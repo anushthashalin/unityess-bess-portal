@@ -1,0 +1,81 @@
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+
+async function request(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export const api = {
+  get:    (path)         => request(path),
+  post:   (path, body)   => request(path, { method: 'POST',  body: JSON.stringify(body) }),
+  patch:  (path, body)   => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (path)         => request(path, { method: 'DELETE' }),
+};
+
+// ── BESS endpoints ─────────────────────────────────────────────────────────
+export const bessApi = {
+  // GET
+  clients:            () => api.get('/api/bess/clients'),
+  sites:              () => api.get('/api/bess/sites'),
+  units:              () => api.get('/api/bess/units'),
+  proposals:          () => api.get('/api/bess/proposals'),
+  projects:           () => api.get('/api/bess/projects'),
+  configs:            () => api.get('/api/bess/bess-configurations'),
+  tariffs:            () => api.get('/api/bess/tariff-structures'),
+  loadProfiles:       (site_id) => api.get(`/api/bess/load-profiles?site_id=${site_id}`),
+
+  // POST
+  createClient:       (body) => api.post('/api/bess/clients', body),
+  createSite:         (body) => api.post('/api/bess/sites', body),
+  createProposal:     (body) => api.post('/api/bess/proposals', body),
+  createProject:      (body) => api.post('/api/bess/projects', body),
+  createLoadProfile:  (body) => api.post('/api/bess/load-profiles', body),
+  createTariff:       (body) => api.post('/api/bess/tariff-structures', body),
+};
+
+// ── BD endpoints ───────────────────────────────────────────────────────────
+export const bdApi = {
+  dashboard:      () => api.get('/api/bd/dashboard'),
+  users:          () => api.get('/api/bd/users'),
+  accounts:       () => api.get('/api/bd/accounts'),
+  createAccount:  (body) => api.post('/api/bd/accounts', body),
+  contacts:       (account_id) => api.get(account_id ? `/api/bd/contacts?account_id=${account_id}` : '/api/bd/contacts'),
+  createContact:  (body) => api.post('/api/bd/contacts', body),
+  opps:           (filters = {}) => {
+    const q = new URLSearchParams(filters).toString();
+    return api.get(`/api/bd/opportunities${q ? '?' + q : ''}`);
+  },
+  createOpp:      (body) => api.post('/api/bd/opportunities', body),
+  patchOpp:       (id, body) => api.patch(`/api/bd/opportunities/${id}`, body),
+  activities:       (opp_id) => api.get(opp_id ? `/api/bd/activities?opp_id=${opp_id}` : '/api/bd/activities'),
+  createActivity:   (body) => api.post('/api/bd/activities', body),
+  followUps:        (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return api.get(`/api/bd/follow-ups${q ? '?' + q : ''}`);
+  },
+  createFollowUp:   (body) => api.post('/api/bd/follow-ups', body),
+  patchFollowUp:    (id, body) => api.patch(`/api/bd/follow-ups/${id}`, body),
+  approvals:        (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return api.get(`/api/bd/approvals${q ? '?' + q : ''}`);
+  },
+  createApproval:   (body) => api.post('/api/bd/approvals', body),
+  patchApproval:    (id, body) => api.patch(`/api/bd/approvals/${id}`, body),
+  proposals:        (opp_id) => api.get(opp_id ? `/api/bd/proposals?opp_id=${opp_id}` : '/api/bd/proposals'),
+  createProposal:   (body) => api.post('/api/bd/proposals', body),
+  patchProposal:    (id, body) => api.patch(`/api/bd/proposals/${id}`, body),
+  automationStatus: () => api.get('/api/bd/automation/status'),
+  runAutomation:    () => api.post('/api/bd/automation/run', {}),
+  emailStatus:      () => api.get('/api/bd/email/status'),
+  sendEmail:        (body) => api.post('/api/bd/email/send', body),
+  importAccounts:      (rows) => api.post('/api/bd/import/accounts',      { rows }),
+  importContacts:      (rows) => api.post('/api/bd/import/contacts',      { rows }),
+  importOpportunities: (rows) => api.post('/api/bd/import/opportunities', { rows }),
+};

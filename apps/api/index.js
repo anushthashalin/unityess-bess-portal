@@ -1,0 +1,1167 @@
+const path = require('path');
+// In dev: load root .env; in production env vars are injected by the platform
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+}
+const express      = require('express');
+const cors         = require('cors');
+const { Pool }     = require('pg');
+const bcrypt       = require('bcryptjs');
+const jwt          = require('jsonwebtoken');
+const nodemailer   = require('nodemailer');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+
+// ── Email transporter (Gmail SMTP) ────────────────────────────────────────────
+// Set GMAIL_USER and GMAIL_APP_PASSWORD in .env
+// Generate app password at: myaccount.google.com/apppasswords
+let emailTransporter = null;
+function getTransporter() {
+  if (emailTransporter) return emailTransporter;
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return null;
+  emailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+  return emailTransporter;
+}
+
+// ── Auth middleware ────────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Token invalid or expired' });
+  }
+}
+
+const app  = express();
+const PORT = process.env.PORT || 4000;
+
+// ── DB Pool ────────────────────────────────────────────────────────────────
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+// Verify DB connectivity at startup — release the client immediately
+pool.connect()
+  .then(client => { client.release(); console.log('✅  Connected to Neon (frosty-sound-57567439)'); })
+  .catch(e => console.error('❌  DB connection failed:', e.message));
+
+// Prevent Neon idle-connection drops from crashing the process
+pool.on('error', (err) => {
+  console.warn('⚠️  Neon pool idle error (safe to ignore):', err.message);
+});
+
+// ── Database migrations ─────────────────────────────────────────────────────────
+async function runMigrations() {
+  const migrations = [
+    // Proposals — columns added in P10 that may not exist in the live schema
+    `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS prop_number  TEXT`,
+    `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS sent_at      TIMESTAMPTZ`,
+    `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS closed_at    TIMESTAMPTZ`,
+    `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS content      JSONB`,
+    `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS created_by   INTEGER REFERENCES bd.users(id)`,
+    // Unique indexes for import upserts (CREATE INDEX IF NOT EXISTS is safe to repeat)
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_company_name
+       ON bd.accounts (LOWER(company_name))`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_account_email
+       ON bd.contacts (account_id, LOWER(email)) WHERE email IS NOT NULL`,
+  ];
+  for (const sql of migrations) {
+    try {
+      await pool.query(sql);
+    } catch (e) {
+      console.warn(`⚠️  Migration skipped (${e.message.slice(0, 80)})`);
+    }
+  }
+  console.log('✅  Migrations complete');
+}
+
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:4173',
+    /\.vercel\.app$/,
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
+  credentials: true,
+}));
+app.use(express.json());
+
+// ── Root & DevTools probes ──────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.json({
+    name:    'UnityESS BD Portal API',
+    version: '1.0.0',
+    status:  'ok',
+    docs:    '/health',
+  });
+});
+
+// Chrome DevTools probes this on every page load — return empty JSON so the
+// browser doesn't log a CSP violation or a 404 in the network panel.
+app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
+  res.json({});
+});
+
+// ── Health ─────────────────────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT schemaname, count(*)::int AS tables
+       FROM pg_tables WHERE schemaname IN ('bd','bess')
+       GROUP BY schemaname ORDER BY schemaname`
+    );
+    res.json({ status: 'ok', version: '1.0.0', schemas: rows });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
+// ── Auth ────────────────────────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM bd.users WHERE email = $1 AND is_active = true',
+      [email.toLowerCase().trim()]
+    );
+    const user = rows[0];
+    if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, name, email, role FROM bd.users WHERE id = $1',
+    [req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+  res.json({ user: rows[0] });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// BD PORTAL — Business Development
+// ════════════════════════════════════════════════════════════════════════════
+
+// Users
+app.get('/api/bd/users', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM bd.users WHERE is_active = true ORDER BY name');
+  res.json({ data: rows });
+});
+
+// Accounts
+app.get('/api/bd/accounts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.*, u.name AS owner_name,
+         COUNT(DISTINCT o.id)::int                              AS opp_count,
+         COUNT(DISTINCT c.id)::int                             AS contact_count,
+         COALESCE(SUM(o.estimated_value) FILTER (WHERE o.closed_at IS NULL), 0)::float AS pipeline_value,
+         MAX(o.stage) FILTER (WHERE o.closed_at IS NULL)       AS latest_stage,
+         MAX(o.last_activity_at)                               AS last_activity_at
+       FROM bd.accounts a
+       LEFT JOIN bd.users u    ON u.id = a.owner_id
+       LEFT JOIN bd.opportunities o ON o.account_id = a.id
+       LEFT JOIN bd.contacts c ON c.account_id = a.id
+       GROUP BY a.id, u.name
+       ORDER BY MAX(COALESCE(o.last_activity_at, a.updated_at)) DESC NULLS LAST`
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bd/accounts', async (req, res) => {
+  const { company_name, industry, city, state, website, gstin, source, owner_id } = req.body;
+  const { rows: [c] } = await pool.query(
+    "SELECT COUNT(*) FROM bd.accounts WHERE account_id LIKE $1",
+    [`ACC-${new Date().getFullYear()}%`]
+  );
+  const account_id = `ACC-${new Date().getFullYear()}-${String(parseInt(c.count) + 1).padStart(3,'0')}`;
+  const { rows } = await pool.query(
+    `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [account_id, company_name, industry, city, state, website, gstin, source, owner_id]
+  );
+  res.status(201).json({ data: rows[0] });
+});
+
+// Contacts
+app.get('/api/bd/contacts', async (req, res) => {
+  const { account_id } = req.query;
+  const { rows } = account_id
+    ? await pool.query('SELECT * FROM bd.contacts WHERE account_id=$1 ORDER BY is_primary DESC,name', [account_id])
+    : await pool.query('SELECT c.*,a.company_name FROM bd.contacts c JOIN bd.accounts a ON a.id=c.account_id ORDER BY c.name');
+  res.json({ data: rows });
+});
+
+app.post('/api/bd/contacts', async (req, res) => {
+  const { account_id, name, designation, email, phone, is_primary, linkedin, notes } = req.body;
+  const { rows } = await pool.query(
+    `INSERT INTO bd.contacts (account_id,name,designation,email,phone,is_primary,linkedin,notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [account_id, name, designation, email, phone, is_primary ?? false, linkedin, notes]
+  );
+  res.status(201).json({ data: rows[0] });
+});
+
+// Opportunities
+app.get('/api/bd/opportunities', async (req, res) => {
+  const { stage, stale } = req.query;
+  const where = [];
+  const params = [];
+  if (stage) { params.push(stage); where.push(`o.stage=$${params.length}`); }
+  if (stale === 'true') where.push('o.stale=true');
+  const wc = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+  const { rows } = await pool.query(
+    `SELECT o.*, a.company_name, a.city, c.name AS contact_name, c.phone AS contact_phone,
+       u.name AS owner_name,
+       (SELECT COUNT(*)::int FROM bd.activities act WHERE act.opp_id=o.id) AS activity_count,
+       (SELECT COUNT(*)::int FROM bd.follow_ups f WHERE f.opp_id=o.id AND f.status='pending') AS pending_followups
+     FROM bd.opportunities o
+     LEFT JOIN bd.accounts a ON a.id=o.account_id
+     LEFT JOIN bd.contacts c ON c.id=o.contact_id
+     LEFT JOIN bd.users u ON u.id=o.owner_id
+     ${wc} ORDER BY o.stage_updated_at DESC`, params
+  );
+  res.json({ data: rows });
+});
+
+app.post('/api/bd/opportunities', async (req, res) => {
+  const { account_id, contact_id, owner_id, title, scope_type, estimated_value } = req.body;
+  const { rows: [c] } = await pool.query(
+    "SELECT COUNT(*) FROM bd.opportunities WHERE opp_id LIKE $1",
+    [`OPP-${new Date().getFullYear()}%`]
+  );
+  const opp_id = `OPP-${new Date().getFullYear()}-${String(parseInt(c.count)+1).padStart(3,'0')}`;
+  const next_d = new Date(); next_d.setDate(next_d.getDate()+3);
+  const { rows } = await pool.query(
+    `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d]
+  );
+  res.status(201).json({ data: rows[0] });
+});
+
+app.patch('/api/bd/opportunities/:id', async (req, res) => {
+  const { id } = req.params;
+  const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
+                   'next_action','next_action_date','stale','stale_reason','lost_reason',
+                   'po_number','po_value','closed_at'];
+  const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+  if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
+  const keys = updates.map(([k]) => k);
+  const vals = updates.map(([,v]) => v);
+  const stageChanging = keys.includes('stage');
+  const extras = stageChanging ? ', stage_updated_at=NOW(), last_activity_at=NOW()' : ', last_activity_at=NOW()';
+  const set = keys.map((k,i) => `${k}=$${i+2}`).join(', ');
+  const { rows } = await pool.query(
+    `UPDATE bd.opportunities SET ${set}${extras} WHERE id=$1 RETURNING *`,
+    [id, ...vals]
+  );
+  res.json({ data: rows[0] });
+});
+
+// Activities
+app.get('/api/bd/activities', async (req, res) => {
+  try {
+    const { opp_id } = req.query;
+    const { rows } = opp_id
+      ? await pool.query(
+          `SELECT a.*, u.name AS logged_by_name,
+             o.title AS opp_title, ac.company_name
+           FROM bd.activities a
+           LEFT JOIN bd.users u       ON u.id  = a.logged_by
+           LEFT JOIN bd.opportunities o ON o.id = a.opp_id
+           LEFT JOIN bd.accounts ac   ON ac.id = o.account_id
+           WHERE a.opp_id=$1 ORDER BY a.logged_at DESC`, [opp_id])
+      : await pool.query(
+          `SELECT a.*, u.name AS logged_by_name,
+             o.title AS opp_title, ac.company_name
+           FROM bd.activities a
+           LEFT JOIN bd.users u       ON u.id  = a.logged_by
+           LEFT JOIN bd.opportunities o ON o.id = a.opp_id
+           LEFT JOIN bd.accounts ac   ON ac.id = o.account_id
+           ORDER BY a.logged_at DESC LIMIT 200`);
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bd/activities', async (req, res) => {
+  try {
+    const { opp_id, type, direction, summary, outcome, next_action, next_action_date, logged_by, duration_min } = req.body;
+    if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO bd.activities (opp_id,type,direction,summary,outcome,next_action,next_action_date,logged_by,duration_min)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [opp_id, type, direction ?? 'outbound', summary, outcome, next_action, next_action_date, logged_by, duration_min ?? null]
+    );
+    // Update opportunity last_activity_at + next_action_date if provided
+    if (next_action_date) {
+      await pool.query(
+        'UPDATE bd.opportunities SET last_activity_at=NOW(), next_action=$1, next_action_date=$2 WHERE id=$3',
+        [next_action, next_action_date, opp_id]
+      );
+      // Create T+3 follow-up from the explicit next_action_date
+      await autoCreateFollowUp(opp_id, logged_by, new Date(next_action_date).getTime());
+    } else {
+      await pool.query('UPDATE bd.opportunities SET last_activity_at=NOW() WHERE id=$1', [opp_id]);
+      // Auto-create T+3 follow-up from today
+      await autoCreateFollowUp(opp_id, logged_by, Date.now());
+    }
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Follow-ups
+app.get('/api/bd/follow-ups', async (req, res) => {
+  try {
+    const { status, opp_id } = req.query;
+    const where = [];
+    const params = [];
+
+    if (opp_id) { params.push(opp_id); where.push(`f.opp_id=$${params.length}`); }
+
+    if (status === 'all') {
+      // no status filter
+    } else if (status === 'done') {
+      where.push(`f.status='done'`);
+    } else {
+      // default: pending, respecting snooze
+      where.push(`f.status='pending'`);
+      where.push(`(f.snooze_until IS NULL OR f.snooze_until<=CURRENT_DATE)`);
+    }
+
+    const wc = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { rows } = await pool.query(
+      `SELECT f.*, o.opp_id AS opp_ref, o.title AS opp_title, o.stage,
+         a.company_name, u.name AS assigned_to_name,
+         (CURRENT_DATE - f.due_date)::int AS days_overdue
+       FROM bd.follow_ups f
+       JOIN bd.opportunities o ON o.id=f.opp_id
+       JOIN bd.accounts a ON a.id=o.account_id
+       LEFT JOIN bd.users u ON u.id=f.assigned_to
+       ${wc}
+       ORDER BY f.due_date ASC`, params
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bd/follow-ups', async (req, res) => {
+  try {
+    const { opp_id, due_date, type, assigned_to } = req.body;
+    if (!opp_id || !due_date) return res.status(400).json({ error: 'opp_id and due_date required' });
+    const { rows: [cnt] } = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM bd.follow_ups WHERE opp_id=$1', [opp_id]
+    );
+    const { rows } = await pool.query(
+      `INSERT INTO bd.follow_ups (opp_id, due_date, type, assigned_to, status, follow_up_number)
+       VALUES ($1,$2,$3,$4,'pending',$5) RETURNING *`,
+      [opp_id, due_date, type ?? 'call', assigned_to ?? null, cnt.n + 1]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/bd/follow-ups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, snooze_until } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE bd.follow_ups SET status=COALESCE($2,status), snooze_until=$3 WHERE id=$1 RETURNING *`,
+      [id, status ?? null, snooze_until ?? null]
+    );
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Approvals
+const APPROVAL_WITH_JOINS = `
+  SELECT ap.*,
+    o.opp_id AS opp_ref, o.title AS opp_title, o.stage, o.estimated_value,
+    a.company_name,
+    req.name  AS requested_by_name,
+    appr.name AS approver_name
+  FROM bd.approvals ap
+  JOIN  bd.opportunities o ON o.id  = ap.opp_id
+  JOIN  bd.accounts a      ON a.id  = o.account_id
+  LEFT JOIN bd.users req   ON req.id  = ap.requested_by
+  LEFT JOIN bd.users appr  ON appr.id = ap.approver_id
+`;
+
+app.get('/api/bd/approvals', async (req, res) => {
+  try {
+    const { status } = req.query;
+    const where = status === 'all' ? '' :
+                  status ? `WHERE ap.status=$1` :
+                  `WHERE ap.status='pending'`;
+    const params = status && status !== 'all' ? [status] : [];
+    const { rows } = await pool.query(
+      `${APPROVAL_WITH_JOINS} ${where} ORDER BY ap.requested_at DESC`, params
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bd/approvals', async (req, res) => {
+  try {
+    const { opp_id, type, deviation_value, justification, requested_by, proposal_id } = req.body;
+    if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type required' });
+    const { rows } = await pool.query(
+      `INSERT INTO bd.approvals (opp_id, proposal_id, type, deviation_value, justification, requested_by, status)
+       VALUES ($1,$2,$3,$4,$5,$6,'pending') RETURNING *`,
+      [opp_id, proposal_id ?? null, type, deviation_value ?? null, justification ?? null, requested_by ?? null]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/bd/approvals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, approver_notes, approver_id } = req.body;
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'status must be approved or rejected' });
+    }
+    await pool.query(
+      `UPDATE bd.approvals SET status=$2, approver_notes=$3, approver_id=$4, approved_at=NOW() WHERE id=$1`,
+      [id, status, approver_notes ?? null, approver_id ?? null]
+    );
+    const { rows } = await pool.query(`${APPROVAL_WITH_JOINS} WHERE ap.id=$1`, [id]);
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Proposals (BD)
+const PROPOSAL_WITH_JOINS = `
+  SELECT p.*,
+    o.opp_id AS opp_ref, o.title AS opp_title, o.stage, o.scope_type,
+    o.estimated_value AS opp_value,
+    a.company_name, a.city, a.state, a.gstin,
+    c.name AS contact_name, c.designation AS contact_designation,
+    c.email AS contact_email, c.phone AS contact_phone,
+    u.name AS created_by_name
+  FROM bd.proposals p
+  JOIN  bd.opportunities o ON o.id = p.opp_id
+  JOIN  bd.accounts a      ON a.id = o.account_id
+  LEFT JOIN bd.contacts c  ON c.id = o.contact_id
+  LEFT JOIN bd.users u     ON u.id = p.created_by
+`;
+
+app.get('/api/bd/proposals', async (req, res) => {
+  try {
+    const { opp_id } = req.query;
+    const where  = opp_id ? 'WHERE p.opp_id=$1' : '';
+    const params = opp_id ? [opp_id] : [];
+    const { rows } = await pool.query(
+      `${PROPOSAL_WITH_JOINS} ${where} ORDER BY p.created_at DESC`, params
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bd/proposals', async (req, res) => {
+  try {
+    const { opp_id, content, created_by } = req.body;
+    if (!opp_id) return res.status(400).json({ error: 'opp_id required' });
+
+    // Auto-increment version per opportunity
+    const { rows: [cnt] } = await pool.query(
+      'SELECT COALESCE(MAX(version),0)::int AS max_ver FROM bd.proposals WHERE opp_id=$1',
+      [opp_id]
+    );
+    const version = cnt.max_ver + 1;
+
+    // Generate proposal number: PROP-{YEAR}-{OPP_ID}-V{version}
+    const { rows: [opp] } = await pool.query('SELECT opp_id AS opp_ref FROM bd.opportunities WHERE id=$1', [opp_id]);
+    const prop_number = `PROP-${new Date().getFullYear()}-${(opp?.opp_ref || opp_id).replace('OPP-','')}-V${version}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO bd.proposals (opp_id, version, status, content, created_by, prop_number)
+       VALUES ($1,$2,'draft',$3,$4,$5) RETURNING *`,
+      [opp_id, version, JSON.stringify(content ?? {}), created_by ?? null, prop_number]
+    );
+    const { rows: full } = await pool.query(`${PROPOSAL_WITH_JOINS} WHERE p.id=$1`, [rows[0].id]);
+    res.status(201).json({ data: full[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/bd/proposals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, content } = req.body;
+    const updates = [];
+    const vals = [id];
+
+    if (status) {
+      vals.push(status);
+      updates.push(`status=$${vals.length}`);
+      if (status === 'sent') {
+        updates.push('sent_at=NOW()');
+        // Also update opportunity's last_activity_at
+        const { rows: [p] } = await pool.query('SELECT opp_id FROM bd.proposals WHERE id=$1', [id]);
+        if (p) await pool.query('UPDATE bd.opportunities SET last_activity_at=NOW() WHERE id=$1', [p.opp_id]);
+      }
+      if (['accepted','rejected','expired'].includes(status)) {
+        updates.push('closed_at=NOW()');
+      }
+    }
+    if (content !== undefined) {
+      vals.push(JSON.stringify(content));
+      updates.push(`content=$${vals.length}`);
+    }
+
+    if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+    await pool.query(`UPDATE bd.proposals SET ${updates.join(',')} WHERE id=$1`, vals);
+    const { rows } = await pool.query(`${PROPOSAL_WITH_JOINS} WHERE p.id=$1`, [id]);
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// EMAIL — Gmail SMTP send
+// ════════════════════════════════════════════════════════════════════════════
+
+// GET /api/bd/email/status — tells the frontend if email is configured
+app.get('/api/bd/email/status', (req, res) => {
+  const configured = !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+  res.json({ configured, from: process.env.GMAIL_USER ?? null });
+});
+
+// POST /api/bd/email/send
+// body: { proposal_id, to, cc, subject, body, sent_by }
+app.post('/api/bd/email/send', async (req, res) => {
+  try {
+    const { proposal_id, to, cc, subject, body: emailBody, sent_by } = req.body;
+    if (!to || !subject || !emailBody) {
+      return res.status(400).json({ error: 'to, subject, and body are required' });
+    }
+
+    const transporter = getTransporter();
+    if (!transporter) {
+      return res.status(503).json({
+        error: 'Email not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to .env',
+      });
+    }
+
+    // Send the email
+    const info = await transporter.sendMail({
+      from: `"Ornate Solar — UnityESS" <${process.env.GMAIL_USER}>`,
+      to,
+      cc: cc || undefined,
+      subject,
+      html: emailBody,
+      text: emailBody.replace(/<[^>]+>/g, ''),   // plain-text fallback
+    });
+
+    // If a proposal_id is provided, mark it sent + log an activity
+    if (proposal_id) {
+      // Mark proposal sent
+      await pool.query(
+        `UPDATE bd.proposals SET status='sent', sent_at=NOW() WHERE id=$1 AND status='draft'`,
+        [proposal_id]
+      );
+
+      // Fetch proposal for context
+      const { rows: [prop] } = await pool.query(
+        `SELECT p.opp_id, o.title AS opp_title FROM bd.proposals p
+         JOIN bd.opportunities o ON o.id=p.opp_id WHERE p.id=$1`,
+        [proposal_id]
+      );
+
+      if (prop) {
+        // Log activity
+        await pool.query(
+          `INSERT INTO bd.activities (opp_id, type, direction, summary, logged_by)
+           VALUES ($1,'email','outbound',$2,$3)`,
+          [prop.opp_id, `Proposal emailed to ${to}. Subject: ${subject}`, sent_by ?? null]
+        );
+        // Update opp last_activity_at
+        await pool.query(
+          'UPDATE bd.opportunities SET last_activity_at=NOW() WHERE id=$1',
+          [prop.opp_id]
+        );
+      }
+    }
+
+    res.json({ sent: true, message_id: info.messageId });
+  } catch (e) {
+    console.error('❌  Email send error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// BULK IMPORT — Google Sheets CSV → Neon
+// Accepts arrays of plain objects; resolves FKs by name; returns summary.
+// ════════════════════════════════════════════════════════════════════════════
+
+// POST /api/bd/import/accounts
+// body: { rows: [{ company_name, industry, city, state, website, gstin, source, owner_email }] }
+app.post('/api/bd/import/accounts', async (req, res) => {
+  const { rows = [] } = req.body;
+  if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
+
+  const results = { imported: 0, skipped: 0, errors: [] };
+  const year = new Date().getFullYear();
+
+  for (const [i, row] of rows.entries()) {
+    try {
+      if (!row.company_name?.trim()) {
+        results.errors.push({ row: i + 1, message: 'company_name is required' });
+        results.skipped++;
+        continue;
+      }
+
+      // Resolve owner by email or name
+      let owner_id = null;
+      if (row.owner_email || row.owner_name) {
+        const { rows: [u] } = await pool.query(
+          'SELECT id FROM bd.users WHERE email=$1 OR name ILIKE $2 LIMIT 1',
+          [row.owner_email ?? '', `%${row.owner_name ?? ''}%`]
+        );
+        owner_id = u?.id ?? null;
+      }
+
+      // Check if account exists (case-insensitive)
+      const { rows: [existing] } = await pool.query(
+        'SELECT id FROM bd.accounts WHERE LOWER(company_name)=LOWER($1) LIMIT 1',
+        [row.company_name.trim()]
+      );
+      if (existing) {
+        // Update existing
+        await pool.query(
+          `UPDATE bd.accounts SET
+             industry = COALESCE($2, industry),
+             city     = COALESCE($3, city),
+             state    = COALESCE($4, state),
+             website  = COALESCE($5, website),
+             gstin    = COALESCE($6, gstin),
+             source   = COALESCE($7, source),
+             owner_id = COALESCE($8, owner_id)
+           WHERE id=$1`,
+          [existing.id, row.industry||null, row.city||null, row.state||null,
+           row.website||null, row.gstin||null, row.source||null, owner_id]
+        );
+      } else {
+        // Insert new
+        const { rows: [cnt] } = await pool.query(
+          "SELECT COUNT(*) FROM bd.accounts WHERE account_id LIKE $1",
+          [`ACC-${year}%`]
+        );
+        const account_id = `ACC-${year}-${String(parseInt(cnt.count) + 1).padStart(3, '0')}`;
+        await pool.query(
+          `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [account_id, row.company_name.trim(), row.industry||null,
+           row.city||null, row.state||null, row.website||null,
+           row.gstin||null, row.source||null, owner_id]
+        );
+      }
+      results.imported++;
+    } catch (e) {
+      results.errors.push({ row: i + 1, message: e.message });
+      results.skipped++;
+    }
+  }
+  res.json(results);
+});
+
+// POST /api/bd/import/contacts
+// body: { rows: [{ company_name, name, designation, email, phone, is_primary, linkedin }] }
+app.post('/api/bd/import/contacts', async (req, res) => {
+  const { rows = [] } = req.body;
+  if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
+
+  const results = { imported: 0, skipped: 0, errors: [] };
+
+  for (const [i, row] of rows.entries()) {
+    try {
+      if (!row.name?.trim())         { results.errors.push({ row: i+1, message: 'name is required' });         results.skipped++; continue; }
+      if (!row.company_name?.trim()) { results.errors.push({ row: i+1, message: 'company_name is required' }); results.skipped++; continue; }
+
+      // Resolve account by company_name
+      const { rows: [acc] } = await pool.query(
+        'SELECT id FROM bd.accounts WHERE company_name ILIKE $1 LIMIT 1',
+        [row.company_name.trim()]
+      );
+      if (!acc) {
+        results.errors.push({ row: i+1, message: `Account not found: "${row.company_name}" — import accounts first` });
+        results.skipped++;
+        continue;
+      }
+
+      // Check if contact already exists for this account (by email if present, else by name)
+      let existing = null;
+      if (row.email?.trim()) {
+        const { rows: [e] } = await pool.query(
+          'SELECT id FROM bd.contacts WHERE account_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1',
+          [acc.id, row.email.trim()]
+        );
+        existing = e ?? null;
+      }
+      if (!existing) {
+        const { rows: [e] } = await pool.query(
+          'SELECT id FROM bd.contacts WHERE account_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1',
+          [acc.id, row.name.trim()]
+        );
+        existing = e ?? null;
+      }
+
+      if (existing) {
+        await pool.query(
+          `UPDATE bd.contacts SET
+             designation = COALESCE($2, designation),
+             email       = COALESCE($3, email),
+             phone       = COALESCE($4, phone),
+             is_primary  = $5,
+             linkedin    = COALESCE($6, linkedin)
+           WHERE id=$1`,
+          [existing.id, row.designation||null, row.email?.trim()||null,
+           row.phone?.trim()||null,
+           row.is_primary==='true'||row.is_primary===true||row.is_primary==='1',
+           row.linkedin||null]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO bd.contacts (account_id,name,designation,email,phone,is_primary,linkedin)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [acc.id, row.name.trim(), row.designation||null, row.email?.trim()||null,
+           row.phone?.trim()||null,
+           row.is_primary==='true'||row.is_primary===true||row.is_primary==='1',
+           row.linkedin||null]
+        );
+      }
+      results.imported++;
+    } catch (e) {
+      results.errors.push({ row: i+1, message: e.message });
+      results.skipped++;
+    }
+  }
+  res.json(results);
+});
+
+// POST /api/bd/import/opportunities
+// body: { rows: [{ company_name, contact_email, owner_name, title, scope_type, estimated_value, stage, next_action_date }] }
+app.post('/api/bd/import/opportunities', async (req, res) => {
+  const { rows = [] } = req.body;
+  if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
+
+  const VALID_STAGES = ['first_connect','requirement_captured','proposal_sent','technical_closure','commercial_negotiation','po_received','lost'];
+  const results = { imported: 0, skipped: 0, errors: [] };
+  const year = new Date().getFullYear();
+
+  for (const [i, row] of rows.entries()) {
+    try {
+      if (!row.title?.trim())        { results.errors.push({ row: i+1, message: 'title is required' });        results.skipped++; continue; }
+      if (!row.company_name?.trim()) { results.errors.push({ row: i+1, message: 'company_name is required' }); results.skipped++; continue; }
+
+      // Resolve account
+      const { rows: [acc] } = await pool.query(
+        'SELECT id FROM bd.accounts WHERE company_name ILIKE $1 LIMIT 1',
+        [row.company_name.trim()]
+      );
+      if (!acc) {
+        results.errors.push({ row: i+1, message: `Account not found: "${row.company_name}"` });
+        results.skipped++;
+        continue;
+      }
+
+      // Resolve contact (optional)
+      let contact_id = null;
+      if (row.contact_email) {
+        const { rows: [c] } = await pool.query(
+          'SELECT id FROM bd.contacts WHERE email ILIKE $1 LIMIT 1', [row.contact_email.trim()]
+        );
+        contact_id = c?.id ?? null;
+      }
+
+      // Resolve owner (optional)
+      let owner_id = null;
+      if (row.owner_name) {
+        const { rows: [u] } = await pool.query(
+          'SELECT id FROM bd.users WHERE name ILIKE $1 LIMIT 1', [`%${row.owner_name.trim()}%`]
+        );
+        owner_id = u?.id ?? null;
+      }
+
+      // Validate stage
+      const stage = VALID_STAGES.includes(row.stage) ? row.stage : 'first_connect';
+
+      // Auto-generate opp_id
+      const { rows: [cnt] } = await pool.query(
+        "SELECT COUNT(*) FROM bd.opportunities WHERE opp_id LIKE $1", [`OPP-${year}%`]
+      );
+      const opp_id = `OPP-${year}-${String(parseInt(cnt.count) + 1).padStart(3,'0')}`;
+
+      const value = row.estimated_value
+        ? parseFloat(String(row.estimated_value).replace(/[₹,\s]/g, ''))
+        : null;
+
+      await pool.query(
+        `INSERT INTO bd.opportunities
+           (opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, stage, next_action_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (opp_id) DO NOTHING`,
+        [opp_id, acc.id, contact_id, owner_id, row.title.trim(),
+         row.scope_type ?? null, value, stage,
+         row.next_action_date || null]
+      );
+      results.imported++;
+    } catch (e) {
+      results.errors.push({ row: i+1, message: e.message });
+      results.skipped++;
+    }
+  }
+  res.json(results);
+});
+
+// Dashboard
+app.get('/api/bd/dashboard', async (req, res) => {
+  try {
+    const [pipeline, followUpCount, approvalCount, staleCount, hotDeals, dueFollowUps, pendingApprovals, recentActivities] = await Promise.all([
+      // Pipeline by stage — count + value
+      pool.query(`
+        SELECT stage, COUNT(*)::int AS count, COALESCE(SUM(estimated_value),0)::float AS value
+        FROM bd.opportunities WHERE closed_at IS NULL GROUP BY stage`),
+
+      // Overdue / due-today follow-up count
+      pool.query(`SELECT COUNT(*)::int AS count FROM bd.follow_ups WHERE status='pending' AND due_date<=CURRENT_DATE`),
+
+      // Pending approval count
+      pool.query(`SELECT COUNT(*)::int AS count FROM bd.approvals WHERE status='pending'`),
+
+      // Stale deal count
+      pool.query(`SELECT COUNT(*)::int AS count FROM bd.opportunities WHERE stale=true AND closed_at IS NULL`),
+
+      // Hot deals — technical_closure + commercial_negotiation, sorted by longest silence
+      pool.query(`
+        SELECT o.id, o.title, o.stage, o.estimated_value, o.stale,
+               a.company_name, c.name AS contact_name,
+               (CURRENT_DATE - o.last_activity_at::date)::int AS days_silent
+        FROM bd.opportunities o
+        JOIN bd.accounts a ON a.id=o.account_id
+        LEFT JOIN bd.contacts c ON c.id=o.contact_id
+        WHERE o.stage IN ('commercial_negotiation','technical_closure') AND o.closed_at IS NULL
+        ORDER BY o.last_activity_at ASC NULLS LAST
+        LIMIT 10`),
+
+      // Follow-ups due today or overdue — with context
+      pool.query(`
+        SELECT f.id, f.due_date, f.type AS follow_up_type, NULL::text AS notes, f.status,
+               o.id AS opp_id, o.title AS opp_title,
+               a.company_name, u.name AS assigned_to_name
+        FROM bd.follow_ups f
+        JOIN bd.opportunities o ON o.id=f.opp_id
+        JOIN bd.accounts a ON a.id=o.account_id
+        LEFT JOIN bd.users u ON u.id=f.assigned_to
+        WHERE f.status='pending' AND f.due_date<=CURRENT_DATE
+          AND (f.snooze_until IS NULL OR f.snooze_until<=CURRENT_DATE)
+        ORDER BY f.due_date ASC
+        LIMIT 15`),
+
+      // Pending approvals — with context
+      pool.query(`
+        SELECT ap.id, ap.type AS approval_type, ap.status,
+               ap.justification AS notes, ap.requested_at AS created_at,
+               o.id AS opp_id, o.title AS opp_title,
+               a.company_name, u.name AS requested_by_name
+        FROM bd.approvals ap
+        JOIN bd.opportunities o ON o.id=ap.opp_id
+        JOIN bd.accounts a ON a.id=o.account_id
+        LEFT JOIN bd.users u ON u.id=ap.requested_by
+        WHERE ap.status='pending'
+        ORDER BY ap.requested_at ASC
+        LIMIT 10`),
+
+      // Recent activities — last 10
+      pool.query(`
+        SELECT ac.id, ac.type, ac.summary, ac.logged_at,
+               o.id AS opp_id, o.title AS opp_title,
+               a.company_name, u.name AS logged_by_name
+        FROM bd.activities ac
+        JOIN bd.opportunities o ON o.id=ac.opp_id
+        JOIN bd.accounts a ON a.id=o.account_id
+        LEFT JOIN bd.users u ON u.id=ac.logged_by
+        ORDER BY ac.logged_at DESC, ac.id DESC
+        LIMIT 10`),
+    ]);
+
+    res.json({
+      pipeline:          pipeline.rows,
+      overdue_followups: followUpCount.rows[0].count,
+      pending_approvals: approvalCount.rows[0].count,
+      stale_deals:       staleCount.rows[0].count,
+      hot_deals:         hotDeals.rows,
+      due_follow_ups:    dueFollowUps.rows,
+      pending_approval_list: pendingApprovals.rows,
+      recent_activities: recentActivities.rows,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// BESS PORTAL
+// ════════════════════════════════════════════════════════════════════════════
+app.get('/api/bess/clients',            async (req, res) => { const { rows } = await pool.query('SELECT * FROM bess.clients ORDER BY created_at DESC'); res.json({ data: rows }); });
+app.get('/api/bess/sites',              async (req, res) => { const { rows } = await pool.query('SELECT s.*,c.company_name FROM bess.sites s JOIN bess.clients c ON c.id=s.client_id ORDER BY s.created_at DESC'); res.json({ data: rows }); });
+app.get('/api/bess/units',              async (req, res) => { const { rows } = await pool.query('SELECT * FROM bess.units WHERE is_active=true ORDER BY power_kw'); res.json({ data: rows }); });
+app.get('/api/bess/proposals',          async (req, res) => { const { rows } = await pool.query('SELECT p.*,c.company_name FROM bess.proposals p JOIN bess.clients c ON c.id=p.client_id ORDER BY p.created_at DESC'); res.json({ data: rows }); });
+app.get('/api/bess/projects',           async (req, res) => { const { rows } = await pool.query('SELECT p.*,c.company_name FROM bess.projects p JOIN bess.clients c ON c.id=p.client_id ORDER BY p.created_at DESC'); res.json({ data: rows }); });
+app.get('/api/bess/bess-configurations',async (req, res) => { const { rows } = await pool.query('SELECT b.*,s.site_name FROM bess.bess_configurations b JOIN bess.sites s ON s.id=b.site_id ORDER BY b.created_at DESC'); res.json({ data: rows }); });
+app.get('/api/bess/tariff-structures',  async (req, res) => { const { rows } = await pool.query('SELECT * FROM bess.tariff_structures ORDER BY state'); res.json({ data: rows }); });
+app.get('/api/bess/load-profiles',      async (req, res) => { const { site_id } = req.query; const { rows } = await pool.query('SELECT * FROM bess.load_profiles WHERE site_id=$1 ORDER BY year,month', [site_id||1]); res.json({ data: rows }); });
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTOMATION ENGINE
+// ════════════════════════════════════════════════════════════════════════════
+
+let lastAutomationRun  = null;
+let lastAutomationLog  = [];
+
+async function runAutomation() {
+  const log = [];
+  const ts  = new Date().toISOString();
+
+  try {
+    // ── Rule 1: Mark stale — no activity for 60+ days ─────────────────────
+    const r1 = await pool.query(`
+      UPDATE bd.opportunities
+      SET    stale = true,
+             stale_reason = 'no_activity_60d'
+      WHERE  closed_at IS NULL
+        AND  stage NOT IN ('po_received','lost')
+        AND  stale = false
+        AND  (last_activity_at IS NULL OR last_activity_at < NOW() - INTERVAL '60 days')
+    `);
+    if (r1.rowCount > 0) log.push(`Marked ${r1.rowCount} deal(s) stale (60d no activity)`);
+
+    // ── Rule 2: Mark stale — 5+ pending follow-ups with no progression ────
+    const r2 = await pool.query(`
+      UPDATE bd.opportunities o
+      SET    stale = true,
+             stale_reason = 'followup_overload'
+      WHERE  o.closed_at IS NULL
+        AND  o.stage NOT IN ('po_received','lost')
+        AND  o.stale = false
+        AND  (
+          SELECT COUNT(*) FROM bd.follow_ups f
+          WHERE  f.opp_id = o.id AND f.status = 'pending'
+        ) >= 5
+    `);
+    if (r2.rowCount > 0) log.push(`Marked ${r2.rowCount} deal(s) stale (5+ pending follow-ups)`);
+
+    // ── Rule 3: Clear stale flag — activity logged within last 14 days ────
+    const r3 = await pool.query(`
+      UPDATE bd.opportunities
+      SET    stale = false,
+             stale_reason = NULL
+      WHERE  stale = true
+        AND  closed_at IS NULL
+        AND  last_activity_at > NOW() - INTERVAL '14 days'
+    `);
+    if (r3.rowCount > 0) log.push(`Cleared stale flag on ${r3.rowCount} deal(s) (recent activity)`);
+
+    // ── Rule 4: Close overdue won deals with PO ────────────────────────────
+    // (no-op for now — PO closure is manual)
+
+    lastAutomationRun = ts;
+    lastAutomationLog = log.length ? log : ['No changes — pipeline healthy'];
+    if (log.length) console.log(`🤖  Automation [${ts}]:`, log.join(' | '));
+
+  } catch (e) {
+    lastAutomationLog = [`Error: ${e.message}`];
+    console.error('❌  Automation error:', e.message);
+  }
+}
+
+// ── Auto follow-up helper (called from POST /api/bd/activities) ───────────
+async function autoCreateFollowUp(opp_id, assigned_to, baseDateMs) {
+  try {
+    // Count existing pending follow-ups for this opp
+    const { rows: [cnt] } = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM bd.follow_ups WHERE opp_id=$1', [opp_id]
+    );
+    const followUpNumber = cnt.n + 1;
+
+    // T+3 follow-up
+    const t3 = new Date(baseDateMs + 3 * 86400000).toISOString().slice(0, 10);
+    await pool.query(
+      `INSERT INTO bd.follow_ups (opp_id, due_date, type, assigned_to, status, follow_up_number)
+       VALUES ($1,$2,'call',$3,'pending',$4)
+       ON CONFLICT DO NOTHING`,
+      [opp_id, t3, assigned_to ?? null, followUpNumber]
+    );
+  } catch (e) {
+    console.warn('⚠️  Auto follow-up creation failed:', e.message);
+  }
+}
+
+// ── Manual trigger endpoint ───────────────────────────────────────────────
+app.post('/api/bd/automation/run', async (req, res) => {
+  await runAutomation();
+  res.json({ ran_at: lastAutomationRun, log: lastAutomationLog });
+});
+
+app.get('/api/bd/automation/status', (req, res) => {
+  res.json({ last_run: lastAutomationRun, log: lastAutomationLog });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BESS WRITE ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Clients ──────────────────────────────────────────────────────────────
+app.post('/api/bess/clients', async (req, res) => {
+  try {
+    const { company_name, contact_person, email, phone, city, state, gstin } = req.body;
+    if (!company_name) return res.status(400).json({ error: 'company_name required' });
+    const { rows: [c] } = await pool.query(
+      `INSERT INTO bess.clients (company_name, contact_person, email, phone, city, state, gstin)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [company_name, contact_person||null, email||null, phone||null, city||null, state||null, gstin||null]
+    );
+    res.json({ data: c });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Sites ─────────────────────────────────────────────────────────────────
+app.post('/api/bess/sites', async (req, res) => {
+  try {
+    const { client_id, site_name, address, state, discom, tariff_category,
+            sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number } = req.body;
+    if (!client_id || !site_name) return res.status(400).json({ error: 'client_id and site_name required' });
+    const { rows: [s] } = await pool.query(
+      `INSERT INTO bess.sites (client_id, site_name, address, state, discom, tariff_category,
+         sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [client_id, site_name, address||null, state||null, discom||null, tariff_category||null,
+       sanctioned_load_kva||null, contract_demand_kva||null, connection_voltage_kv||null, meter_number||null]
+    );
+    res.json({ data: s });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Proposals ─────────────────────────────────────────────────────────────
+app.post('/api/bess/proposals', async (req, res) => {
+  try {
+    const { client_id, site_id, bess_config_id, proposal_date, status,
+            capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes } = req.body;
+    if (!client_id)    return res.status(400).json({ error: 'client_id required' });
+    if (!capex_ex_gst) return res.status(400).json({ error: 'capex_ex_gst required' });
+    const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM bess.proposals');
+    const propNum = `PROP-${new Date().getFullYear()}-${String(parseInt(count)+1).padStart(4,'0')}`;
+    const { rows: [p] } = await pool.query(
+      `INSERT INTO bess.proposals (client_id, site_id, bess_config_id, proposal_number, proposal_date,
+         status, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [client_id, site_id||null, bess_config_id||null, propNum,
+       proposal_date||new Date().toISOString().split('T')[0],
+       status||'draft', capex_ex_gst||null, annual_savings||null,
+       payback_years||null, irr_percent||null, validity_days||30, notes||null]
+    );
+    res.json({ data: p });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Projects ──────────────────────────────────────────────────────────────
+app.post('/api/bess/projects', async (req, res) => {
+  try {
+    const { client_id, site_id, proposal_id, status, po_number, po_value_inr,
+            installation_date, commissioning_date, warranty_expiry } = req.body;
+    if (!client_id) return res.status(400).json({ error: 'client_id required' });
+    const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM bess.projects');
+    const code = `PROJ-${new Date().getFullYear()}-${String(parseInt(count)+1).padStart(4,'0')}`;
+    const { rows: [pj] } = await pool.query(
+      `INSERT INTO bess.projects (client_id, site_id, proposal_id, project_code, status,
+         po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [client_id, site_id||null, proposal_id||null, code, status||'lead',
+       po_number||null, po_value_inr||null,
+       installation_date||null, commissioning_date||null, warranty_expiry||null]
+    );
+    res.json({ data: pj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Load Profiles ─────────────────────────────────────────────────────────
+app.post('/api/bess/load-profiles', async (req, res) => {
+  try {
+    const { site_id, month, year, total_units_kwh, max_demand_kw,
+            peak_demand_kw, tod_peak_kwh, tod_offpeak_kwh, tod_night_kwh } = req.body;
+    if (!site_id || !month || !year) return res.status(400).json({ error: 'site_id, month, year required' });
+    const { rows: [lp] } = await pool.query(
+      `INSERT INTO bess.load_profiles
+         (site_id, month, year, total_units_kwh, max_demand_kw, peak_demand_kw,
+          tod_peak_kwh, tod_offpeak_kwh, tod_night_kwh)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (site_id, month, year)
+       DO UPDATE SET total_units_kwh=EXCLUDED.total_units_kwh, max_demand_kw=EXCLUDED.max_demand_kw,
+         peak_demand_kw=EXCLUDED.peak_demand_kw, tod_peak_kwh=EXCLUDED.tod_peak_kwh,
+         tod_offpeak_kwh=EXCLUDED.tod_offpeak_kwh, tod_night_kwh=EXCLUDED.tod_night_kwh
+       RETURNING *`,
+      [site_id, month, year, total_units_kwh||0, max_demand_kw||0, peak_demand_kw||0,
+       tod_peak_kwh||0, tod_offpeak_kwh||0, tod_night_kwh||0]
+    );
+    res.json({ data: lp });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Tariff Structures ─────────────────────────────────────────────────────
+app.post('/api/bess/tariff-structures', async (req, res) => {
+  try {
+    const { state, discom, tariff_category, effective_date,
+            energy_charge_peak, energy_charge_offpeak, demand_charge, fixed_charge } = req.body;
+    if (!state || !discom) return res.status(400).json({ error: 'state and discom required' });
+    const { rows: [t] } = await pool.query(
+      `INSERT INTO bess.tariff_structures
+         (state, discom, tariff_category, effective_date,
+          energy_charge_peak, energy_charge_offpeak, demand_charge, fixed_charge)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [state, discom, tariff_category||null, effective_date||null,
+       energy_charge_peak||null, energy_charge_offpeak||null, demand_charge||null, fixed_charge||null]
+    );
+    res.json({ data: t });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Run on startup + every hour ───────────────────────────────────────────
+app.listen(PORT, async () => {
+  console.log(`\n🚀  API → http://localhost:${PORT}`);
+  console.log(`🔍  Health → http://localhost:${PORT}/health\n`);
+  await runMigrations();
+  // Short delay to let DB pool stabilise before first run
+  setTimeout(() => {
+    runAutomation().then(() => {
+      setInterval(runAutomation, 60 * 60 * 1000); // hourly
+    });
+  }, 3000);
+});
