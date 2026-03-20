@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Zap, Battery, Settings, TrendingUp, Cpu, CheckCircle2,
   ChevronRight, Info, BarChart3, Layers, Clock, Shield,
   Thermometer, Weight, Wifi, Award,
+  Upload, FileText, User, Link2, Loader2, X, BarChart2,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, RadialBarChart, RadialBar,
@@ -32,6 +33,9 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const APPLICATIONS = [
@@ -104,10 +108,12 @@ function ChartTooltip({ active, payload, label, unit = '' }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function BESSConfig() {
-  const { units, configs, sites } = useApiMulti({
+  const { units, configs, sites, clients, projects: projectsData } = useApiMulti({
     units: bessApi.units,
     configs: bessApi.configs,
     sites: bessApi.sites,
+    clients: bessApi.clients,
+    projects: bessApi.projects,
   });
 
   // ── ALL hooks must be declared before any conditional return ────────────
@@ -119,6 +125,134 @@ export default function BESSConfig() {
   const [socMax,       setSocMax]       = useState(90);
   const [peakKw,       setPeakKw]       = useState('');
   const [tariffDiff,   setTariffDiff]   = useState(4.5);
+
+  // Load Profile tab state
+  const [lpMode,       setLpMode]       = useState(null);      // 'bills'|'client'|'backup'|'manual'
+  const [lpFile,       setLpFile]       = useState(null);
+  const [lpParsing,    setLpParsing]    = useState(false);
+  const [lpParsed,     setLpParsed]     = useState(null);
+  const [lpParseErr,   setLpParseErr]   = useState(null);
+  const [lpClientId,   setLpClientId]   = useState('');
+  const [lpBackupHrs,  setLpBackupHrs]  = useState('4');
+  const [lpLoadKw,     setLpLoadKw]     = useState('');
+  const [lpSaved,      setLpSaved]      = useState(false);
+  const [lpData,       setLpData]       = useState(null);  // normalised load data ready for AI
+  const [lpRecommending, setLpRecommending] = useState(false);
+  const [lpRec,        setLpRec]        = useState(null);  // AI recommendation result
+  const [lpRecError,   setLpRecError]   = useState(null);
+  const [lpVerified,   setLpVerified]   = useState(false);
+  const [lpManualKwh,  setLpManualKwh]  = useState(Array(12).fill(''));
+  const lpFileRef = useRef(null);
+
+  // ── Sizing Tool state ──────────────────────────────────────────────────────
+  const [szUseCase,       setSzUseCase]       = useState(null); // 'dg'|'tod'
+  const [szLoadKw,        setSzLoadKw]        = useState('');
+  const [szBackupHrs,     setSzBackupHrs]     = useState('4');
+  const [szFuelCost,      setSzFuelCost]      = useState('90');
+  const [szDgEff,         setSzDgEff]         = useState('0.31');
+  const [szDgDays,        setSzDgDays]        = useState('300');
+  const [szDispatchKwh,   setSzDispatchKwh]   = useState('');
+  const [szPeakTariff,    setSzPeakTariff]    = useState('');
+  const [szOffpeakTariff, setSzOffpeakTariff] = useState('');
+  const [szPeakWindow,    setSzPeakWindow]    = useState('4');
+  const [szTodDays,       setSzTodDays]       = useState('300');
+  const [szResult,        setSzResult]        = useState(null);
+  const [szAiNote,        setSzAiNote]        = useState(null);
+  const [szAiLoading,     setSzAiLoading]     = useState(false);
+
+  const resetLp = () => {
+    setLpMode(null); setLpFile(null); setLpParsed(null); setLpParseErr(null);
+    setLpSaved(false); setLpData(null); setLpRec(null); setLpRecError(null);
+    setLpVerified(false); setLpManualKwh(Array(12).fill(''));
+  };
+
+  const runRecommendation = async (data) => {
+    setLpData(data);
+    setLpRec(null); setLpRecError(null); setLpVerified(false);
+    setLpRecommending(true);
+    try {
+      const result = await bessApi.recommendBess({ load_data: data, available_units: unitList });
+      setLpRec(result?.data ?? result);
+    } catch (err) {
+      setLpRecError(err.message ?? 'Recommendation failed.');
+    } finally {
+      setLpRecommending(false);
+    }
+  };
+
+  const applyRecommendation = () => {
+    if (!lpRec?.primary) return;
+    const unit = unitList.find(u => u.model === lpRec.primary.unit_model);
+    if (unit) { setSelectedUnit(unit); setNumUnits(lpRec.primary.unit_count); }
+    setLpVerified(true);
+  };
+
+  const runSizing = async () => {
+    let nominal_kwh = 0, nominal_kw = 0, annual_savings_inr = 0, dispatch_kwh_per_year = 0;
+    if (szUseCase === 'dg') {
+      const load = parseFloat(szLoadKw) || 0;
+      const hrs  = parseFloat(szBackupHrs) || 0;
+      const days = parseFloat(szDgDays) || 300;
+      const fuel = parseFloat(szFuelCost) || 0;
+      const eff  = parseFloat(szDgEff) || 0.31;
+      nominal_kwh           = (load * hrs) / 0.85;
+      nominal_kw            = load;
+      dispatch_kwh_per_year = load * hrs * days;
+      annual_savings_inr    = load * hrs * eff * fuel * days;
+    } else {
+      const dispatch = parseFloat(szDispatchKwh) || 0;
+      const peak     = parseFloat(szPeakTariff) || 0;
+      const offpeak  = parseFloat(szOffpeakTariff) || 0;
+      const window   = parseFloat(szPeakWindow) || 4;
+      const days     = parseFloat(szTodDays) || 300;
+      nominal_kwh           = dispatch / 0.85;
+      nominal_kw            = dispatch / window;
+      dispatch_kwh_per_year = dispatch * days;
+      annual_savings_inr    = dispatch * (peak - offpeak) * days;
+    }
+    const mkSlot = (count, kwh, kw, capex) => ({
+      count, kwh, kw, capex,
+      headroom:    Math.round(((kwh - nominal_kwh) / nominal_kwh) * 100),
+      payback:     capex > 0 && annual_savings_inr > 0 ? capex / annual_savings_inr : null,
+      roi10:       capex > 0 && annual_savings_inr > 0
+        ? Math.round(((annual_savings_inr * 10 - capex) / capex) * 100) : null,
+      benefit_kwh: dispatch_kwh_per_year > 0 ? annual_savings_inr / dispatch_kwh_per_year : null,
+    });
+    const allConfigs = unitList
+      .filter(u => (u.energy_kwh ?? 0) > 0)
+      .map(unit => {
+        const ecoCount = Math.max(1, Math.ceil(nominal_kwh / unit.energy_kwh));
+        const recCount = Math.max(1, Math.ceil((nominal_kwh * 1.15) / unit.energy_kwh));
+        return {
+          unit,
+          eco: mkSlot(ecoCount, ecoCount * unit.energy_kwh, ecoCount * unit.power_kw, ecoCount * (unit.price_ex_gst || 0)),
+          rec: mkSlot(recCount, recCount * unit.energy_kwh, recCount * unit.power_kw, recCount * (unit.price_ex_gst || 0)),
+        };
+      });
+    setSzResult({ nominal_kwh, nominal_kw, annual_savings_inr, allConfigs });
+    // Async AI narrative — non-blocking
+    setSzAiNote(null); setSzAiLoading(true);
+    try {
+      const aiRes = await bessApi.recommendBess({
+        load_data: {
+          source: szUseCase === 'dg' ? 'DG Replacement' : 'ToD Arbitrage',
+          nominal_kwh: Math.round(nominal_kwh), nominal_kw: Math.round(nominal_kw),
+          annual_savings_inr: Math.round(annual_savings_inr), use_case: szUseCase,
+        },
+        available_units: unitList,
+      });
+      setSzAiNote(aiRes?.data ?? aiRes);
+    } catch (_) { /* non-blocking */ } finally { setSzAiLoading(false); }
+  };
+
+  // Proposal modal state
+  const [showPropModal,  setShowPropModal]  = useState(false);
+  const [propClientId,   setPropClientId]   = useState('');
+  const [propSiteId,     setPropSiteId]     = useState('');
+  const [propNotes,      setPropNotes]      = useState('');
+  const [propLoading,    setPropLoading]    = useState(false);
+  const [propSuccess,    setPropSuccess]    = useState(null); // proposal number on success
+  const [propProjectId,  setPropProjectId]  = useState('');
 
   // Derive everything here (values are 0/empty while loading — that is fine)
   const unitList   = units?.data  ?? [];
@@ -156,6 +290,34 @@ export default function BESSConfig() {
   // Auto-select first unit once data loads (deferred to avoid setState-in-render)
   if (!selectedUnit && unitList.length > 0) {
     setTimeout(() => setSelectedUnit(unitList[0]), 0);
+  }
+
+  const clientList  = clients?.data      ?? [];
+  const siteList    = sites?.data        ?? [];
+  const projectList = projectsData?.data ?? [];
+
+  async function handleGenerateProposal() {
+    if (!propClientId) return;
+    setPropLoading(true);
+    try {
+      const res = await bessApi.createProposal({
+        client_id:     parseInt(propClientId),
+        site_id:       (propSiteId && propSiteId !== 'none') ? parseInt(propSiteId) : null,
+        project_id:    propProjectId ? parseInt(propProjectId) : null,
+        capex_ex_gst:  totalPrice,
+        annual_savings: Math.round(annualSavings),
+        payback_years:  parseFloat(simplePayback) || null,
+        irr_percent:    irr10yr || null,
+        notes: propNotes ||
+          `${numUnits}× ${u.model ?? 'BESS'} | ${totalPower} kW / ${totalEnergy} kWh | ${coupling}-Coupled | ${appLabel}`,
+        validity_days: 30,
+      });
+      setPropSuccess(res.data?.proposal_number ?? 'Created');
+    } catch (e) {
+      alert('Error creating proposal: ' + (e?.response?.data?.error ?? e.message));
+    } finally {
+      setPropLoading(false);
+    }
   }
 
   // Non-hook derived values that need loaded data
@@ -211,7 +373,7 @@ export default function BESSConfig() {
         <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-6">
 
           {/* ── LEFT PANEL: configurator ─────────────────────────────── */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
 
             {/* Unit selector */}
             <Card>
@@ -221,42 +383,40 @@ export default function BESSConfig() {
                 </CardTitle>
                 <CardDescription>Live catalogue from database</CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-2">
+              <CardContent className="p-2">
                 {unitList.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">No active units in database.</p>
                 ) : (
-                  unitList.map((unit) => {
-                    const active = activeUnit?.id === unit.id;
-                    return (
-                      <button
-                        key={unit.id}
-                        onClick={() => setSelectedUnit(unit)}
-                        className={`w-full text-left rounded-lg border-2 px-4 py-3 transition-all ${
-                          active
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-border hover:border-orange-300 bg-background'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className={`font-black text-sm ${active ? 'text-orange-500' : 'text-foreground'}`}>
-                              {unit.model}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {unit.power_kw} kW · {unit.energy_kwh} kWh · {unit.chemistry}
+                  <div className="max-h-[260px] overflow-y-auto flex flex-col gap-1 pr-1">
+                    {unitList.map((unit) => {
+                      const active = activeUnit?.id === unit.id;
+                      return (
+                        <button
+                          key={unit.id}
+                          onClick={() => setSelectedUnit(unit)}
+                          className={`w-full text-left rounded-md border px-3 py-2 transition-all ${
+                            active
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-border hover:border-orange-300 bg-background'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center gap-2">
+                            <div className="min-w-0">
+                              <p className={`font-black text-xs truncate ${active ? 'text-orange-500' : 'text-foreground'}`}>
+                                {unit.model}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {unit.power_kw} kW · {unit.energy_kwh} kWh
+                              </p>
+                            </div>
+                            <p className={`font-black text-xs shrink-0 ${active ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                              {Number(unit.price_ex_gst) > 0 ? inrL(unit.price_ex_gst) : 'On request'}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className="font-black text-orange-500 text-sm">{inrL(unit.price_ex_gst)}</p>
-                            <p className="text-[10px] text-muted-foreground">ex-GST / unit</p>
-                          </div>
-                        </div>
-                        {active && (
-                          <Progress value={85} className="mt-2 h-1" indicatorClassName="bg-orange-500" />
-                        )}
-                      </button>
-                    );
-                  })
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -415,11 +575,13 @@ export default function BESSConfig() {
 
           {/* ── RIGHT PANEL: analysis tabs ───────────────────────────── */}
           <Tabs defaultValue="summary" className="flex flex-col gap-4">
-            <TabsList className="w-full grid grid-cols-4">
+            <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="summary">Summary</TabsTrigger>
               <TabsTrigger value="financials">Financials</TabsTrigger>
-              <TabsTrigger value="tod">ToD Analysis</TabsTrigger>
+              <TabsTrigger value="tod">ToD</TabsTrigger>
               <TabsTrigger value="specs">Specs</TabsTrigger>
+              <TabsTrigger value="loadprofile">Load Profile</TabsTrigger>
+              <TabsTrigger value="sizing">Sizing</TabsTrigger>
             </TabsList>
 
             {/* ── TAB: Summary ─────────────────────────────────────── */}
@@ -811,12 +973,947 @@ export default function BESSConfig() {
                 </CardContent>
               </Card>
 
-              <Button className="w-full bg-orange-500 hover:bg-orange-600 h-11 text-sm font-bold">
+              <Button
+                className="w-full bg-orange-500 hover:bg-orange-600 h-11 text-sm font-bold"
+                onClick={() => { setPropSuccess(null); setShowPropModal(true); }}
+                disabled={!activeUnit}
+              >
                 Generate Commercial Proposal <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </TabsContent>
+
+            {/* ── TAB: Load Profile ─────────────────────────────────── */}
+            <TabsContent value="loadprofile" className="flex flex-col gap-4 mt-0">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-orange-500" />
+                    Load Profile &amp; AI Sizing
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Provide load data → AI recommends capacity → verify and apply to configurator.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+
+                  {/* ── STATE: Verified ── */}
+                  {lpVerified && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-xs text-green-700 font-bold">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        Applied — {numUnits}× {activeUnit?.model} ({totalEnergy.toLocaleString('en-IN')} kWh / {totalPower.toLocaleString('en-IN')} kW) is now active.
+                      </div>
+                      <Button variant="outline" className="h-8 text-xs" onClick={resetLp}>
+                        <X className="w-3 h-3 mr-1" /> Reset Load Profile
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* ── STATE: Analysis Sheet ── */}
+                  {!lpVerified && lpRec && (
+                    <div className="flex flex-col gap-4">
+                      {/* Header row */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <Cpu className="w-3.5 h-3.5 text-orange-500" /> AI Sizing Analysis
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-orange-100 text-orange-700 text-[10px] border-0">{lpData?.source}</Badge>
+                          <button onClick={resetLp} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                            <X className="w-3 h-3" /> Reset
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Load summary tiles */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          ['Total kWh', lpData?.total_monthly_kwh ? `${Number(lpData.total_monthly_kwh).toLocaleString('en-IN')} kWh/mo` : lpData?.required_kwh ? `${Number(lpData.required_kwh).toFixed(0)} kWh` : lpData?.avg_monthly_kwh ? `${Math.round(lpData.avg_monthly_kwh).toLocaleString('en-IN')} kWh/mo` : '—'],
+                          ['Max Demand', lpData?.max_demand_kw ? `${lpData.max_demand_kw} kW` : lpData?.critical_load_kw ? `${lpData.critical_load_kw} kW` : '—'],
+                          ['Key Driver', lpRec.sizing_logic?.key_driver ?? '—'],
+                          ['Application', lpRec.primary?.application?.replace(/_/g,' ') ?? '—'],
+                        ].map(([lbl, val]) => (
+                          <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
+                            <p className="text-xs font-bold text-foreground mt-0.5 capitalize">{val}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Primary recommendation */}
+                      <Card className="border-orange-300 bg-orange-50/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500 mb-1">Recommended Configuration</p>
+                              <p className="text-lg font-black text-foreground">
+                                {lpRec.primary.unit_count} × {lpRec.primary.unit_model}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {lpRec.primary.total_kwh?.toLocaleString('en-IN')} kWh &nbsp;·&nbsp; {lpRec.primary.total_kw?.toLocaleString('en-IN')} kW
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] text-muted-foreground uppercase">CAPEX Ex-GST</p>
+                              <p className="text-base font-black text-foreground">
+                                {inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0))}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                + GST = {inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0) * 1.18)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed border-t border-orange-200 pt-3">
+                            {lpRec.primary.reasoning}
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Sizing options table */}
+                      <div className="flex flex-col gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">All Sizing Options</p>
+                        <div className="rounded-xl border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/60 hover:bg-muted/60">
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Option</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Configuration</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">kWh</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">CAPEX</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Savings/yr</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Payback</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {/* Primary */}
+                              <TableRow className="bg-orange-50/60">
+                                <TableCell className="py-2 text-xs font-bold text-orange-600">★ Recommended</TableCell>
+                                <TableCell className="py-2 text-xs font-bold">{lpRec.primary.unit_count}× {lpRec.primary.unit_model}</TableCell>
+                                <TableCell className="py-2 text-xs text-right">{(lpRec.primary.total_kwh ?? 0).toLocaleString('en-IN')}</TableCell>
+                                <TableCell className="py-2 text-xs text-right font-bold">{inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0))}</TableCell>
+                                <TableCell className="py-2 text-xs text-right text-green-600 font-bold">{inrL(lpRec.financial_estimate?.annual_savings_inr ?? 0)}</TableCell>
+                                <TableCell className="py-2 text-xs text-right font-bold">{lpRec.financial_estimate?.simple_payback_years?.toFixed(1) ?? '—'} yrs</TableCell>
+                              </TableRow>
+                              {/* Alternatives */}
+                              {(lpRec.alternatives ?? []).map((alt, i) => {
+                                const altUnit = unitList.find(u => u.model === alt.unit_model);
+                                const altCapex = alt.unit_count * (altUnit?.price_ex_gst ?? 0);
+                                return (
+                                  <TableRow key={i}>
+                                    <TableCell className="py-2 text-xs text-muted-foreground">{alt.label}</TableCell>
+                                    <TableCell className="py-2 text-xs">{alt.unit_count}× {alt.unit_model}</TableCell>
+                                    <TableCell className="py-2 text-xs text-right">{(alt.total_kwh ?? alt.unit_count * (altUnit?.energy_kwh ?? 0)).toLocaleString('en-IN')}</TableCell>
+                                    <TableCell className="py-2 text-xs text-right">{inrCr(altCapex)}</TableCell>
+                                    <TableCell className="py-2 text-xs text-right text-muted-foreground">—</TableCell>
+                                    <TableCell className="py-2 text-xs text-right text-muted-foreground">—</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {lpRec.sizing_logic?.rationale && (
+                          <p className="text-[10px] text-muted-foreground italic px-1 leading-relaxed">{lpRec.sizing_logic.rationale}</p>
+                        )}
+                        {lpRec.financial_estimate?.assumptions && (
+                          <p className="text-[10px] text-muted-foreground italic px-1">Assumptions: {lpRec.financial_estimate.assumptions}</p>
+                        )}
+                      </div>
+
+                      {/* Verification buttons */}
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1 bg-[#2D2D2D] hover:bg-black h-10 text-xs font-bold"
+                          onClick={applyRecommendation}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Verify &amp; Apply to Configurator
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-10 text-xs px-4"
+                          onClick={() => { setLpRec(null); setLpData(null); }}
+                        >
+                          Recalculate
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── STATE: AI Loading ── */}
+                  {!lpVerified && !lpRec && lpRecommending && (
+                    <div className="flex flex-col items-center gap-3 py-8">
+                      <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                      <p className="text-xs font-bold text-foreground">Gemini is analysing your load data…</p>
+                      <p className="text-[11px] text-muted-foreground">Running sizing calculations and financial model</p>
+                    </div>
+                  )}
+
+                  {/* ── STATE: Error ── */}
+                  {lpRecError && !lpRecommending && (
+                    <div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{lpRecError}</div>
+                  )}
+
+                  {/* ── STATE: Data captured, ready to analyse ── */}
+                  {!lpVerified && !lpRec && !lpRecommending && lpData && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                        <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-foreground">Load data captured from {lpData.source}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {lpData.total_monthly_kwh ? `${Number(lpData.total_monthly_kwh).toLocaleString('en-IN')} kWh/month` : ''}
+                            {lpData.max_demand_kw ? ` · ${lpData.max_demand_kw} kW max demand` : ''}
+                            {lpData.critical_load_kw ? `${lpData.critical_load_kw} kW × ${lpData.backup_hours}h backup` : ''}
+                            {lpData.avg_monthly_kwh ? `${Math.round(lpData.avg_monthly_kwh).toLocaleString('en-IN')} kWh/month avg` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
+                        onClick={() => runRecommendation(lpData)}
+                      >
+                        <Cpu className="w-3.5 h-3.5 mr-1.5" /> Generate AI Sizing Recommendation
+                      </Button>
+                      <button
+                        className="text-xs text-center text-muted-foreground hover:text-foreground underline underline-offset-2"
+                        onClick={() => { setLpData(null); }}
+                      >
+                        Change input data
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── INPUT MODES (only when no data captured and not showing results) ── */}
+                  {!lpVerified && !lpRec && !lpRecommending && !lpData && (
+                    <>
+                  {/* Mode selector cards */}
+                  {!lpMode && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { key: 'bills',  icon: FileText, label: 'Bills / Documents', desc: 'Upload EB bills or PDFs — AI extracts kWh, demand, ToD data automatically.' },
+                        { key: 'client', icon: User,     label: 'Client Data',        desc: 'Pull from an existing client\'s saved load profile in the database.' },
+                        { key: 'backup', icon: Clock,    label: 'Backup Requirement', desc: 'Specify load kW and desired backup hours — system calculates kWh needed.' },
+                        { key: 'manual', icon: Upload,   label: 'Manual Input Sheet', desc: 'Enter hourly/monthly consumption values directly or via the Google Form.' },
+                      ].map(({ key, icon: Icon, label, desc }) => (
+                        <button
+                          key={key}
+                          onClick={() => { setLpMode(key); setLpParsed(null); setLpParseErr(null); setLpFile(null); setLpSaved(false); }}
+                          className="text-left p-4 rounded-xl border-2 border-border hover:border-orange-400 hover:bg-orange-50/50 transition-all group"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                              <Icon className="w-4 h-4 text-orange-500" />
+                            </div>
+                            <span className="text-xs font-bold text-foreground">{label}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── MODE: Bills / Documents ── */}
+                  {lpMode === 'bills' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setLpMode(null); setLpFile(null); setLpParsed(null); setLpParseErr(null); }} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <X className="w-3 h-3" /> Back
+                        </button>
+                        <span className="text-xs font-bold text-foreground">Bills / Documents — AI Extraction</span>
+                      </div>
+
+                      {/* Sub-option: manual entry or document upload */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <a
+                          href="https://docs.google.com/forms/d/e/1FAIpQLSfffMETWxybmqb83ss9qTXdcAkRlXfvpE5HvbzdICXTERRU2w/viewform?usp=sharing"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-border hover:border-orange-400 hover:bg-orange-50/50 transition-all text-center"
+                        >
+                          <Link2 className="w-5 h-5 text-orange-500" />
+                          <span className="text-xs font-bold">Manual Entry Form</span>
+                          <span className="text-[10px] text-muted-foreground">Open Google Form → client fills monthly data</span>
+                        </a>
+                        <button
+                          onClick={() => lpFileRef.current?.click()}
+                          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-orange-300 hover:border-orange-500 hover:bg-orange-50/50 transition-all text-center"
+                        >
+                          <Upload className="w-5 h-5 text-orange-500" />
+                          <span className="text-xs font-bold">Upload Document</span>
+                          <span className="text-[10px] text-muted-foreground">PDF, image, or Excel bill — Gemini AI reads it</span>
+                        </button>
+                      </div>
+
+                      <input
+                        ref={lpFileRef}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setLpFile(file);
+                          setLpParsed(null);
+                          setLpParseErr(null);
+                          setLpParsing(true);
+                          (async () => {
+                            try {
+                              const base64 = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                                reader.onerror = () => reject(new Error('File read error.'));
+                                reader.readAsDataURL(file);
+                              });
+                              const result = await bessApi.parseBill({ fileData: base64, mimeType: file.type });
+                              setLpParsed(result);
+                            } catch (err) {
+                              setLpParseErr(err.message ?? 'Gemini parsing failed.');
+                            } finally {
+                              setLpParsing(false);
+                            }
+                          })();
+                        }}
+                      />
+
+                      {lpFile && !lpParsed && !lpParsing && !lpParseErr && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">
+                          <FileText className="w-4 h-4" /> {lpFile.name}
+                        </div>
+                      )}
+
+                      {lpParsing && (
+                        <div className="flex items-center gap-2 text-xs text-orange-500 bg-orange-50 rounded-lg px-3 py-3">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Gemini is reading the document…
+                        </div>
+                      )}
+
+                      {lpParseErr && (
+                        <div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{lpParseErr}</div>
+                      )}
+
+                      {lpParsed && (
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 font-bold">
+                            <CheckCircle2 className="w-4 h-4" /> Extraction complete — review below
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              ['Consumer',         lpParsed.consumer_name],
+                              ['DISCOM',            lpParsed.discom],
+                              ['Tariff Category',  lpParsed.tariff_category],
+                              ['Month / Year',     lpParsed.month && lpParsed.year ? `${lpParsed.month}/${lpParsed.year}` : '—'],
+                              ['Total Units (kWh)',lpParsed.total_units_kwh ? `${lpParsed.total_units_kwh} kWh` : '—'],
+                              ['Max Demand',       lpParsed.max_demand_kw    ? `${lpParsed.max_demand_kw} kW`  : '—'],
+                              ['Peak kWh',         lpParsed.tod_peak_kwh     ? `${lpParsed.tod_peak_kwh} kWh`  : '—'],
+                              ['Off-Peak kWh',     lpParsed.tod_offpeak_kwh  ? `${lpParsed.tod_offpeak_kwh} kWh` : '—'],
+                              ['Night kWh',        lpParsed.tod_night_kwh    ? `${lpParsed.tod_night_kwh} kWh`  : '—'],
+                              ['Contract Demand',  lpParsed.contract_demand_kva ? `${lpParsed.contract_demand_kva} kVA` : '—'],
+                              ['Sanctioned Load',  lpParsed.sanctioned_load_kva ? `${lpParsed.sanctioned_load_kva} kVA` : '—'],
+                              ['Total Bill',       lpParsed.total_amount_inr ? `₹${Number(lpParsed.total_amount_inr).toLocaleString('en-IN')}` : '—'],
+                            ].map(([lbl, val]) => (
+                              <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2">
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
+                                <p className="text-xs font-bold text-foreground mt-0.5">{val ?? '—'}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <Button
+                            className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
+                            onClick={() => runRecommendation({
+                              source: 'EB Bill',
+                              total_monthly_kwh: lpParsed.total_units_kwh,
+                              max_demand_kw:     lpParsed.max_demand_kw,
+                              peak_kwh:          lpParsed.tod_peak_kwh,
+                              offpeak_kwh:       lpParsed.tod_offpeak_kwh,
+                              night_kwh:         lpParsed.tod_night_kwh,
+                              contract_demand_kva: lpParsed.contract_demand_kva,
+                              tariff_category:   lpParsed.tariff_category,
+                              discom:            lpParsed.discom,
+                              consumer_name:     lpParsed.consumer_name,
+                            })}
+                          >
+                            <Cpu className="w-3.5 h-3.5 mr-1.5" /> Use this bill — Get AI Recommendation
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── MODE: Client Data ── */}
+                  {lpMode === 'client' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setLpMode(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <X className="w-3 h-3" /> Back
+                        </button>
+                        <span className="text-xs font-bold text-foreground">Client Load Profile</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Select Client</Label>
+                        <Select value={lpClientId} onValueChange={setLpClientId}>
+                          <SelectTrigger className="h-9 text-xs">
+                            <SelectValue placeholder="Choose client…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(clients?.data ?? []).map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.company_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {lpClientId && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs text-orange-700">
+                          Load profile data for this client will be pulled from their site's saved records.
+                          Navigate to the <strong>Sites</strong> page to add or review load profiles per site.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── MODE: Backup Requirement ── */}
+                  {lpMode === 'backup' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setLpMode(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <X className="w-3 h-3" /> Back
+                        </button>
+                        <span className="text-xs font-bold text-foreground">Backup Requirement Calculator</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Critical Load (kW)</Label>
+                          <Input
+                            type="number" min="0" placeholder="e.g. 250"
+                            className="h-9 text-xs"
+                            value={lpLoadKw}
+                            onChange={e => setLpLoadKw(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Backup Hours Needed</Label>
+                          <Input
+                            type="number" min="0.5" step="0.5" placeholder="e.g. 4"
+                            className="h-9 text-xs"
+                            value={lpBackupHrs}
+                            onChange={e => setLpBackupHrs(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      {lpLoadKw && lpBackupHrs && (
+                        <div className="flex flex-col gap-3">
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              ['Required Energy', `${(parseFloat(lpLoadKw) * parseFloat(lpBackupHrs)).toFixed(0)} kWh`],
+                              ['At 80% DoD',      `${(parseFloat(lpLoadKw) * parseFloat(lpBackupHrs) / 0.8).toFixed(0)} kWh`],
+                              ['Units (est.)',    `${Math.ceil((parseFloat(lpLoadKw) * parseFloat(lpBackupHrs) / 0.8) / 261)} × UESS-125`],
+                            ].map(([lbl, val]) => (
+                              <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2 text-center">
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
+                                <p className="text-sm font-black text-orange-500 mt-0.5">{val}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <Button
+                            className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
+                            onClick={() => runRecommendation({
+                              source: 'Backup Requirement',
+                              critical_load_kw:   parseFloat(lpLoadKw),
+                              backup_hours:        parseFloat(lpBackupHrs),
+                              required_kwh:        parseFloat(lpLoadKw) * parseFloat(lpBackupHrs),
+                              required_kwh_at_80dod: parseFloat(lpLoadKw) * parseFloat(lpBackupHrs) / 0.8,
+                            })}
+                          >
+                            <Cpu className="w-3.5 h-3.5 mr-1.5" /> Get AI Recommendation
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── MODE: Manual Input Sheet ── */}
+                  {lpMode === 'manual' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setLpMode(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <X className="w-3 h-3" /> Back
+                        </button>
+                        <span className="text-xs font-bold text-foreground">Manual Input Sheet</span>
+                      </div>
+                      <a
+                        href="https://docs.google.com/forms/d/e/1FAIpQLSfffMETWxybmqb83ss9qTXdcAkRlXfvpE5HvbzdICXTERRU2w/viewform?usp=sharing"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:bg-orange-50/50 transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                          <Link2 className="w-4 h-4 text-orange-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">UnityESS BESS Intake Form</p>
+                          <p className="text-[10px] text-muted-foreground">Send this to the client to fill their load data</p>
+                        </div>
+                      </a>
+                      <Separator />
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Or enter monthly totals manually</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                          <div key={m} className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">{m} (kWh)</Label>
+                            <Input
+                              type="number" min="0" placeholder="0"
+                              className="h-8 text-xs"
+                              value={lpManualKwh[i]}
+                              onChange={e => {
+                                const next = [...lpManualKwh];
+                                next[i] = e.target.value;
+                                setLpManualKwh(next);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {lpManualKwh.some(v => v && parseFloat(v) > 0) && (
+                        <Button
+                          className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
+                          onClick={() => {
+                            const vals = lpManualKwh.map(v => parseFloat(v) || 0);
+                            const filled = vals.filter(v => v > 0);
+                            const total = vals.reduce((a, b) => a + b, 0);
+                            const avg = filled.length ? total / filled.length : 0;
+                            const max = Math.max(...vals);
+                            runRecommendation({
+                              source: 'Manual Input',
+                              monthly_kwh: vals,
+                              total_annual_kwh: total,
+                              avg_monthly_kwh: avg,
+                              max_monthly_kwh: max,
+                              months_with_data: filled.length,
+                            });
+                          }}
+                        >
+                          <Cpu className="w-3.5 h-3.5 mr-1.5" /> Get AI Recommendation
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  </> /* end !lpData input modes */
+                  )} {/* end !lpVerified && !lpRec && !lpRecommending && !lpData */}
+
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* ── TAB: Sizing ──────────────────────────────────────────────── */}
+            <TabsContent value="sizing" className="flex flex-col gap-4 mt-0">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-orange-500" />
+                    BESS Sizing Tool
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Rule-based requirement calculator → Economical &amp; Recommended configurations → Finance model.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+
+                  {/* ── PHASE 1: Use case selection ── */}
+                  {!szUseCase && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        {
+                          key: 'dg',
+                          label: 'DG Replacement',
+                          desc: 'Size BESS to replace diesel generator runtime. Savings calculated from fuel displaced.',
+                        },
+                        {
+                          key: 'tod',
+                          label: 'ToD Arbitrage',
+                          desc: 'Size BESS for peak/off-peak tariff arbitrage. Savings from daily tariff spread.',
+                        },
+                      ].map(({ key, label, desc }) => (
+                        <button
+                          key={key}
+                          onClick={() => { setSzUseCase(key); setSzResult(null); setSzAiNote(null); }}
+                          className="text-left p-4 rounded-xl border-2 border-border hover:border-orange-400 hover:bg-orange-50/50 transition-all group"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                              <TrendingUp className="w-4 h-4 text-orange-500" />
+                            </div>
+                            <span className="text-xs font-black text-foreground">{label}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── PHASE 2: Inputs ── */}
+                  {szUseCase && !szResult && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSzUseCase(null)}
+                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                          <X className="w-3 h-3" /> Back
+                        </button>
+                        <span className="text-xs font-bold text-foreground">
+                          {szUseCase === 'dg' ? 'DG Replacement Inputs' : 'ToD Arbitrage Inputs'}
+                        </span>
+                      </div>
+
+                      {szUseCase === 'dg' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Critical Load (kW)</Label>
+                            <Input type="number" min="0" placeholder="e.g. 250" className="h-9 text-xs"
+                              value={szLoadKw} onChange={e => setSzLoadKw(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Backup Duration (hrs)</Label>
+                            <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4" className="h-9 text-xs"
+                              value={szBackupHrs} onChange={e => setSzBackupHrs(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fuel Cost (₹/litre)</Label>
+                            <Input type="number" min="0" placeholder="e.g. 90" className="h-9 text-xs"
+                              value={szFuelCost} onChange={e => setSzFuelCost(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">DG Efficiency (L/kWh)</Label>
+                            <Input type="number" min="0.1" step="0.01" placeholder="e.g. 0.31" className="h-9 text-xs"
+                              value={szDgEff} onChange={e => setSzDgEff(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5 col-span-2">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
+                            <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
+                              value={szDgDays} onChange={e => setSzDgDays(e.target.value)} />
+                          </div>
+                        </div>
+                      )}
+
+                      {szUseCase === 'tod' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Daily Dispatch (kWh/day)</Label>
+                            <Input type="number" min="0" placeholder="e.g. 500" className="h-9 text-xs"
+                              value={szDispatchKwh} onChange={e => setSzDispatchKwh(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Window (hrs)</Label>
+                            <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4" className="h-9 text-xs"
+                              value={szPeakWindow} onChange={e => setSzPeakWindow(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Tariff (₹/kWh)</Label>
+                            <Input type="number" min="0" step="0.1" placeholder="e.g. 10.5" className="h-9 text-xs"
+                              value={szPeakTariff} onChange={e => setSzPeakTariff(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Off-Peak Tariff (₹/kWh)</Label>
+                            <Input type="number" min="0" step="0.1" placeholder="e.g. 5.5" className="h-9 text-xs"
+                              value={szOffpeakTariff} onChange={e => setSzOffpeakTariff(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5 col-span-2">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
+                            <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
+                              value={szTodDays} onChange={e => setSzTodDays(e.target.value)} />
+                          </div>
+                        </div>
+                      )}
+
+                      <Button
+                        className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
+                        disabled={szUseCase === 'dg'
+                          ? !(szLoadKw && szBackupHrs)
+                          : !(szDispatchKwh && szPeakTariff && szOffpeakTariff)}
+                        onClick={runSizing}
+                      >
+                        <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Calculate Sizing
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* ── PHASE 3: Results ── */}
+                  {szResult && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">
+                          {szUseCase === 'dg' ? 'DG Replacement' : 'ToD Arbitrage'} — Sizing Results
+                        </span>
+                        <button
+                          onClick={() => { setSzResult(null); setSzAiNote(null); }}
+                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                          <X className="w-3 h-3" /> Recalculate
+                        </button>
+                      </div>
+
+                      {/* Nominal requirement */}
+                      <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Nominal Requirement</p>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-[10px] text-gray-400">Energy</p>
+                            <p className="text-xl font-black text-orange-500">{Math.round(szResult.nominal_kwh).toLocaleString('en-IN')} kWh</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-gray-400">Power</p>
+                            <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-gray-400">Annual Savings</p>
+                            <p className="text-xl font-black text-green-400">{inrL(szResult.annual_savings_inr)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Economical + Recommended cards for active unit */}
+                      {(() => {
+                        const ac = szResult.allConfigs.find(c => c.unit.id === activeUnit?.id);
+                        if (!ac) return null;
+                        return (
+                          <div className="grid grid-cols-2 gap-3">
+                            <Card className="border-border">
+                              <CardContent className="p-4 flex flex-col gap-2">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Economical</p>
+                                <p className="text-sm font-black">{ac.eco.count} × {ac.unit.model}</p>
+                                <p className="text-[11px] text-muted-foreground">{ac.eco.kwh.toLocaleString('en-IN')} kWh · {ac.eco.kw.toLocaleString('en-IN')} kW</p>
+                                <Separator />
+                                <div className="space-y-1 text-xs">
+                                  <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.eco.capex > 0 ? inrCr(ac.eco.capex) : 'On request'}</span></div>
+                                  <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold">{ac.eco.headroom}%</span></div>
+                                  <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.eco.payback ? `${ac.eco.payback.toFixed(1)} yrs` : '—'}</span></div>
+                                  <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
+                                </div>
+                                <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full"
+                                  onClick={() => setNumUnits(ac.eco.count)}>
+                                  Apply Economical
+                                </Button>
+                              </CardContent>
+                            </Card>
+                            <Card className="border-orange-300 bg-orange-50/50">
+                              <CardContent className="p-4 flex flex-col gap-2">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">★ Recommended</p>
+                                <p className="text-sm font-black">{ac.rec.count} × {ac.unit.model}</p>
+                                <p className="text-[11px] text-muted-foreground">{ac.rec.kwh.toLocaleString('en-IN')} kWh · {ac.rec.kw.toLocaleString('en-IN')} kW</p>
+                                <Separator />
+                                <div className="space-y-1 text-xs">
+                                  <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.rec.capex > 0 ? inrCr(ac.rec.capex) : 'On request'}</span></div>
+                                  <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold text-orange-500">{ac.rec.headroom}%</span></div>
+                                  <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.rec.payback ? `${ac.rec.payback.toFixed(1)} yrs` : '—'}</span></div>
+                                  <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
+                                </div>
+                                <Button size="sm" className="h-8 text-xs mt-1 w-full bg-orange-500 hover:bg-orange-600"
+                                  onClick={() => setNumUnits(ac.rec.count)}>
+                                  Apply Recommended
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        );
+                      })()}
+
+                      {/* All configurations comparison table */}
+                      <div className="flex flex-col gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">All Configurations</p>
+                        <div className="rounded-xl border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/60 hover:bg-muted/60">
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Model</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-center">Eco (n×kWh)</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-center">Rec (n×kWh)</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Eco CAPEX</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Payback</TableHead>
+                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0"></TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {szResult.allConfigs.map((cfg) => (
+                                <TableRow key={cfg.unit.id} className={cfg.unit.id === activeUnit?.id ? 'bg-orange-50/60' : ''}>
+                                  <TableCell className="py-2 text-xs font-bold">
+                                    {cfg.unit.model}{cfg.unit.id === activeUnit?.id && <span className="ml-1 text-orange-500 text-[10px]">◀ active</span>}
+                                  </TableCell>
+                                  <TableCell className="py-2 text-xs text-center">{cfg.eco.count}× · {cfg.eco.kwh.toLocaleString('en-IN')} kWh</TableCell>
+                                  <TableCell className="py-2 text-xs text-center text-orange-600 font-medium">{cfg.rec.count}× · {cfg.rec.kwh.toLocaleString('en-IN')} kWh</TableCell>
+                                  <TableCell className="py-2 text-xs text-right font-bold">{cfg.eco.capex > 0 ? inrCr(cfg.eco.capex) : '—'}</TableCell>
+                                  <TableCell className="py-2 text-xs text-right">{cfg.eco.payback ? `${cfg.eco.payback.toFixed(1)} yr` : '—'}</TableCell>
+                                  <TableCell className="py-2">
+                                    <button
+                                      onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); }}
+                                      className="text-[10px] text-orange-500 hover:text-orange-700 font-bold whitespace-nowrap"
+                                    >
+                                      Apply ★
+                                    </button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground italic px-1">
+                          Economical = minimum units to meet nominal. Recommended = ≥15% headroom for derating and dispatch buffer.
+                        </p>
+                      </div>
+
+                      {/* AI narrative */}
+                      {szAiLoading && (
+                        <div className="flex items-center gap-2 text-xs text-orange-500 bg-orange-50 rounded-lg px-3 py-2.5">
+                          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                          Gemini generating sizing rationale…
+                        </div>
+                      )}
+                      {szAiNote && !szAiLoading && (
+                        <div className="flex flex-col gap-2 bg-muted/40 rounded-xl p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Cpu className="w-3 h-3" /> AI Rationale
+                          </p>
+                          {(szAiNote.sizing_logic?.rationale || szAiNote.primary?.reasoning) && (
+                            <p className="text-xs text-foreground leading-relaxed">
+                              {szAiNote.sizing_logic?.rationale ?? szAiNote.primary?.reasoning}
+                            </p>
+                          )}
+                          {szAiNote.financial_estimate?.assumptions && (
+                            <p className="text-[11px] text-muted-foreground italic">{szAiNote.financial_estimate.assumptions}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                </CardContent>
+              </Card>
+            </TabsContent>
+
           </Tabs>
         </div>
+
+        {/* ── Generate Proposal Modal ─────────────────────────────────── */}
+        <Dialog open={showPropModal} onOpenChange={(o) => { setShowPropModal(o); if (!o) setPropSuccess(null); }}>
+          <DialogContent className="max-w-md">
+            {propSuccess ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-green-600 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" /> Proposal Created
+                  </DialogTitle>
+                  <DialogDescription>
+                    Proposal <span className="font-black text-foreground">{propSuccess}</span> has been saved.
+                    You can find it under the <strong>Proposals</strong> section.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setShowPropModal(false)}>
+                    Done
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Generate Commercial Proposal</DialogTitle>
+                  <DialogDescription>
+                    Creates a proposal for{' '}
+                    <span className="font-bold text-foreground">
+                      {numUnits}× {u.model ?? 'BESS'} — {inrCr(totalPrice)} Ex-GST
+                    </span>
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-col gap-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Client <span className="text-red-500">*</span></Label>
+                    <Select value={propClientId} onValueChange={setPropClientId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select client…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientList.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Site (optional)</Label>
+                    <Select value={propSiteId} onValueChange={setPropSiteId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select site…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— None —</SelectItem>
+                        {siteList
+                          .filter((s) => !propClientId || String(s.client_id) === propClientId)
+                          .map((s) => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.site_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link to Project (optional)</Label>
+                    <Select value={propProjectId} onValueChange={setPropProjectId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select project…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">— None —</SelectItem>
+                        {projectList.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.project_code} — {p.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Configuration</span><span className="font-bold">{numUnits}× {u.model ?? '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">System</span><span className="font-bold">{totalPower} kW / {totalEnergy} kWh</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">CAPEX (Ex-GST)</span><span className="font-black text-orange-500">{inrCr(totalPrice)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Annual Savings</span><span className="font-bold">{inrL(annualSavings)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{simplePayback} yrs</span></div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Notes (optional)</Label>
+                    <textarea
+                      placeholder="Any additional notes for this proposal…"
+                      value={propNotes}
+                      onChange={(e) => setPropNotes(e.target.value)}
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setShowPropModal(false)}>Cancel</Button>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600"
+                    onClick={handleGenerateProposal}
+                    disabled={!propClientId || propLoading}
+                  >
+                    {propLoading ? 'Creating…' : 'Create Proposal'}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ── Saved Configurations ──────────────────────────────────────── */}
         <Card>

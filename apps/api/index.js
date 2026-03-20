@@ -67,6 +67,8 @@ async function runMigrations() {
   const migrations = [
     // Proposals — columns added in P10 that may not exist in the live schema
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS prop_number  TEXT`,
+    // BESS proposals — project link
+    `ALTER TABLE bess.proposals ADD COLUMN IF NOT EXISTS project_id INTEGER`,
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS sent_at      TIMESTAMPTZ`,
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS closed_at    TIMESTAMPTZ`,
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS content      JSONB`,
@@ -1053,37 +1055,201 @@ app.post('/api/bess/clients', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── PATCH client (inline edit + Google Sheet sync) ────────────────────────
+app.patch('/api/bess/clients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      company_name, contact_person, email, phone, city, state, gstin,
+      // Sheet-only fields (not stored in DB, passed through to Sheets)
+      lead_status, bd_name, requirement_kwh, project_type, meeting_date,
+      timeline, qualified, budgetary_quote, tech_discussion, tc_offer,
+      final_quote, remarks
+    } = req.body;
+
+    if (!company_name) return res.status(400).json({ error: 'company_name required' });
+
+    const { rows: [c] } = await pool.query(
+      `UPDATE bess.clients
+       SET company_name=$1, contact_person=$2, email=$3, phone=$4,
+           city=$5, state=$6, gstin=$7, updated_at=NOW()
+       WHERE id=$8 RETURNING *`,
+      [company_name, contact_person||null, email||null, phone||null,
+       city||null, state||null, gstin||null, id]
+    );
+    if (!c) return res.status(404).json({ error: 'Client not found' });
+
+    // Async sync to Google Sheet — fire and forget, don't block response
+    const webhookUrl = process.env.SHEETS_WEBHOOK_URL;
+    if (webhookUrl) {
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...c,
+          lead_status, bd_name, requirement_kwh, project_type, meeting_date,
+          timeline, qualified, budgetary_quote, tech_discussion, tc_offer,
+          final_quote, remarks
+        }),
+      }).catch(err => console.warn('Sheet sync failed:', err.message));
+    }
+
+    res.json({ data: c });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Geocode helper (Nominatim, no key required) ───────────────────────────
+async function geocode(address, state) {
+  try {
+    const q = encodeURIComponent([address, state, 'India'].filter(Boolean).join(', '));
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=in`,
+      { headers: { 'User-Agent': 'UnityESS-BESSPortal/1.0 (kedar@ornatesolar.com)' } }
+    );
+    const data = await resp.json();
+    if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch {}
+  return null;
+}
+
 // ── Sites ─────────────────────────────────────────────────────────────────
 app.post('/api/bess/sites', async (req, res) => {
   try {
     const { client_id, site_name, address, state, discom, tariff_category,
-            sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number } = req.body;
+            sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number,
+            lat, lng } = req.body;
     if (!client_id || !site_name) return res.status(400).json({ error: 'client_id and site_name required' });
+
+    // Auto-geocode if no coords provided and address/state available
+    let coords = (lat && lng) ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null;
+    if (!coords && (address || state)) {
+      coords = await geocode(address, state);
+    }
+
     const { rows: [s] } = await pool.query(
       `INSERT INTO bess.sites (client_id, site_name, address, state, discom, tariff_category,
-         sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+         sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number, lat, lng)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [client_id, site_name, address||null, state||null, discom||null, tariff_category||null,
-       sanctioned_load_kva||null, contract_demand_kva||null, connection_voltage_kv||null, meter_number||null]
+       sanctioned_load_kva||null, contract_demand_kva||null, connection_voltage_kv||null,
+       meter_number||null, coords?.lat||null, coords?.lng||null]
     );
     res.json({ data: s });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PATCH site (update coords or details) ────────────────────────────────
+app.patch('/api/bess/sites/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { lat, lng } = req.body;
+    const { rows: [s] } = await pool.query(
+      `UPDATE bess.sites SET lat=$1, lng=$2 WHERE id=$3 RETURNING *`,
+      [lat||null, lng||null, id]
+    );
+    if (!s) return res.status(404).json({ error: 'Site not found' });
+    res.json({ data: s });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Gemini Bill Parser ────────────────────────────────────────────────────
+app.post('/api/bess/parse-bill', async (req, res) => {
+  try {
+    const { fileData, mimeType } = req.body;
+    if (!fileData || !mimeType) return res.status(400).json({ error: 'fileData and mimeType required' });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'GEMINI_API_KEY not configured on server' });
+
+    const prompt = `You are analyzing an Indian electricity bill or load data document. Extract these fields and return ONLY a valid JSON object, no explanation:\n{"total_units_kwh":number|null,"max_demand_kw":number|null,"peak_demand_kw":number|null,"tod_peak_kwh":number|null,"tod_offpeak_kwh":number|null,"tod_night_kwh":number|null,"month":number|null,"year":number|null,"sanctioned_load_kva":number|null,"contract_demand_kva":number|null,"tariff_category":string|null,"discom":string|null,"total_amount_inr":number|null,"consumer_name":string|null,"meter_number":string|null}\nUse null for missing fields. Numbers as plain decimals only.`;
+
+    const gr = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: fileData } },
+          ]}],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+        }),
+      }
+    );
+    const gd = await gr.json();
+    if (gd.error) return res.status(502).json({ error: gd.error.message });
+    const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(422).json({ error: 'Could not parse document — try a clearer scan or manual input.' });
+    res.json({ data: JSON.parse(match[0]) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Gemini BESS Recommendation ────────────────────────────────────────────
+app.post('/api/bess/recommend', async (req, res) => {
+  try {
+    const { load_data, available_units } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
+    if (!load_data) return res.status(400).json({ error: 'load_data required' });
+
+    const unitsSummary = (available_units || [])
+      .filter(u => u.price_ex_gst > 0)
+      .map(u => `${u.model}: ${u.power_kw}kW / ${u.energy_kwh}kWh @ ₹${(u.price_ex_gst/1e5).toFixed(1)}L ex-GST`)
+      .join('\n');
+
+    const prompt = `You are a senior BESS (Battery Energy Storage System) sizing engineer specializing in Indian C&I projects under CERC/CEA regulations. LFP chemistry, AC-coupled systems.
+
+Available UnityESS models:
+${unitsSummary || 'UESS-A-125-261: 125kW / 261kWh @ ₹90.0L, UESS-A2-215-418: 215kW / 418kWh @ ₹145.0L'}
+
+Customer load data:
+${JSON.stringify(load_data, null, 2)}
+
+Sizing rules:
+- For ToD arbitrage: capacity = peak_kwh * 0.8 (daily discharge), power >= max_demand * 0.3
+- For backup: capacity = critical_load_kw * backup_hours / 0.8 (DoD factor)
+- For peak shaving: capacity = (demand_to_shave_kw * 2hrs) / 0.8
+- Always round up to nearest whole unit
+- Provide 3 options: Conservative (min viable), Recommended (optimal), Growth (future-proof)
+
+Return ONLY valid JSON, no markdown, no explanation:
+{"primary":{"unit_model":string,"unit_count":number,"total_kwh":number,"total_kw":number,"application":string,"reasoning":string},"alternatives":[{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string},{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string}],"sizing_logic":{"key_driver":string,"recommended_capacity_kwh":number,"recommended_power_kw":number,"rationale":string},"financial_estimate":{"annual_savings_inr":number,"simple_payback_years":number,"tariff_diff_assumed_rs_kwh":number,"assumptions":string}}`;
+
+    const gr = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.15, maxOutputTokens: 2048 },
+        }),
+      }
+    );
+    const gd = await gr.json();
+    if (gd.error) return res.status(502).json({ error: gd.error.message });
+    const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(422).json({ error: 'Gemini did not return a valid recommendation. Try again.' });
+    res.json({ data: JSON.parse(match[0]) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Proposals ─────────────────────────────────────────────────────────────
 app.post('/api/bess/proposals', async (req, res) => {
   try {
-    const { client_id, site_id, bess_config_id, proposal_date, status,
+    const { client_id, site_id, bess_config_id, project_id, proposal_date, status,
             capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes } = req.body;
     if (!client_id)    return res.status(400).json({ error: 'client_id required' });
     if (!capex_ex_gst) return res.status(400).json({ error: 'capex_ex_gst required' });
     const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM bess.proposals');
     const propNum = `PROP-${new Date().getFullYear()}-${String(parseInt(count)+1).padStart(4,'0')}`;
     const { rows: [p] } = await pool.query(
-      `INSERT INTO bess.proposals (client_id, site_id, bess_config_id, proposal_number, proposal_date,
+      `INSERT INTO bess.proposals (client_id, site_id, bess_config_id, project_id, proposal_number, proposal_date,
          status, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [client_id, site_id||null, bess_config_id||null, propNum,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [client_id, site_id||null, bess_config_id||null, project_id||null, propNum,
        proposal_date||new Date().toISOString().split('T')[0],
        status||'draft', capex_ex_gst||null, annual_savings||null,
        payback_years||null, irr_percent||null, validity_days||30, notes||null]
@@ -1108,6 +1274,27 @@ app.post('/api/bess/projects', async (req, res) => {
        po_number||null, po_value_inr||null,
        installation_date||null, commissioning_date||null, warranty_expiry||null]
     );
+    res.json({ data: pj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/bess/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry } = req.body;
+    const fields = [], vals = [];
+    if (status             !== undefined) { fields.push(`status=$${fields.length+1}`);              vals.push(status); }
+    if (po_number          !== undefined) { fields.push(`po_number=$${fields.length+1}`);           vals.push(po_number || null); }
+    if (po_value_inr       !== undefined) { fields.push(`po_value_inr=$${fields.length+1}`);        vals.push(po_value_inr || null); }
+    if (installation_date  !== undefined) { fields.push(`installation_date=$${fields.length+1}`);   vals.push(installation_date || null); }
+    if (commissioning_date !== undefined) { fields.push(`commissioning_date=$${fields.length+1}`);  vals.push(commissioning_date || null); }
+    if (warranty_expiry    !== undefined) { fields.push(`warranty_expiry=$${fields.length+1}`);     vals.push(warranty_expiry || null); }
+    if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
+    vals.push(id);
+    const { rows: [pj] } = await pool.query(
+      `UPDATE bess.projects SET ${fields.join(', ')} WHERE id=$${vals.length} RETURNING *`, vals
+    );
+    if (!pj) return res.status(404).json({ error: 'Project not found' });
     res.json({ data: pj });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1153,15 +1340,21 @@ app.post('/api/bess/tariff-structures', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Run on startup + every hour ───────────────────────────────────────────
-app.listen(PORT, async () => {
-  console.log(`\n🚀  API → http://localhost:${PORT}`);
-  console.log(`🔍  Health → http://localhost:${PORT}/health\n`);
-  await runMigrations();
-  // Short delay to let DB pool stabilise before first run
-  setTimeout(() => {
-    runAutomation().then(() => {
-      setInterval(runAutomation, 60 * 60 * 1000); // hourly
-    });
-  }, 3000);
-});
+// ── Run migrations on cold start ─────────────────────────────────────────
+runMigrations().catch(e => console.error('Migration error:', e.message));
+
+// ── Export for Vercel serverless; listen only in dev ──────────────────────
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, async () => {
+    console.log(`\n🚀  API → http://localhost:${PORT}`);
+    console.log(`🔍  Health → http://localhost:${PORT}/health\n`);
+    // Short delay to let DB pool stabilise before first automation run
+    setTimeout(() => {
+      runAutomation().then(() => {
+        setInterval(runAutomation, 60 * 60 * 1000); // hourly
+      });
+    }, 3000);
+  });
+}
