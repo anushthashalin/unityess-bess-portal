@@ -117,7 +117,6 @@ export default function BESSConfig() {
   });
 
   // ── ALL hooks must be declared before any conditional return ────────────
-  const [activeTab,    setActiveTab]    = useState('sizing');
   const [numUnits,     setNumUnits]     = useState(1);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [coupling,     setCoupling]     = useState('AC');
@@ -186,7 +185,6 @@ export default function BESSConfig() {
     const unit = unitList.find(u => u.model === lpRec.primary.unit_model);
     if (unit) { setSelectedUnit(unit); setNumUnits(lpRec.primary.unit_count); }
     setLpVerified(true);
-    setActiveTab('summary');
   };
 
   const runSizing = async () => {
@@ -372,10 +370,211 @@ export default function BESSConfig() {
         </div>
 
         {/* ── Main layout ───────────────────────────────────────────────── */}
-        <div>
+        <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-6">
 
-          {/* ── Analysis tabs — full width ───────────────────────────── */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
+          {/* ── LEFT PANEL: configurator ─────────────────────────────── */}
+          <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+
+            {/* Unit selector */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-orange-500" /> Select Unit Model
+                </CardTitle>
+                <CardDescription>Live catalogue from database</CardDescription>
+              </CardHeader>
+              <CardContent className="p-2">
+                {unitList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No active units in database.</p>
+                ) : (
+                  <div className="max-h-[260px] overflow-y-auto flex flex-col gap-1 pr-1">
+                    {unitList.map((unit) => {
+                      const active = activeUnit?.id === unit.id;
+                      return (
+                        <button
+                          key={unit.id}
+                          onClick={() => setSelectedUnit(unit)}
+                          className={`w-full text-left rounded-md border px-3 py-2 transition-all ${
+                            active
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-border hover:border-orange-300 bg-background'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center gap-2">
+                            <div className="min-w-0">
+                              <p className={`font-black text-xs truncate ${active ? 'text-orange-500' : 'text-foreground'}`}>
+                                {unit.model}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {unit.power_kw} kW · {unit.energy_kwh} kWh
+                              </p>
+                            </div>
+                            <p className={`font-black text-xs shrink-0 ${active ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                              {Number(unit.price_ex_gst) > 0 ? inrL(unit.price_ex_gst) : 'On request'}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* System parameters */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-orange-500" /> System Parameters
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-5">
+
+                {/* Number of units */}
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Number of Units</Label>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline" size="icon"
+                      onClick={() => setNumUnits(Math.max(1, numUnits - 1))}
+                      className="h-9 w-9 text-lg font-black"
+                    >−</Button>
+                    <span className="text-3xl font-black w-12 text-center">{numUnits}</span>
+                    <Button
+                      variant="outline" size="icon"
+                      onClick={() => setNumUnits(numUnits + 1)}
+                      className="h-9 w-9 text-lg font-black"
+                    >+</Button>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      = {totalPower} kW / {totalEnergy} kWh
+                    </span>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Coupling */}
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Coupling Type</Label>
+                  <div className="flex gap-2">
+                    {COUPLING.map((c) => (
+                      <Button
+                        key={c}
+                        variant={coupling === c ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCoupling(c)}
+                        className={coupling === c ? 'bg-orange-500 hover:bg-orange-600' : ''}
+                      >
+                        {c}-Coupled
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Application */}
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Application</Label>
+                  <Select value={application} onValueChange={setApplication}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {APPLICATIONS.map((a) => (
+                        <SelectItem key={a.value} value={a.value}>
+                          <span className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full inline-block" style={{ background: a.color }} />
+                            {a.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
+                {/* SoC range */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      State of Charge Window
+                    </Label>
+                    <Badge variant="secondary" className="text-xs font-bold">
+                      {socMin}% – {socMax}%
+                    </Badge>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>SoC Min</span><span className="font-bold text-foreground">{socMin}%</span>
+                      </div>
+                      <Slider
+                        min={5} max={30} step={1}
+                        value={[socMin]}
+                        onValueChange={([v]) => setSocMin(v)}
+                        className="[&_[role=slider]]:bg-orange-500 [&_.bg-primary]:bg-orange-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>SoC Max</span><span className="font-bold text-foreground">{socMax}%</span>
+                      </div>
+                      <Slider
+                        min={70} max={100} step={1}
+                        value={[socMax]}
+                        onValueChange={([v]) => setSocMax(v)}
+                        className="[&_[role=slider]]:bg-orange-500 [&_.bg-primary]:bg-orange-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
+                    Usable window: <span className="font-bold text-foreground">{socMax - socMin}%</span>
+                    {' '}→{' '}
+                    <span className="font-bold text-orange-500">{usableEnergy.toFixed(0)} kWh</span> effective
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Financial inputs */}
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Financial Assumptions
+                  </Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Peak Load (kW)</Label>
+                      <Input
+                        type="number" placeholder="e.g. 500"
+                        value={peakKw}
+                        onChange={(e) => setPeakKw(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs flex items-center gap-1">
+                        Tariff Δ (₹/kWh)
+                        <Tooltip>
+                          <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
+                          <TooltipContent>Peak minus off-peak tariff spread used for arbitrage savings</TooltipContent>
+                        </Tooltip>
+                      </Label>
+                      <Input
+                        type="number" step="0.1"
+                        value={tariffDiff}
+                        onChange={(e) => setTariffDiff(+e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── RIGHT PANEL: analysis tabs ───────────────────────────── */}
+          <Tabs defaultValue="summary" className="flex flex-col gap-4">
             <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="summary">Summary</TabsTrigger>
               <TabsTrigger value="financials">Financials</TabsTrigger>
@@ -1494,7 +1693,7 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
                                 </div>
                                 <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full"
-                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.eco.count); setActiveTab('summary'); }}>
+                                  onClick={() => setNumUnits(ac.eco.count)}>
                                   Apply Economical
                                 </Button>
                               </CardContent>
@@ -1512,7 +1711,7 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
                                 </div>
                                 <Button size="sm" className="h-8 text-xs mt-1 w-full bg-orange-500 hover:bg-orange-600"
-                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.rec.count); setActiveTab('summary'); }}>
+                                  onClick={() => setNumUnits(ac.rec.count)}>
                                   Apply Recommended
                                 </Button>
                               </CardContent>
@@ -1548,7 +1747,7 @@ export default function BESSConfig() {
                                   <TableCell className="py-2 text-xs text-right">{cfg.eco.payback ? `${cfg.eco.payback.toFixed(1)} yr` : '—'}</TableCell>
                                   <TableCell className="py-2">
                                     <button
-                                      onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); setActiveTab('summary'); }}
+                                      onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); }}
                                       className="text-[10px] text-orange-500 hover:text-orange-700 font-bold whitespace-nowrap"
                                     >
                                       Apply ★
