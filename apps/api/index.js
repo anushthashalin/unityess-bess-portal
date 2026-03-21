@@ -938,7 +938,24 @@ app.get('/api/bess/sites',              async (req, res) => { const { rows } = a
 app.get('/api/bess/units',              async (req, res) => { const { rows } = await pool.query('SELECT * FROM bess.units WHERE is_active=true ORDER BY power_kw'); res.json({ data: rows }); });
 app.get('/api/bess/proposals',          async (req, res) => { const { rows } = await pool.query('SELECT p.*,c.company_name FROM bess.proposals p JOIN bess.clients c ON c.id=p.client_id ORDER BY p.created_at DESC'); res.json({ data: rows }); });
 app.get('/api/bess/projects',           async (req, res) => { const { rows } = await pool.query('SELECT p.*,c.company_name FROM bess.projects p JOIN bess.clients c ON c.id=p.client_id ORDER BY p.created_at DESC'); res.json({ data: rows }); });
-app.get('/api/bess/bess-configurations',async (req, res) => { const { rows } = await pool.query('SELECT b.*,s.site_name FROM bess.bess_configurations b JOIN bess.sites s ON s.id=b.site_id ORDER BY b.created_at DESC'); res.json({ data: rows }); });
+app.get('/api/bess/bess-configurations', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT b.*,s.site_name FROM bess.bess_configurations b JOIN bess.sites s ON s.id=b.site_id ORDER BY b.created_at DESC');
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/bess/bess-configurations', async (req, res) => {
+  try {
+    const { site_id, config_name, num_units, total_power_kw, total_energy_kwh, coupling_type, application, soc_min, soc_max, charge_hours, discharge_hours } = req.body;
+    if (!site_id || !config_name || !num_units) return res.status(400).json({ error: 'site_id, config_name and num_units are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO bess.bess_configurations (site_id, config_name, num_units, total_power_kw, total_energy_kwh, coupling_type, application, soc_min, soc_max, charge_hours, discharge_hours)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [site_id, config_name, num_units, total_power_kw ?? null, total_energy_kwh ?? null, coupling_type ?? 'AC', application ?? null, soc_min ?? 20, soc_max ?? 90, JSON.stringify(charge_hours ?? []), JSON.stringify(discharge_hours ?? [])]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/bess/tariff-structures',  async (req, res) => { const { rows } = await pool.query('SELECT * FROM bess.tariff_structures ORDER BY state'); res.json({ data: rows }); });
 app.get('/api/bess/load-profiles',      async (req, res) => { const { site_id } = req.query; const { rows } = await pool.query('SELECT * FROM bess.load_profiles WHERE site_id=$1 ORDER BY year,month', [site_id||1]); res.json({ data: rows }); });
 
@@ -1152,6 +1169,63 @@ app.patch('/api/bess/sites/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Cycle Datasets (from IEC-certified LFP test data) ────────────────────
+const CYCLE_DATASETS = {
+  q25c_365: {
+    label: '0.25C / 365 cycles/yr',
+    description: 'Standard C&I ToD arbitrage — once-daily discharge at 0.25C rate',
+    cycles_per_year: 365,
+    years: [
+      { year:1,  soh:0.9609, rte:0.9390 }, { year:2,  soh:0.9303, rte:0.9385 },
+      { year:3,  soh:0.9013, rte:0.9360 }, { year:4,  soh:0.8814, rte:0.9343 },
+      { year:5,  soh:0.8658, rte:0.9330 }, { year:6,  soh:0.8559, rte:0.9321 },
+      { year:7,  soh:0.8422, rte:0.9309 }, { year:8,  soh:0.8244, rte:0.9294 },
+      { year:9,  soh:0.8103, rte:0.9282 }, { year:10, soh:0.7971, rte:0.9270 },
+      { year:11, soh:0.7846, rte:0.9260 }, { year:12, soh:0.7747, rte:0.9251 },
+      { year:13, soh:0.7649, rte:0.9243 }, { year:14, soh:0.7556, rte:0.9235 },
+      { year:15, soh:0.7466, rte:0.9227 }, { year:16, soh:0.7375, rte:0.9219 },
+      { year:17, soh:0.7292, rte:0.9212 }, { year:18, soh:0.7209, rte:0.9205 },
+      { year:19, soh:0.7124, rte:0.9197 }, { year:20, soh:0.7046, rte:0.9191 },
+    ],
+  },
+  h5c_365: {
+    label: '0.5C / 365 cycles/yr',
+    description: 'Heavy C&I / industrial — once-daily at 0.5C (faster discharge, higher stress)',
+    cycles_per_year: 365,
+    years: [
+      { year:1,  soh:0.9531, rte:0.9280 }, { year:2,  soh:0.9263, rte:0.9263 },
+      { year:3,  soh:0.8973, rte:0.9241 }, { year:4,  soh:0.8769, rte:0.9225 },
+      { year:5,  soh:0.8629, rte:0.9214 }, { year:6,  soh:0.8529, rte:0.9207 },
+      { year:7,  soh:0.8396, rte:0.9197 }, { year:8,  soh:0.8210, rte:0.9183 },
+      { year:9,  soh:0.8065, rte:0.9171 }, { year:10, soh:0.7919, rte:0.9160 },
+      { year:11, soh:0.7773, rte:0.9149 }, { year:12, soh:0.7629, rte:0.9138 },
+      { year:13, soh:0.7483, rte:0.9127 }, { year:14, soh:0.7339, rte:0.9116 },
+      { year:15, soh:0.7194, rte:0.9105 }, { year:16, soh:0.7049, rte:0.9094 },
+      { year:17, soh:0.6905, rte:0.9083 }, { year:18, soh:0.6761, rte:0.9072 },
+      { year:19, soh:0.6617, rte:0.9061 }, { year:20, soh:0.6472, rte:0.9050 },
+    ],
+  },
+  h5c_730: {
+    label: '0.5C / 730 cycles/yr',
+    description: 'Utility / dual-shift — twice-daily discharge, high throughput applications',
+    cycles_per_year: 730,
+    years: [
+      { year:1,  soh:0.9323, rte:0.9280 }, { year:2,  soh:0.8877, rte:0.9233 },
+      { year:3,  soh:0.8526, rte:0.9207 }, { year:4,  soh:0.8163, rte:0.9179 },
+      { year:5,  soh:0.7907, rte:0.9159 }, { year:6,  soh:0.7716, rte:0.9145 },
+      { year:7,  soh:0.7491, rte:0.9128 }, { year:8,  soh:0.7293, rte:0.9113 },
+      { year:9,  soh:0.7104, rte:0.9098 }, { year:10, soh:0.6920, rte:0.9084 },
+      { year:11, soh:0.6743, rte:0.9071 }, { year:12, soh:0.6574, rte:0.9058 },
+      { year:13, soh:0.6410, rte:0.9045 }, { year:14, soh:0.6255, rte:0.9034 },
+      { year:15, soh:0.6107, rte:0.9022 }, { year:16, soh:0.6000, rte:0.9014 },
+    ],
+  },
+};
+
+app.get('/api/bess/cycle-datasets', (req, res) => {
+  res.json({ data: CYCLE_DATASETS });
+});
+
 // ── Gemini Bill Parser ────────────────────────────────────────────────────
 app.post('/api/bess/parse-bill', async (req, res) => {
   try {
@@ -1163,7 +1237,7 @@ app.post('/api/bess/parse-bill', async (req, res) => {
     const prompt = `You are analyzing an Indian electricity bill or load data document. Extract these fields and return ONLY a valid JSON object, no explanation:\n{"total_units_kwh":number|null,"max_demand_kw":number|null,"peak_demand_kw":number|null,"tod_peak_kwh":number|null,"tod_offpeak_kwh":number|null,"tod_night_kwh":number|null,"month":number|null,"year":number|null,"sanctioned_load_kva":number|null,"contract_demand_kva":number|null,"tariff_category":string|null,"discom":string|null,"total_amount_inr":number|null,"consumer_name":string|null,"meter_number":string|null}\nUse null for missing fields. Numbers as plain decimals only.`;
 
     const gr = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1198,26 +1272,26 @@ app.post('/api/bess/recommend', async (req, res) => {
       .map(u => `${u.model}: ${u.power_kw}kW / ${u.energy_kwh}kWh @ ₹${(u.price_ex_gst/1e5).toFixed(1)}L ex-GST`)
       .join('\n');
 
-    const prompt = `You are a senior BESS (Battery Energy Storage System) sizing engineer specializing in Indian C&I projects under CERC/CEA regulations. LFP chemistry, AC-coupled systems.
+    const prompt = `You are a senior BESS application engineer for Indian C&I projects (LFP chemistry, AC-coupled, CERC/CEA context). The sizing engine has already computed the configuration mathematically. Your role is ONLY to provide expert narrative and trade-off commentary — do NOT recalculate or override numbers.
 
 Available UnityESS models:
 ${unitsSummary || 'UESS-A-125-261: 125kW / 261kWh @ ₹90.0L, UESS-A2-215-418: 215kW / 418kWh @ ₹145.0L'}
 
-Customer load data:
+Sizing inputs and context:
 ${JSON.stringify(load_data, null, 2)}
 
-Sizing rules:
-- For ToD arbitrage: capacity = peak_kwh * 0.8 (daily discharge), power >= max_demand * 0.3
-- For backup: capacity = critical_load_kw * backup_hours / 0.8 (DoD factor)
-- For peak shaving: capacity = (demand_to_shave_kw * 2hrs) / 0.8
-- Always round up to nearest whole unit
-- Provide 3 options: Conservative (min viable), Recommended (optimal), Growth (future-proof)
+Your task:
+- Identify the key sizing driver (e.g. "peak demand window", "DG runtime", "ToD spread")
+- Explain why the recommended unit count is appropriate for the application
+- Compare economical vs recommended — what the extra capacity buys (dispatchable headroom, degradation buffer, future load growth)
+- Note any Indian regulatory or operational context relevant to the configuration (CERC BESS 2022, IS 16270, CEA Grid Connectivity 2023)
+- Provide a realistic tariff_diff_assumed_rs_kwh based on the use case (ToD: 3–5, DG: 20–28 net of grid charge)
 
-Return ONLY valid JSON, no markdown, no explanation:
+Return ONLY valid JSON, no markdown:
 {"primary":{"unit_model":string,"unit_count":number,"total_kwh":number,"total_kw":number,"application":string,"reasoning":string},"alternatives":[{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string},{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string}],"sizing_logic":{"key_driver":string,"recommended_capacity_kwh":number,"recommended_power_kw":number,"rationale":string},"financial_estimate":{"annual_savings_inr":number,"simple_payback_years":number,"tariff_diff_assumed_rs_kwh":number,"assumptions":string}}`;
 
     const gr = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1338,6 +1412,13 @@ app.post('/api/bess/tariff-structures', async (req, res) => {
     );
     res.json({ data: t });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Global JSON error handler (prevents HTML 500 responses) ──────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+  console.error(err);
+  res.status(err.status ?? 500).json({ error: err.message ?? 'Internal server error' });
 });
 
 // ── Run migrations on cold start ─────────────────────────────────────────

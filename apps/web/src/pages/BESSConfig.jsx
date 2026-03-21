@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Zap, Battery, Settings, TrendingUp, Cpu, CheckCircle2,
   ChevronRight, Info, BarChart3, Layers, Clock, Shield,
@@ -66,6 +66,85 @@ const TOD_SLOTS = [
 
 const SLOT_COLORS = { Peak: '#F26B4E', Shoulder: '#F59E0B', 'Off-peak': '#10B981' };
 
+// ── Cycle Degradation Datasets ───────────────────────────────────────────────
+const CYCLE_DATASETS = {
+  q25c_365: {
+    label: '0.25C · 365 cycles/yr',
+    description: 'Standard C&I ToD — once-daily discharge',
+    cycles_per_year: 365,
+    years: [
+      { soh:0.9609, rte:0.9390 }, { soh:0.9303, rte:0.9385 }, { soh:0.9013, rte:0.9360 },
+      { soh:0.8814, rte:0.9343 }, { soh:0.8658, rte:0.9330 }, { soh:0.8559, rte:0.9321 },
+      { soh:0.8422, rte:0.9309 }, { soh:0.8244, rte:0.9294 }, { soh:0.8103, rte:0.9282 },
+      { soh:0.7971, rte:0.9270 }, { soh:0.7846, rte:0.9260 }, { soh:0.7747, rte:0.9251 },
+      { soh:0.7649, rte:0.9243 }, { soh:0.7556, rte:0.9235 }, { soh:0.7466, rte:0.9227 },
+      { soh:0.7375, rte:0.9219 }, { soh:0.7292, rte:0.9212 }, { soh:0.7209, rte:0.9205 },
+      { soh:0.7124, rte:0.9197 }, { soh:0.7046, rte:0.9191 },
+    ],
+  },
+  h5c_365: {
+    label: '0.5C · 365 cycles/yr',
+    description: 'Heavy C&I / industrial — once-daily at 0.5C',
+    cycles_per_year: 365,
+    years: [
+      { soh:0.9531, rte:0.9280 }, { soh:0.9263, rte:0.9263 }, { soh:0.8973, rte:0.9241 },
+      { soh:0.8769, rte:0.9225 }, { soh:0.8629, rte:0.9214 }, { soh:0.8529, rte:0.9207 },
+      { soh:0.8396, rte:0.9197 }, { soh:0.8210, rte:0.9183 }, { soh:0.8065, rte:0.9171 },
+      { soh:0.7919, rte:0.9160 }, { soh:0.7773, rte:0.9149 }, { soh:0.7629, rte:0.9138 },
+      { soh:0.7483, rte:0.9127 }, { soh:0.7339, rte:0.9116 }, { soh:0.7194, rte:0.9105 },
+      { soh:0.7049, rte:0.9094 }, { soh:0.6905, rte:0.9083 }, { soh:0.6761, rte:0.9072 },
+      { soh:0.6617, rte:0.9061 }, { soh:0.6472, rte:0.9050 },
+    ],
+  },
+  h5c_730: {
+    label: '0.5C · 730 cycles/yr',
+    description: 'Utility / dual-shift — twice-daily discharge',
+    cycles_per_year: 730,
+    years: [
+      { soh:0.9323, rte:0.9280 }, { soh:0.8877, rte:0.9233 }, { soh:0.8526, rte:0.9207 },
+      { soh:0.8163, rte:0.9179 }, { soh:0.7907, rte:0.9159 }, { soh:0.7716, rte:0.9145 },
+      { soh:0.7491, rte:0.9128 }, { soh:0.7293, rte:0.9113 }, { soh:0.7104, rte:0.9098 },
+      { soh:0.6920, rte:0.9084 }, { soh:0.6743, rte:0.9071 }, { soh:0.6574, rte:0.9058 },
+      { soh:0.6410, rte:0.9045 }, { soh:0.6255, rte:0.9034 }, { soh:0.6107, rte:0.9022 },
+      { soh:0.6000, rte:0.9014 },
+    ],
+  },
+};
+
+// ── Finance Engine ────────────────────────────────────────────────────────────
+// Newton-Raphson IRR — cashflows[0] = -CAPEX, [1..n] = net annual cash inflows
+function calcIRR(cashflows, guess = 0.15) {
+  let rate = guess;
+  for (let iter = 0; iter < 200; iter++) {
+    let npv = 0, dnpv = 0;
+    for (let t = 0; t < cashflows.length; t++) {
+      const pv = Math.pow(1 + rate, t);
+      npv  += cashflows[t] / pv;
+      dnpv -= t * cashflows[t] / (pv * (1 + rate));
+    }
+    if (Math.abs(dnpv) < 1e-10) break;
+    const next = rate - npv / dnpv;
+    if (Math.abs(next - rate) < 1e-8) return next;
+    rate = Math.max(-0.9, next); // guard against divergence
+  }
+  return rate;
+}
+
+// Build year-by-year net cashflows with SOH/RTE degradation and O&M escalation
+function buildCashflows({ capex, nominalKwh, socWindow, tariffDiff, dataset, years = 10, omRate = 0.015, omEsc = 0.03 }) {
+  const flows = [-capex];
+  let om = capex * omRate;
+  const lastRow = dataset.years[dataset.years.length - 1];
+  for (let yr = 0; yr < years; yr++) {
+    const d = dataset.years[yr] ?? lastRow;
+    const atMeter  = nominalKwh * d.soh * socWindow * d.rte;
+    const gross    = atMeter * tariffDiff * dataset.cycles_per_year;
+    flows.push(gross - om);
+    om *= (1 + omEsc);
+  }
+  return flows;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const inrCr = (v) => `₹${(v / 1e7).toFixed(2)} Cr`;
 const inrL  = (v) => `₹${(v / 1e5).toFixed(1)} L`;
@@ -125,7 +204,8 @@ export default function BESSConfig() {
   const [socMin,       setSocMin]       = useState(10);
   const [socMax,       setSocMax]       = useState(90);
   const [peakKw,       setPeakKw]       = useState('');
-  const [tariffDiff,   setTariffDiff]   = useState(4.5);
+  const [tariffDiff,      setTariffDiff]      = useState(4.5);
+  const [cycleDatasetKey, setCycleDatasetKey] = useState('q25c_365');
 
   // Load Profile tab state
   const [lpMode,       setLpMode]       = useState(null);      // 'bills'|'client'|'backup'|'manual'
@@ -143,7 +223,15 @@ export default function BESSConfig() {
   const [lpRecError,   setLpRecError]   = useState(null);
   const [lpVerified,   setLpVerified]   = useState(false);
   const [lpManualKwh,  setLpManualKwh]  = useState(Array(12).fill(''));
-  const lpFileRef = useRef(null);
+  const lpFileRef  = useRef(null);
+  const tabsTopRef = useRef(null); // scroll anchor for tab switches
+
+  // Scroll tabs panel into view whenever the active tab changes
+  useEffect(() => {
+    if (tabsTopRef.current) {
+      tabsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeTab]);
 
   // ── Sizing Tool state ──────────────────────────────────────────────────────
   const [szUseCase,       setSzUseCase]       = useState(null); // 'dg'|'tod'
@@ -160,6 +248,12 @@ export default function BESSConfig() {
   const [szResult,        setSzResult]        = useState(null);
   const [szAiNote,        setSzAiNote]        = useState(null);
   const [szAiLoading,     setSzAiLoading]     = useState(false);
+
+  // ── Save Configuration state ──────────────────────────────────────────────
+  const [saveSiteId,      setSaveSiteId]      = useState('');
+  const [saveConfigName,  setSaveConfigName]  = useState('');
+  const [saveSaving,      setSaveSaving]      = useState(false);
+  const [saveSuccess,     setSaveSuccess]     = useState(false);
 
   const resetLp = () => {
     setLpMode(null); setLpFile(null); setLpParsed(null); setLpParseErr(null);
@@ -185,6 +279,9 @@ export default function BESSConfig() {
     if (!lpRec?.primary) return;
     const unit = unitList.find(u => u.model === lpRec.primary.unit_model);
     if (unit) { setSelectedUnit(unit); setNumUnits(lpRec.primary.unit_count); }
+    // Sync financial model with AI-assumed tariff diff if available
+    const aiTariffDiff = lpRec?.financial_estimate?.tariff_diff_assumed_rs_kwh;
+    if (aiTariffDiff && aiTariffDiff > 0) setTariffDiff(parseFloat(aiTariffDiff));
     setLpVerified(true);
   };
 
@@ -196,10 +293,13 @@ export default function BESSConfig() {
       const days = parseFloat(szDgDays) || 300;
       const fuel = parseFloat(szFuelCost) || 0;
       const eff  = parseFloat(szDgEff) || 0.31;
+      const dg_cost_per_kwh   = eff * fuel;           // SFC(L/kWh) × ₹/L = ₹/kWh from DG
+      const grid_charge_per_kwh = 3;                  // ₹3/kWh off-peak grid charge (fixed default)
+      const net_benefit_kwh   = dg_cost_per_kwh - grid_charge_per_kwh;
       nominal_kwh           = (load * hrs) / 0.85;
       nominal_kw            = load;
       dispatch_kwh_per_year = load * hrs * days;
-      annual_savings_inr    = load * hrs * eff * fuel * days;
+      annual_savings_inr    = dispatch_kwh_per_year * Math.max(0, net_benefit_kwh);
     } else {
       const dispatch = parseFloat(szDispatchKwh) || 0;
       const peak     = parseFloat(szPeakTariff) || 0;
@@ -211,14 +311,23 @@ export default function BESSConfig() {
       dispatch_kwh_per_year = dispatch * days;
       annual_savings_inr    = dispatch * (peak - offpeak) * days;
     }
-    const mkSlot = (count, kwh, kw, capex) => ({
-      count, kwh, kw, capex,
-      headroom:    Math.round(((kwh - nominal_kwh) / nominal_kwh) * 100),
-      payback:     capex > 0 && annual_savings_inr > 0 ? capex / annual_savings_inr : null,
-      roi10:       capex > 0 && annual_savings_inr > 0
-        ? Math.round(((annual_savings_inr * 10 - capex) / capex) * 100) : null,
-      benefit_kwh: dispatch_kwh_per_year > 0 ? annual_savings_inr / dispatch_kwh_per_year : null,
-    });
+    const mkSlot = (count, kwh, kw, capex) => {
+      const om1    = capex * 0.015;
+      const netYr1 = annual_savings_inr - om1;
+      let irrVal = null;
+      if (capex > 0 && netYr1 > 0) {
+        const flows = buildCashflows({ capex, nominalKwh: kwh, socWindow: (socMax - socMin) / 100, tariffDiff: annual_savings_inr / Math.max(1, dispatch_kwh_per_year / cyclesPerYear), dataset, years: 10 });
+        const r = calcIRR(flows);
+        irrVal = isFinite(r) ? Math.round(r * 100) : null;
+      }
+      return {
+        count, kwh, kw, capex,
+        headroom:    Math.round(((kwh - nominal_kwh) / nominal_kwh) * 100),
+        payback:     capex > 0 && annual_savings_inr > 0 ? capex / annual_savings_inr : null,
+        roi10:       irrVal,
+        benefit_kwh: dispatch_kwh_per_year > 0 ? annual_savings_inr / dispatch_kwh_per_year : null,
+      };
+    };
     const allConfigs = unitList
       .filter(u => (u.energy_kwh ?? 0) > 0)
       .map(unit => {
@@ -264,24 +373,39 @@ export default function BESSConfig() {
   const totalPower   = numUnits * (u.power_kw     ?? 0);
   const totalEnergy  = numUnits * (u.energy_kwh   ?? 0);
   const totalPrice   = numUnits * (u.price_ex_gst ?? 0);
-  const usableEnergy = totalEnergy * ((socMax - socMin) / 100);
+  const socWindow    = (socMax - socMin) / 100;
+  const usableEnergy = totalEnergy * socWindow;   // nameplate usable (kWh)
 
-  const cyclesPerYear = 300;
-  const annualSavings = usableEnergy * tariffDiff * cyclesPerYear;
-  const simplePayback = totalPrice > 0 ? (totalPrice / annualSavings).toFixed(1) : '—';
-  const irr10yr       = totalPrice > 0
-    ? Math.round(((annualSavings * 10 - totalPrice) / (totalPrice * 10)) * 100)
-    : 0;
+  // ── Degradation-aware financial model ────────────────────────────────────
+  const dataset        = CYCLE_DATASETS[cycleDatasetKey] ?? CYCLE_DATASETS.q25c_365;
+  const cyclesPerYear  = dataset.cycles_per_year;
+  const yr1            = dataset.years[0] ?? { soh: 1, rte: 0.93 };
+  // Year-1 at-meter energy: apply SOH + RTE to usable nameplate
+  const atMeterYr1    = usableEnergy * yr1.soh * yr1.rte;
+  const grossSavYr1   = atMeterYr1 * tariffDiff * cyclesPerYear;
+  const omYr1         = totalPrice * 0.015;        // 1.5% of CAPEX
+  const annualSavings = grossSavYr1 - omYr1;       // Year-1 net savings (for display KPIs)
 
-  // useMemo must also be before any early return
+  // 10-year degraded cashflows for NPV/IRR
+  const cashflows10 = useMemo(() => {
+    if (!totalPrice || !usableEnergy || !tariffDiff) return [];
+    return buildCashflows({ capex: totalPrice, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 10 });
+  }, [totalPrice, usableEnergy, tariffDiff, cycleDatasetKey]); // eslint-disable-line
+
+  const irrDecimal    = cashflows10.length > 1 && annualSavings > 0 ? calcIRR(cashflows10) : null;
+  const irrPct        = irrDecimal != null && isFinite(irrDecimal) ? Math.round(irrDecimal * 100) : null;
+  const simplePayback = totalPrice > 0 && annualSavings > 0 ? (totalPrice / annualSavings).toFixed(1) : '—';
+
+  // 12-year cumulative cashflow for chart (uses degraded cashflows, extended by holding last-year net flat)
   const paybackData = useMemo(() => {
     if (!totalPrice || !annualSavings) return [];
-    let cum = -totalPrice;
-    return Array.from({ length: 12 }, (_, i) => {
-      cum += annualSavings;
-      return { year: `Y${i + 1}`, cashflow: Math.round(cum / 1e5) };
+    const flows = buildCashflows({ capex: totalPrice, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 12 });
+    let cum = 0;
+    return flows.slice(1).map((net, i) => {
+      cum += net;
+      return { year: `Y${i + 1}`, cashflow: Math.round(cum / 1e5), net: Math.round(net / 1e5) };
     });
-  }, [totalPrice, annualSavings]);
+  }, [totalPrice, usableEnergy, tariffDiff, cycleDatasetKey]); // eslint-disable-line
 
   // ── NOW it is safe to return early ──────────────────────────────────────
   const loading = units?.loading || configs?.loading || sites?.loading;
@@ -308,7 +432,7 @@ export default function BESSConfig() {
         capex_ex_gst:  totalPrice,
         annual_savings: Math.round(annualSavings),
         payback_years:  parseFloat(simplePayback) || null,
-        irr_percent:    irr10yr || null,
+        irr_percent:    irrPct || null,
         notes: propNotes ||
           `${numUnits}× ${u.model ?? 'BESS'} | ${totalPower} kW / ${totalEnergy} kWh | ${coupling}-Coupled | ${appLabel}`,
         validity_days: 30,
@@ -344,6 +468,32 @@ export default function BESSConfig() {
   const PIE_COLORS = ['#F26B4E', '#6366F1', '#F59E0B', '#10B981'];
 
   const appLabel = APPLICATIONS.find((a) => a.value === application)?.label ?? '';
+
+  async function handleSaveConfig() {
+    if (!saveSiteId || !saveConfigName.trim()) return;
+    setSaveSaving(true);
+    try {
+      await bessApi.createConfig({
+        site_id:         parseInt(saveSiteId),
+        config_name:     saveConfigName.trim(),
+        num_units:       numUnits,
+        total_power_kw:  totalPower,
+        total_energy_kwh: totalEnergy,
+        coupling_type:   coupling,
+        application,
+        soc_min:         socMin,
+        soc_max:         socMax,
+      });
+      setSaveSuccess(true);
+      setSaveConfigName('');
+      setSaveSiteId('');
+      setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (e) {
+      alert('Save failed: ' + (e?.message ?? 'Unknown error'));
+    } finally {
+      setSaveSaving(false);
+    }
+  }
 
   return (
     <TooltipProvider>
@@ -570,19 +720,51 @@ export default function BESSConfig() {
                   </div>
                 </div>
 
+                <Separator />
+
+                {/* Cycle / Degradation Dataset */}
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> Degradation Profile
+                  </Label>
+                  <div className="flex flex-col gap-1">
+                    {Object.entries(CYCLE_DATASETS).map(([key, ds]) => (
+                      <button
+                        key={key}
+                        onClick={() => setCycleDatasetKey(key)}
+                        className={`w-full text-left rounded-md border px-3 py-2 transition-all text-xs ${
+                          cycleDatasetKey === key
+                            ? 'border-orange-500 bg-orange-50 text-orange-700'
+                            : 'border-border hover:border-orange-300 bg-background text-muted-foreground'
+                        }`}
+                      >
+                        <span className="font-bold block">{ds.label}</span>
+                        <span className="text-[10px] opacity-70">{ds.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    Yr-1 RTE: <span className="font-bold text-foreground">{(yr1.rte * 100).toFixed(1)}%</span>
+                    {' '}· Yr-1 SOH: <span className="font-bold text-foreground">{(yr1.soh * 100).toFixed(1)}%</span>
+                    {' '}· {cyclesPerYear} cycles/yr
+                  </p>
+                </div>
+
               </CardContent>
             </Card>
           </div>
 
           {/* ── RIGHT PANEL: analysis tabs ───────────────────────────── */}
+          <div className="flex flex-col gap-4 min-w-0">
+          <div ref={tabsTopRef} style={{ scrollMarginTop: '8px' }} />
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
-            <TabsList className="w-full grid grid-cols-6">
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-              <TabsTrigger value="financials">Financials</TabsTrigger>
-              <TabsTrigger value="tod">ToD</TabsTrigger>
-              <TabsTrigger value="specs">Specs</TabsTrigger>
-              <TabsTrigger value="loadprofile">Load Profile</TabsTrigger>
-              <TabsTrigger value="sizing">Sizing</TabsTrigger>
+            <TabsList className="w-full flex overflow-x-auto gap-0.5 h-auto p-1">
+              <TabsTrigger value="summary"     className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Summary</TabsTrigger>
+              <TabsTrigger value="financials"  className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Financials</TabsTrigger>
+              <TabsTrigger value="tod"         className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">ToD</TabsTrigger>
+              <TabsTrigger value="specs"       className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Specs</TabsTrigger>
+              <TabsTrigger value="loadprofile" className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Load Profile</TabsTrigger>
+              <TabsTrigger value="sizing"      className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Sizing</TabsTrigger>
             </TabsList>
 
             {/* ── TAB: Summary ─────────────────────────────────────── */}
@@ -711,6 +893,54 @@ export default function BESSConfig() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
+
+              {/* ── Save Configuration ──────────────────────────────── */}
+              <Card className="border-orange-200 bg-orange-50/40">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-orange-500" /> Save Configuration to Database
+                  </CardTitle>
+                  <CardDescription>Link this configuration to a site for future reference and proposals</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {saveSuccess && (
+                    <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <CheckCircle2 className="w-4 h-4" /> Configuration saved successfully.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-muted-foreground">Site</label>
+                      <select
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        value={saveSiteId}
+                        onChange={e => setSaveSiteId(e.target.value)}
+                      >
+                        <option value="">Select site…</option>
+                        {siteList.map(s => (
+                          <option key={s.id} value={s.id}>{s.site_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-muted-foreground">Config Name</label>
+                      <input
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        placeholder={`${numUnits}× ${u.model ?? 'BESS'} – ${appLabel}`}
+                        value={saveConfigName}
+                        onChange={e => setSaveConfigName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 h-9 text-sm font-bold"
+                    onClick={handleSaveConfig}
+                    disabled={saveSaving || !saveSiteId || !saveConfigName.trim()}
+                  >
+                    {saveSaving ? 'Saving…' : 'Save Configuration'}
+                  </Button>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* ── TAB: Financials ───────────────────────────────────── */}
@@ -730,9 +960,9 @@ export default function BESSConfig() {
                   icon={Clock}
                 />
                 <SparkKpi
-                  label="10-yr Net Return"
-                  value={irr10yr > 0 ? `${irr10yr}%` : '—'}
-                  sub="Simple (no discounting)"
+                  label="IRR (10-yr NPV)"
+                  value={irrPct != null && irrPct > 0 ? `${irrPct}%` : '—'}
+                  sub="With degradation + O&M"
                   icon={Award}
                 />
               </div>
@@ -742,8 +972,7 @@ export default function BESSConfig() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Cumulative Cash Flow</CardTitle>
                   <CardDescription>
-                    10-year projection · ₹ Lakhs · tariff Δ = ₹{tariffDiff}/kWh ·{' '}
-                    {cyclesPerYear} cycles/yr · {usableEnergy.toFixed(0)} kWh usable
+                    12-year · ₹ Lakhs · degradation + O&M included · {dataset.label}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -796,13 +1025,17 @@ export default function BESSConfig() {
                     </TableHeader>
                     <TableBody>
                       {[
-                        ['Application',      appLabel,                         'User-selected'],
-                        ['Usable Energy',    `${usableEnergy.toFixed(0)} kWh`, `SoC ${socMin}–${socMax}%`],
-                        ['Cycles / Year',    `${cyclesPerYear}`,               'Conservative C&I assumption'],
-                        ['Tariff Δ',         `₹${tariffDiff}/kWh`,            'Peak − off-peak spread'],
-                        ['Annual Savings',   inrL(annualSavings),              'Gross, pre-O&M'],
-                        ['CAPEX (Ex-GST)',   inrCr(totalPrice),                'Indicative ex-works'],
-                        ['GST',              '18%',                            'Applicable on supply'],
+                        ['Application',      appLabel,                                    'User-selected'],
+                        ['Usable Energy',    `${usableEnergy.toFixed(0)} kWh`,            `SoC ${socMin}–${socMax}%`],
+                        ['Yr-1 At Meter',    `${atMeterYr1.toFixed(0)} kWh`,              `After SOH ${(yr1.soh*100).toFixed(1)}% + RTE ${(yr1.rte*100).toFixed(1)}%`],
+                        ['Cycle Profile',    dataset.label,                               `${cyclesPerYear} cycles/yr`],
+                        ['Tariff Δ',         `₹${tariffDiff}/kWh`,                       'Peak − off-peak spread'],
+                        ['Yr-1 Gross Sav.',  inrL(grossSavYr1),                           'Before O&M'],
+                        ['O&M Yr-1',         inrL(omYr1),                                 '1.5% of CAPEX, +3%/yr'],
+                        ['Yr-1 Net Savings', inrL(annualSavings),                         'Post O&M'],
+                        ['IRR (10-yr NPV)',  irrPct != null ? `${irrPct}%` : '—',        'Degradation + O&M included'],
+                        ['CAPEX (Ex-GST)',   inrCr(totalPrice),                           'Indicative ex-works'],
+                        ['GST',              '18%',                                        'Applicable on supply'],
                       ].map(([p, v, n]) => (
                         <TableRow key={p}>
                           <TableCell className="font-medium text-xs">{p}</TableCell>
@@ -865,13 +1098,13 @@ export default function BESSConfig() {
                   },
                   {
                     label: 'Monthly Revenue',
-                    value: `₹${((usableEnergy * tariffDiff * 25) / 1e3).toFixed(1)} K`,
-                    sub: '25 arbitrage days/month',
+                    value: `₹${((atMeterYr1 * tariffDiff * 25) / 1e3).toFixed(1)} K`,
+                    sub: '25 arbitrage days/month · Yr-1',
                   },
                   {
-                    label: 'Annual Revenue',
+                    label: 'Annual Net (Yr-1)',
                     value: inrL(annualSavings),
-                    sub: `${cyclesPerYear} cycles/year`,
+                    sub: `Post O&M · ${cyclesPerYear} cycles/yr`,
                   },
                 ].map((item) => (
                   <Card key={item.label}>
@@ -1694,7 +1927,14 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
                                 </div>
                                 <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full"
-                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.eco.count); setActiveTab('summary'); }}>
+                                  onClick={() => {
+                                    setSelectedUnit(ac.unit); setNumUnits(ac.eco.count);
+                                    if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
+                                      const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
+                                      if (diff > 0) setTariffDiff(diff);
+                                    }
+                                    setActiveTab('summary');
+                                  }}>
                                   Apply Economical
                                 </Button>
                               </CardContent>
@@ -1712,7 +1952,14 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
                                 </div>
                                 <Button size="sm" className="h-8 text-xs mt-1 w-full bg-orange-500 hover:bg-orange-600"
-                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.rec.count); setActiveTab('summary'); }}>
+                                  onClick={() => {
+                                    setSelectedUnit(ac.unit); setNumUnits(ac.rec.count);
+                                    if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
+                                      const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
+                                      if (diff > 0) setTariffDiff(diff);
+                                    }
+                                    setActiveTab('summary');
+                                  }}>
                                   Apply Recommended
                                 </Button>
                               </CardContent>
@@ -1794,6 +2041,7 @@ export default function BESSConfig() {
             </TabsContent>
 
           </Tabs>
+          </div>{/* end right-panel wrapper */}
         </div>
 
         {/* ── Generate Proposal Modal ─────────────────────────────────── */}
