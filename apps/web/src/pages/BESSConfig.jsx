@@ -117,6 +117,7 @@ export default function BESSConfig() {
   });
 
   // ── ALL hooks must be declared before any conditional return ────────────
+  const [activeTab,    setActiveTab]    = useState('summary');
   const [numUnits,     setNumUnits]     = useState(1);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [coupling,     setCoupling]     = useState('AC');
@@ -574,7 +575,7 @@ export default function BESSConfig() {
           </div>
 
           {/* ── RIGHT PANEL: analysis tabs ───────────────────────────── */}
-          <Tabs defaultValue="summary" className="flex flex-col gap-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
             <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="summary">Summary</TabsTrigger>
               <TabsTrigger value="financials">Financials</TabsTrigger>
@@ -1693,7 +1694,7 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
                                 </div>
                                 <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full"
-                                  onClick={() => setNumUnits(ac.eco.count)}>
+                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.eco.count); setActiveTab('summary'); }}>
                                   Apply Economical
                                 </Button>
                               </CardContent>
@@ -1711,7 +1712,7 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
                                 </div>
                                 <Button size="sm" className="h-8 text-xs mt-1 w-full bg-orange-500 hover:bg-orange-600"
-                                  onClick={() => setNumUnits(ac.rec.count)}>
+                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.rec.count); setActiveTab('summary'); }}>
                                   Apply Recommended
                                 </Button>
                               </CardContent>
@@ -1747,7 +1748,7 @@ export default function BESSConfig() {
                                   <TableCell className="py-2 text-xs text-right">{cfg.eco.payback ? `${cfg.eco.payback.toFixed(1)} yr` : '—'}</TableCell>
                                   <TableCell className="py-2">
                                     <button
-                                      onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); }}
+                                      onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); setActiveTab('summary'); }}
                                       className="text-[10px] text-orange-500 hover:text-orange-700 font-bold whitespace-nowrap"
                                     >
                                       Apply ★
