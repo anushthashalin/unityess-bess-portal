@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import Clients from './pages/Clients.jsx';
 import Sites from './pages/Sites.jsx';
 import BESSConfig from './pages/BESSConfig.jsx';
+import BESSCommandCenter from './pages/BESSCommandCenter.jsx';
 import Proposals from './pages/Proposals.jsx';
 import Projects from './pages/Projects.jsx';
 import LoadProfiles from './pages/LoadProfiles.jsx';
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/clients"               element={<Clients />} />
               <Route path="/sites"                 element={<Sites />} />
               <Route path="/load-profiles"         element={<LoadProfiles />} />
+              <Route path="/bess-command"          element={<BESSCommandCenter />} />
               <Route path="/bess-config"           element={<BESSConfig />} />
               <Route path="/proposals"             element={<Proposals />} />
               <Route path="/projects"              element={<Projects />} />

@@ -12,11 +12,12 @@ import { Avatar, AvatarFallback } from './ui/avatar.jsx';
 import { cn } from '../lib/utils.js';
 
 const BESS_NAV = [
-  { label: 'Dashboard',         to: '/dashboard',   icon: LayoutDashboard },
-  { label: 'BESS Configurator', to: '/bess-config', icon: Zap },
-  { label: 'Proposals',         to: '/proposals',   icon: FileText },
-  { label: 'Projects',          to: '/projects',    icon: FolderOpen },
-  { label: 'Tariff Structures', to: '/tariffs',     icon: Receipt },
+  { label: 'Dashboard',         to: '/dashboard',      icon: LayoutDashboard },
+  { label: 'Command Centre',    to: '/bess-command',   icon: Activity },
+  { label: 'BESS Configurator', to: '/bess-config',    icon: Zap },
+  { label: 'Proposals',         to: '/proposals',      icon: FileText },
+  { label: 'Projects',          to: '/projects',       icon: FolderOpen },
+  { label: 'Tariff Structures', to: '/tariffs',        icon: Receipt },
 ];
 
 const BD_NAV = [

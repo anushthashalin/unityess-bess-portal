@@ -150,7 +150,6 @@ export default function Dashboard() {
 
   const totalCapex = pr.reduce((s, p) => s + Number(p.capex_ex_gst ?? 0), 0);
   const totalKwh   = cfg.reduce((s, c) => s + Number(c.total_energy_kwh ?? 0), 0);
-  const totalUnits = cfg.reduce((s, c) => s + Number(c.num_units ?? 0), 0);
 
   const stageCounts = STAGE_ORDER.map(stage => ({
     stage: stage.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -158,13 +157,17 @@ export default function Dashboard() {
   })).filter(s => s.count > 0);
 
   const now = new Date();
-  const monthlyActivity = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+  const weeklyActivity = Array.from({ length: 8 }, (_, i) => {
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - (7 - i) * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
     return {
-      month:     d.toLocaleDateString('en-IN', { month:'short', year:'2-digit' }),
+      week: `W${i + 1}`,
+      label: weekStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
       proposals: pr.filter(p => {
         const pd = new Date(p.created_at);
-        return pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth();
+        return pd >= weekStart && pd < weekEnd;
       }).length,
     };
   });
@@ -198,7 +201,7 @@ export default function Dashboard() {
         <KPICard icon={TrendingUp}  label="Pipeline Value"   value={inr(totalCapex)}
           sub="Ex-GST · All proposals" accentColor="#3B82F6" iconBg="bg-blue-100 text-blue-500" />
         <KPICard icon={Zap}         label="Capacity Quoted"  value={`${totalKwh.toLocaleString('en-IN')} kWh`} rawValue={totalKwh}
-          sub={`${totalUnits} units total`} accentColor="#7C3AED" iconBg="bg-violet-100 text-violet-600" />
+          sub="Ex-GST · All configurations" accentColor="#7C3AED" iconBg="bg-violet-100 text-violet-600" />
         <KPICard icon={FileText}    label="Proposals"        value={pr.length} rawValue={pr.length}
           sub={`${negotiationCount} in negotiation`} accentColor="#16A34A" iconBg="bg-emerald-100 text-emerald-600" />
       </div>
@@ -235,12 +238,12 @@ export default function Dashboard() {
         <div className="col-span-2 flex flex-col gap-4">
           <Card className="border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm flex-1">
             <CardHeader className="pb-3 px-5 pt-5 space-y-0">
-              <CardTitle className="text-[14px] font-bold">Monthly Proposals</CardTitle>
+              <CardTitle className="text-[14px] font-bold">Weekly Proposals</CardTitle>
             </CardHeader>
             <Separator />
             <CardContent className="pt-3 px-3 pb-3">
-              <ResponsiveContainer width="100%" height={150}>
-                <AreaChart data={monthlyActivity} margin={{ left:0, right:8, top:4 }}>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={weeklyActivity} margin={{ left:0, right:8, top:4 }}>
                   <defs>
                     <linearGradient id="proposalGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor="#F26B4E" stopOpacity={0.25} />
@@ -248,7 +251,7 @@ export default function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                  <XAxis dataKey="month" tick={{ fontSize:10, fill:'#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fontSize:10, fill:'#9CA3AF' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize:10, fill:'#9CA3AF' }} allowDecimals={false} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="proposals" stroke="#F26B4E" strokeWidth={2.5}
@@ -259,28 +262,6 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-
-          {/* Mini stat cards */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Clients', value: cl.length, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50' },
-              { label: 'Units', value: totalUnits, icon: Battery, color: 'text-violet-600', bg: 'bg-violet-50' },
-            ].map(({ label, value, icon: Icon, color, bg }) => (
-              <Card key={label} className="border border-border/50 bg-white/95 shadow-sm">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`${bg} p-2 rounded-lg`}>
-                    <Icon size={16} className={color} />
-                  </div>
-                  <div>
-                    <div className="text-[20px] font-black text-foreground leading-none">
-                      <AnimatedNumber value={value} />
-                    </div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{label}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </div>
       </div>
 
