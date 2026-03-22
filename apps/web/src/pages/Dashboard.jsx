@@ -116,14 +116,13 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { clients, proposals, projects, configs } = useApiMulti({
-    clients:   bessApi.clients,
+  const { proposals, projects, configs } = useApiMulti({
     proposals: bessApi.proposals,
     projects:  bessApi.projects,
     configs:   bessApi.configs,
   });
 
-  const loading = clients?.loading || proposals?.loading || projects?.loading || configs?.loading;
+  const loading = proposals?.loading || projects?.loading || configs?.loading;
 
   if (loading) {
     return (
@@ -145,7 +144,6 @@ export default function Dashboard() {
     );
   }
 
-  const cl  = clients?.data   ?? [];
   const pr  = proposals?.data ?? [];
   const pj  = projects?.data  ?? [];
   const cfg = configs?.data   ?? [];
@@ -196,7 +194,7 @@ export default function Dashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         <KPICard icon={FolderOpen}  label="Active Projects"  value={pj.length} rawValue={pj.length}
-          sub={`${cl.length} clients onboarded`} accentColor="#F26B4E" iconBg="bg-orange-100 text-orange-500" />
+          sub="BESS installations tracked" accentColor="#F26B4E" iconBg="bg-orange-100 text-orange-500" />
         <KPICard icon={TrendingUp}  label="Pipeline Value"   value={inr(totalCapex)}
           sub="Ex-GST · All proposals" accentColor="#3B82F6" iconBg="bg-blue-100 text-blue-500" />
         <KPICard icon={Zap}         label="Capacity Quoted"  value={`${totalKwh.toLocaleString('en-IN')} kWh`} rawValue={totalKwh}
