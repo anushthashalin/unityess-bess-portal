@@ -1337,6 +1337,27 @@ app.post('/api/bess/proposals', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.patch('/api/bess/proposals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days } = req.body;
+    const VALID_STATUSES = ['draft','sent','negotiation','won','lost'];
+    if (status && !VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const updates = []; const vals = []; let i = 1;
+    if (status        !== undefined) { updates.push(`status=$${i++}`);        vals.push(status); }
+    if (notes         !== undefined) { updates.push(`notes=$${i++}`);         vals.push(notes); }
+    if (capex_ex_gst  !== undefined) { updates.push(`capex_ex_gst=$${i++}`);  vals.push(capex_ex_gst); }
+    if (annual_savings !== undefined){ updates.push(`annual_savings=$${i++}`); vals.push(annual_savings); }
+    if (payback_years !== undefined) { updates.push(`payback_years=$${i++}`); vals.push(payback_years); }
+    if (irr_percent   !== undefined) { updates.push(`irr_percent=$${i++}`);   vals.push(irr_percent); }
+    if (validity_days !== undefined) { updates.push(`validity_days=$${i++}`); vals.push(validity_days); }
+    if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+    vals.push(id);
+    await pool.query(`UPDATE bess.proposals SET ${updates.join(',')} WHERE id=$${i}`, vals);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Projects ──────────────────────────────────────────────────────────────
 app.post('/api/bess/projects', async (req, res) => {
   try {
