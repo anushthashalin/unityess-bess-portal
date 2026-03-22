@@ -78,6 +78,30 @@ async function runMigrations() {
        ON bd.accounts (LOWER(company_name))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_account_email
        ON bd.contacts (account_id, LOWER(email)) WHERE email IS NOT NULL`,
+    // ── code-revision: project/opportunity linkage on sizing_analyses ─────────
+    `ALTER TABLE bess.sizing_analyses ADD COLUMN IF NOT EXISTS opportunity_id INTEGER`,
+    `ALTER TABLE bess.sizing_analyses ADD COLUMN IF NOT EXISTS project_id     INTEGER`,
+    // ── code-revision: snapshot immutability on finance_records ──────────────
+    `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS is_locked  BOOLEAN     DEFAULT FALSE`,
+    `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS locked_at  TIMESTAMPTZ`,
+    `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS locked_by  INTEGER`,
+    // ── code-revision: stage machine on bess.projects ─────────────────────────
+    `ALTER TABLE bess.projects ADD COLUMN IF NOT EXISTS stage            TEXT DEFAULT 'lead_identified'`,
+    `ALTER TABLE bess.projects ADD COLUMN IF NOT EXISTS stage_updated_at TIMESTAMPTZ DEFAULT NOW()`,
+    `ALTER TABLE bess.projects ADD COLUMN IF NOT EXISTS opportunity_id   INTEGER`,
+    `ALTER TABLE bess.projects ADD COLUMN IF NOT EXISTS name             TEXT`,
+    `ALTER TABLE bess.projects ADD COLUMN IF NOT EXISTS assigned_to      INTEGER`,
+    // ── code-revision: project activity log ───────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS bess.project_activities (
+       id            SERIAL PRIMARY KEY,
+       project_id    INTEGER NOT NULL,
+       activity_type TEXT    NOT NULL,
+       from_stage    TEXT,
+       to_stage      TEXT,
+       note          TEXT,
+       performed_by  INTEGER,
+       performed_at  TIMESTAMPTZ DEFAULT NOW()
+     )`,
   ];
   for (const sql of migrations) {
     try {
@@ -1340,18 +1364,31 @@ app.post('/api/bess/proposals', async (req, res) => {
 // ── Projects ──────────────────────────────────────────────────────────────
 app.post('/api/bess/projects', async (req, res) => {
   try {
-    const { client_id, site_id, proposal_id, status, po_number, po_value_inr,
-            installation_date, commissioning_date, warranty_expiry } = req.body;
+    const {
+      client_id, site_id, proposal_id, opportunity_id, name,
+      status, stage, assigned_to,
+      po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry,
+    } = req.body;
     if (!client_id) return res.status(400).json({ error: 'client_id required' });
     const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM bess.projects');
     const code = `PROJ-${new Date().getFullYear()}-${String(parseInt(count)+1).padStart(4,'0')}`;
     const { rows: [pj] } = await pool.query(
-      `INSERT INTO bess.projects (client_id, site_id, proposal_id, project_code, status,
-         po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [client_id, site_id||null, proposal_id||null, code, status||'lead',
+      `INSERT INTO bess.projects
+         (client_id, site_id, proposal_id, opportunity_id, project_code,
+          name, status, stage, assigned_to,
+          po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [client_id, site_id||null, proposal_id||null, opportunity_id||null, code,
+       name||null, status||'active',
+       stage||'lead_identified', assigned_to||null,
        po_number||null, po_value_inr||null,
        installation_date||null, commissioning_date||null, warranty_expiry||null]
+    );
+    // Auto-log creation activity
+    await pool.query(
+      `INSERT INTO bess.project_activities (project_id, activity_type, to_stage)
+       VALUES ($1,'stage_change',$2)`,
+      [pj.id, pj.stage]
     );
     res.json({ data: pj });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1360,20 +1397,60 @@ app.post('/api/bess/projects', async (req, res) => {
 app.patch('/api/bess/projects/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry } = req.body;
+    const {
+      stage, status, name, opportunity_id, assigned_to,
+      po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry,
+      note, performed_by,
+    } = req.body;
+
+    // Fetch current project to detect stage changes
+    const { rows: [current] } = await pool.query('SELECT * FROM bess.projects WHERE id=$1', [id]);
+    if (!current) return res.status(404).json({ error: 'Project not found' });
+
+    const VALID_STAGES = [
+      'lead_identified','site_survey','sizing_in_progress','proposal_draft',
+      'proposal_sent','negotiation','po_received','commissioning','handover','post_commissioning',
+    ];
+
     const fields = [], vals = [];
-    if (status             !== undefined) { fields.push(`status=$${fields.length+1}`);              vals.push(status); }
-    if (po_number          !== undefined) { fields.push(`po_number=$${fields.length+1}`);           vals.push(po_number || null); }
-    if (po_value_inr       !== undefined) { fields.push(`po_value_inr=$${fields.length+1}`);        vals.push(po_value_inr || null); }
-    if (installation_date  !== undefined) { fields.push(`installation_date=$${fields.length+1}`);   vals.push(installation_date || null); }
-    if (commissioning_date !== undefined) { fields.push(`commissioning_date=$${fields.length+1}`);  vals.push(commissioning_date || null); }
-    if (warranty_expiry    !== undefined) { fields.push(`warranty_expiry=$${fields.length+1}`);     vals.push(warranty_expiry || null); }
+    if (stage             !== undefined && VALID_STAGES.includes(stage)) {
+      fields.push(`stage=$${fields.length+1}`);            vals.push(stage);
+      fields.push(`stage_updated_at=NOW()`);
+    }
+    if (name              !== undefined) { fields.push(`name=$${fields.length+1}`);               vals.push(name || null); }
+    if (status            !== undefined) { fields.push(`status=$${fields.length+1}`);             vals.push(status); }
+    if (opportunity_id    !== undefined) { fields.push(`opportunity_id=$${fields.length+1}`);     vals.push(opportunity_id || null); }
+    if (assigned_to       !== undefined) { fields.push(`assigned_to=$${fields.length+1}`);        vals.push(assigned_to || null); }
+    if (po_number         !== undefined) { fields.push(`po_number=$${fields.length+1}`);          vals.push(po_number || null); }
+    if (po_value_inr      !== undefined) { fields.push(`po_value_inr=$${fields.length+1}`);       vals.push(po_value_inr || null); }
+    if (installation_date !== undefined) { fields.push(`installation_date=$${fields.length+1}`);  vals.push(installation_date || null); }
+    if (commissioning_date!== undefined) { fields.push(`commissioning_date=$${fields.length+1}`); vals.push(commissioning_date || null); }
+    if (warranty_expiry   !== undefined) { fields.push(`warranty_expiry=$${fields.length+1}`);    vals.push(warranty_expiry || null); }
+
     if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
     vals.push(id);
     const { rows: [pj] } = await pool.query(
       `UPDATE bess.projects SET ${fields.join(', ')} WHERE id=$${vals.length} RETURNING *`, vals
     );
-    if (!pj) return res.status(404).json({ error: 'Project not found' });
+
+    // Auto-log activity on stage change
+    if (stage && stage !== current.stage) {
+      await pool.query(
+        `INSERT INTO bess.project_activities
+           (project_id, activity_type, from_stage, to_stage, note, performed_by)
+         VALUES ($1,'stage_change',$2,$3,$4,$5)`,
+        [id, current.stage, stage, note || null, performed_by || null]
+      );
+    } else if (note) {
+      // Log a note even without stage change
+      await pool.query(
+        `INSERT INTO bess.project_activities
+           (project_id, activity_type, note, performed_by)
+         VALUES ($1,'note',$2,$3)`,
+        [id, note, performed_by || null]
+      );
+    }
+
     res.json({ data: pj });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1472,7 +1549,8 @@ app.get('/api/bess/coverage-table', async (req, res) => {
 app.post('/api/bess/sizing-analyses', async (req, res) => {
   try {
     const {
-      client_id, site_id, use_case, site_state, sku_category,
+      client_id, site_id, opportunity_id, project_id,
+      use_case, site_state, sku_category,
       load_kwh_per_day, peak_demand_kw, dg_runtime_hours, backup_hours, diesel_price_rs_l,
       raw_energy_kwh, derate_factor, validated_energy_kwh, required_power_kw,
       sizing_basis, soc_window, ac_dc_loss_pct, recommended_uplift_pct, created_by
@@ -1482,13 +1560,15 @@ app.post('/api/bess/sizing-analyses', async (req, res) => {
 
     const { rows: [row] } = await pool.query(
       `INSERT INTO bess.sizing_analyses
-         (client_id, site_id, use_case, site_state, sku_category,
+         (client_id, site_id, opportunity_id, project_id,
+          use_case, site_state, sku_category,
           load_kwh_per_day, peak_demand_kw, dg_runtime_hours, backup_hours, diesel_price_rs_l,
           raw_energy_kwh, derate_factor, validated_energy_kwh, required_power_kw,
           sizing_basis, soc_window, ac_dc_loss_pct, recommended_uplift_pct, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING *`,
-      [client_id||null, site_id||null, use_case, site_state||null, sku_category,
+      [client_id||null, site_id||null, opportunity_id||null, project_id||null,
+       use_case, site_state||null, sku_category,
        load_kwh_per_day||null, peak_demand_kw||null, dg_runtime_hours||null,
        backup_hours||null, diesel_price_rs_l||null,
        raw_energy_kwh, derate_factor, validated_energy_kwh, required_power_kw,
@@ -1501,9 +1581,13 @@ app.post('/api/bess/sizing-analyses', async (req, res) => {
 
 app.get('/api/bess/sizing-analyses', async (req, res) => {
   try {
-    const { client_id } = req.query;
-    const where = client_id ? 'WHERE sa.client_id = $1' : '';
-    const params = client_id ? [client_id] : [];
+    const { client_id, project_id, opportunity_id } = req.query;
+    const conditions = [];
+    const params = [];
+    if (client_id)       { params.push(client_id);      conditions.push(`sa.client_id      = $${params.length}`); }
+    if (project_id)      { params.push(project_id);     conditions.push(`sa.project_id     = $${params.length}`); }
+    if (opportunity_id)  { params.push(opportunity_id); conditions.push(`sa.opportunity_id = $${params.length}`); }
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
     const { rows } = await pool.query(
       `SELECT sa.*, c.company_name
        FROM bess.sizing_analyses sa
@@ -1622,15 +1706,52 @@ app.post('/api/bess/finance-records', async (req, res) => {
 
 app.get('/api/bess/finance-records', async (req, res) => {
   try {
-    const { recommendation_id, client_id } = req.query;
+    const { recommendation_id, client_id, project_id } = req.query;
     const conditions = [];
     const params = [];
     if (recommendation_id)  { params.push(recommendation_id); conditions.push(`recommendation_id = $${params.length}`); }
     if (client_id)          { params.push(client_id);         conditions.push(`client_id = $${params.length}`); }
+    if (project_id)         { params.push(project_id);        conditions.push(`project_id = $${params.length}`); }
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
     const { rows } = await pool.query(
       `SELECT * FROM bess.finance_records ${where} ORDER BY computed_at DESC`,
       params
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Lock / unlock a finance record (snapshot immutability) ────────────────
+app.patch('/api/bess/finance-records/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_locked, locked_by } = req.body;
+    if (is_locked === undefined) return res.status(400).json({ error: 'is_locked required' });
+    const { rows: [row] } = await pool.query(
+      `UPDATE bess.finance_records
+       SET is_locked = $2,
+           locked_at = CASE WHEN $2 = true THEN NOW() ELSE NULL END,
+           locked_by = CASE WHEN $2 = true THEN $3    ELSE NULL END
+       WHERE id = $1 RETURNING *`,
+      [id, is_locked, locked_by || null]
+    );
+    if (!row) return res.status(404).json({ error: 'Finance record not found' });
+    res.json({ data: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Project Activities (stage change log) ─────────────────────────────────
+app.get('/api/bess/project-activities', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
+    const { rows } = await pool.query(
+      `SELECT pa.*, u.name AS performed_by_name
+       FROM bess.project_activities pa
+       LEFT JOIN bd.users u ON u.id = pa.performed_by
+       WHERE pa.project_id = $1
+       ORDER BY pa.performed_at DESC`,
+      [project_id]
     );
     res.json({ data: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }

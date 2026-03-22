@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { useApiMulti } from '../hooks/useApi.js';
-import { bessApi } from '../lib/api.js';
+import { bessApi, bdApi } from '../lib/api.js';
 import { Spinner, ErrorBanner } from '../components/Spinner.jsx';
 
 // shadcn/ui
@@ -212,13 +212,14 @@ function ChartTooltip({ active, payload, label, unit = '' }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function BESSConfig() {
-  const { units, configs, sites, clients, projects: projectsData, tariffs } = useApiMulti({
-    units:    bessApi.units,
-    configs:  bessApi.configs,
-    sites:    bessApi.sites,
-    clients:  bessApi.clients,
-    projects: bessApi.projects,
-    tariffs:  bessApi.tariffs,
+  const { units, configs, sites, clients, projects: projectsData, tariffs, opportunities: oppsData } = useApiMulti({
+    units:         bessApi.units,
+    configs:       bessApi.configs,
+    sites:         bessApi.sites,
+    clients:       bessApi.clients,
+    projects:      bessApi.projects,
+    tariffs:       bessApi.tariffs,
+    opportunities: bdApi.opps,
   });
 
   // ── ALL hooks must be declared before any conditional return ────────────
@@ -279,6 +280,8 @@ export default function BESSConfig() {
   const [szResult,        setSzResult]        = useState(null);
   const [szAiNote,        setSzAiNote]        = useState(null);
   const [szAiLoading,     setSzAiLoading]     = useState(false);
+  const [szOpportunityId, setSzOpportunityId] = useState(''); // bd.opportunities.id link
+  const [szProjectId,     setSzProjectId]     = useState(''); // bess.projects.id link
   const [szSaving,        setSzSaving]        = useState(false);
   const [szSaved,         setSzSaved]         = useState(null); // { sizing_id, rec_id, finance_id }
 
@@ -363,10 +366,15 @@ export default function BESSConfig() {
       };
     };
     // Filter by selected category (cabinet / container)
+    // dispatch_factor = yr-1 SOH × yr-1 RTE × SOC window
+    // Economical: nameplate-based (ceil(validated_kwh / sku_kwh))
+    // Recommended: dispatchable-based (ceil(validated_kwh × 1.15 / (sku_kwh × dispatch_factor)))
+    const SOH_YR1 = 0.9609; const RTE_YR1 = 0.9390; const SOC_WIN = 0.90;
+    const dispatch_factor = SOH_YR1 * RTE_YR1 * SOC_WIN; // ≈ 0.812
     const categoryUnits = unitList.filter(u => (u.energy_kwh ?? 0) > 0 && (u.category === szCategory || !u.category));
     const allConfigs = categoryUnits.map(unit => {
         const ecoCount = Math.max(1, Math.ceil(nominal_kwh / unit.energy_kwh));
-        const recCount = Math.max(1, Math.ceil((nominal_kwh * 1.15) / unit.energy_kwh));
+        const recCount = Math.max(1, Math.ceil((nominal_kwh * 1.15) / (unit.energy_kwh * dispatch_factor)));
         return {
           unit,
           eco: mkSlot(ecoCount, ecoCount * unit.energy_kwh, ecoCount * unit.power_kw, ecoCount * (unit.price_ex_gst || 0)),
@@ -407,7 +415,9 @@ export default function BESSConfig() {
 
       // 1 — sizing analysis
       const szRes = await bessApi.createSizingAnalysis({
-        client_id:            szClientId ? parseInt(szClientId) : null,
+        client_id:            szClientId      ? parseInt(szClientId)      : null,
+        opportunity_id:       szOpportunityId ? parseInt(szOpportunityId) : null,
+        project_id:           szProjectId     ? parseInt(szProjectId)     : null,
         use_case:             szResult.use_case,
         site_state:           szResult.site_state || null,
         sku_category:         szResult.category,
@@ -570,6 +580,7 @@ export default function BESSConfig() {
   const siteList    = sites?.data        ?? [];
   const projectList = projectsData?.data ?? [];
   const tariffList  = tariffs?.data      ?? [];
+  const oppList     = oppsData?.data     ?? [];
 
   // Derive unique state list from tariff master for dropdown
   const stateList = [...new Set(tariffList.map(t => t.state))].sort();
@@ -2051,7 +2062,7 @@ export default function BESSConfig() {
                         </span>
                       </div>
 
-                      {/* Category + State + Client row */}
+                      {/* Category + State + Client + Opportunity + Project */}
                       <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-1.5">
                           <Label className="text-xs uppercase tracking-wider text-muted-foreground">SKU Category</Label>
@@ -2075,6 +2086,22 @@ export default function BESSConfig() {
                             value={szClientId} onChange={e => setSzClientId(e.target.value)}>
                             <option value="">— None —</option>
                             {clientList.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Opportunity (optional)</Label>
+                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                            value={szOpportunityId} onChange={e => setSzOpportunityId(e.target.value)}>
+                            <option value="">— None —</option>
+                            {oppList.map(o => <option key={o.id} value={o.id}>{o.opp_id} · {o.title || o.company_name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Project (optional)</Label>
+                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                            value={szProjectId} onChange={e => setSzProjectId(e.target.value)}>
+                            <option value="">— None —</option>
+                            {projectList.map(p => <option key={p.id} value={p.id}>{p.project_code} · {p.name || p.company_name}</option>)}
                           </select>
                         </div>
                       </div>

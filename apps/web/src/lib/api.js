@@ -41,6 +41,9 @@ export const bessApi = {
   patchRecommendation:    (id, body) => api.patch(`/api/bess/recommendation-records/${id}`, body),
   financeRecords:         (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bess/finance-records${q ? '?' + q : ''}`); },
   createFinanceRecord:    (body) => api.post('/api/bess/finance-records', body),
+  patchFinanceRecord:     (id, body) => api.patch(`/api/bess/finance-records/${id}`, body),
+  projectActivities:      (project_id) => api.get(`/api/bess/project-activities?project_id=${project_id}`),
+  patchProject:           (id, body) => api.patch(`/api/bess/projects/${id}`, body),
 
   // POST
   createClient:       (body) => api.post('/api/bess/clients', body),
