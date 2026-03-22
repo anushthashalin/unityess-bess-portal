@@ -44,7 +44,9 @@ export const bessApi = {
 
   // POST
   createClient:       (body) => api.post('/api/bess/clients', body),
+  patchClient:        (id, body) => api.patch(`/api/bess/clients/${id}`, body),
   createSite:         (body) => api.post('/api/bess/sites', body),
+  patchSite:          (id, body) => api.patch(`/api/bess/sites/${id}`, body),
   createProposal:     (body) => api.post('/api/bess/proposals', body),
   patchProposal:      (id, body) => api.patch(`/api/bess/proposals/${id}`, body),
   createProject:      (body) => api.post('/api/bess/projects', body),

@@ -17,6 +17,8 @@ const BESS_NAV = [
   { label: 'BESS Configurator', to: '/bess-config',    icon: Zap },
   { label: 'Proposals',         to: '/proposals',      icon: FileText },
   { label: 'Projects',          to: '/projects',       icon: FolderOpen },
+  { label: 'Clients',           to: '/clients',        icon: Users },
+  { label: 'Sites',             to: '/sites',          icon: MapPin },
   { label: 'Tariff Structures', to: '/tariffs',        icon: Receipt },
 ];
 
