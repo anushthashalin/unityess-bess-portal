@@ -8,6 +8,7 @@ import Sites from './pages/Sites.jsx';
 import BESSConfig from './pages/BESSConfig.jsx';
 import Proposals from './pages/Proposals.jsx';
 import Projects from './pages/Projects.jsx';
+import LoadProfiles from './pages/LoadProfiles.jsx';
 import TariffStructures from './pages/TariffStructures.jsx';
 import BDCommandCenter from './pages/BDCommandCenter.jsx';
 import BDAccounts from './pages/BDAccounts.jsx';
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="/dashboard"             element={<Dashboard />} />
               <Route path="/clients"               element={<Clients />} />
               <Route path="/sites"                 element={<Sites />} />
+              <Route path="/load-profiles"         element={<LoadProfiles />} />
               <Route path="/bess-config"           element={<BESSConfig />} />
               <Route path="/proposals"             element={<Proposals />} />
               <Route path="/projects"              element={<Projects />} />
