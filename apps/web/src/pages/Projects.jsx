@@ -23,6 +23,19 @@ export default function Projects() {
   const [saving, setSaving]   = useState(false);
   const [saveErr, setSaveErr] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [patchingId, setPatchingId] = useState(null);
+
+  const handleStageClick = async (projectId, newStage) => {
+    setPatchingId(projectId);
+    try {
+      await bessApi.patchProject(projectId, { status: newStage });
+      setRefresh(r => r + 1);
+    } catch (err) {
+      console.error('Stage update failed:', err.message);
+    } finally {
+      setPatchingId(null);
+    }
+  };
 
   const { projects, proposals, configs, clients, sites } = useApiMulti({
     projects:  bessApi.projects,
@@ -132,17 +145,28 @@ export default function Projects() {
                     }} />
                     {STAGES.map((stage, i) => {
                       const done = i < stageIdx, current = i === stageIdx;
+                      const isUpdating = patchingId === proj.id;
                       return (
                         <div key={stage} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', zIndex:2 }}>
-                          <div style={{
-                            width:22, height:22, borderRadius:'50%',
-                            background: done || current ? '#F26B4E' : 'white',
-                            border:`2px solid ${done || current ? '#F26B4E' : '#E5E7EB'}`,
-                            display:'flex', alignItems:'center', justifyContent:'center',
-                            fontSize:10, color: done || current ? 'white' : '#9CA3AF', fontWeight:800,
-                          }}>
-                            {done ? '✓' : i+1}
-                          </div>
+                          <button
+                            onClick={() => !isUpdating && handleStageClick(proj.id, stage)}
+                            title={`Move to ${stage.replace(/_/g,' ')}`}
+                            style={{
+                              width:22, height:22, borderRadius:'50%',
+                              background: done || current ? '#F26B4E' : 'white',
+                              border:`2px solid ${done || current ? '#F26B4E' : '#E5E7EB'}`,
+                              display:'flex', alignItems:'center', justifyContent:'center',
+                              fontSize:10, color: done || current ? 'white' : '#9CA3AF', fontWeight:800,
+                              cursor: isUpdating ? 'wait' : (current ? 'default' : 'pointer'),
+                              padding:0,
+                              transition:'transform 0.1s, box-shadow 0.1s',
+                              outline:'none',
+                            }}
+                            onMouseEnter={e => { if (!current && !isUpdating) { e.currentTarget.style.transform='scale(1.2)'; e.currentTarget.style.boxShadow='0 0 0 3px rgba(242,107,78,0.2)'; }}}
+                            onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.boxShadow='none'; }}
+                          >
+                            {isUpdating && current ? '…' : done ? '✓' : i+1}
+                          </button>
                           <div style={{
                             fontSize:10, marginTop:5, textAlign:'center',
                             fontWeight: current ? 700 : 400,

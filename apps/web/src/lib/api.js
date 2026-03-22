@@ -48,6 +48,7 @@ export const bessApi = {
   createProposal:     (body) => api.post('/api/bess/proposals', body),
   patchProposal:      (id, body) => api.patch(`/api/bess/proposals/${id}`, body),
   createProject:      (body) => api.post('/api/bess/projects', body),
+  patchProject:       (id, body) => api.patch(`/api/bess/projects/${id}`, body),
   createLoadProfile:  (body) => api.post('/api/bess/load-profiles', body),
   createTariff:       (body) => api.post('/api/bess/tariff-structures', body),
   createConfig:       (body) => api.post('/api/bess/bess-configurations', body),
