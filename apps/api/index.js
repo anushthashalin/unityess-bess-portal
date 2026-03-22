@@ -73,6 +73,23 @@ async function runMigrations() {
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS closed_at    TIMESTAMPTZ`,
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS content      JSONB`,
     `ALTER TABLE bd.proposals ADD COLUMN IF NOT EXISTS created_by   INTEGER REFERENCES bd.users(id)`,
+    // bess.clients — extended BD fields
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS lead_status        TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS bd_name            TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS industry_type      TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS requirement_kwh    NUMERIC`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS project_type       TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS meeting_date       DATE`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS timeline           TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS qualified          BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS budgetary_quote    BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS tech_discussion    BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS tc_offer           BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS final_quote        BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS remarks            TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS alternate_contact  TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS alternate_phone    TEXT`,
+    `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS website            TEXT`,
     // Unique indexes for import upserts (CREATE INDEX IF NOT EXISTS is safe to repeat)
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_company_name
        ON bd.accounts (LOWER(company_name))`,
@@ -1061,24 +1078,39 @@ app.get('/api/bd/automation/status', (req, res) => {
 // ── Clients ──────────────────────────────────────────────────────────────
 app.post('/api/bess/clients', async (req, res) => {
   try {
-    const { company_name, contact_person, email, phone, city, state, gstin } = req.body;
+    const {
+      company_name, contact_person, email, phone, city, state, gstin,
+      alternate_contact, alternate_phone, website, industry_type,
+      lead_status, bd_name, requirement_kwh, project_type, meeting_date,
+      timeline, qualified, budgetary_quote, tech_discussion, tc_offer,
+      final_quote, remarks
+    } = req.body;
     if (!company_name) return res.status(400).json({ error: 'company_name required' });
     const { rows: [c] } = await pool.query(
-      `INSERT INTO bess.clients (company_name, contact_person, email, phone, city, state, gstin)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [company_name, contact_person||null, email||null, phone||null, city||null, state||null, gstin||null]
+      `INSERT INTO bess.clients
+         (company_name, contact_person, email, phone, city, state, gstin,
+          alternate_contact, alternate_phone, website, industry_type,
+          lead_status, bd_name, requirement_kwh, project_type, meeting_date,
+          timeline, qualified, budgetary_quote, tech_discussion, tc_offer, final_quote, remarks)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+       RETURNING *`,
+      [company_name, contact_person||null, email||null, phone||null, city||null, state||null, gstin||null,
+       alternate_contact||null, alternate_phone||null, website||null, industry_type||null,
+       lead_status||'new', bd_name||null, requirement_kwh||null, project_type||null,
+       meeting_date||null, timeline||null, qualified||false, budgetary_quote||false,
+       tech_discussion||false, tc_offer||false, final_quote||false, remarks||null]
     );
     res.json({ data: c });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── PATCH client (inline edit + Google Sheet sync) ────────────────────────
+// ── PATCH client ──────────────────────────────────────────────────────────
 app.patch('/api/bess/clients/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const {
       company_name, contact_person, email, phone, city, state, gstin,
-      // Sheet-only fields (not stored in DB, passed through to Sheets)
+      alternate_contact, alternate_phone, website, industry_type,
       lead_status, bd_name, requirement_kwh, project_type, meeting_date,
       timeline, qualified, budgetary_quote, tech_discussion, tc_offer,
       final_quote, remarks
@@ -1089,25 +1121,30 @@ app.patch('/api/bess/clients/:id', async (req, res) => {
     const { rows: [c] } = await pool.query(
       `UPDATE bess.clients
        SET company_name=$1, contact_person=$2, email=$3, phone=$4,
-           city=$5, state=$6, gstin=$7, updated_at=NOW()
-       WHERE id=$8 RETURNING *`,
+           city=$5, state=$6, gstin=$7,
+           alternate_contact=$8, alternate_phone=$9, website=$10, industry_type=$11,
+           lead_status=$12, bd_name=$13, requirement_kwh=$14, project_type=$15,
+           meeting_date=$16, timeline=$17, qualified=$18, budgetary_quote=$19,
+           tech_discussion=$20, tc_offer=$21, final_quote=$22, remarks=$23,
+           updated_at=NOW()
+       WHERE id=$24 RETURNING *`,
       [company_name, contact_person||null, email||null, phone||null,
-       city||null, state||null, gstin||null, id]
+       city||null, state||null, gstin||null,
+       alternate_contact||null, alternate_phone||null, website||null, industry_type||null,
+       lead_status||'new', bd_name||null, requirement_kwh||null, project_type||null,
+       meeting_date||null, timeline||null, qualified||false, budgetary_quote||false,
+       tech_discussion||false, tc_offer||false, final_quote||false, remarks||null,
+       id]
     );
     if (!c) return res.status(404).json({ error: 'Client not found' });
 
-    // Async sync to Google Sheet — fire and forget, don't block response
+    // Async sync to Google Sheet — fire and forget
     const webhookUrl = process.env.SHEETS_WEBHOOK_URL;
     if (webhookUrl) {
       fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...c,
-          lead_status, bd_name, requirement_kwh, project_type, meeting_date,
-          timeline, qualified, budgetary_quote, tech_discussion, tc_offer,
-          final_quote, remarks
-        }),
+        body: JSON.stringify(c),
       }).catch(err => console.warn('Sheet sync failed:', err.message));
     }
 
