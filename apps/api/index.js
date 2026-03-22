@@ -1237,7 +1237,7 @@ app.post('/api/bess/parse-bill', async (req, res) => {
     const prompt = `You are analyzing an Indian electricity bill or load data document. Extract these fields and return ONLY a valid JSON object, no explanation:\n{"total_units_kwh":number|null,"max_demand_kw":number|null,"peak_demand_kw":number|null,"tod_peak_kwh":number|null,"tod_offpeak_kwh":number|null,"tod_night_kwh":number|null,"month":number|null,"year":number|null,"sanctioned_load_kva":number|null,"contract_demand_kva":number|null,"tariff_category":string|null,"discom":string|null,"total_amount_inr":number|null,"consumer_name":string|null,"meter_number":string|null}\nUse null for missing fields. Numbers as plain decimals only.`;
 
     const gr = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1253,7 +1253,8 @@ app.post('/api/bess/parse-bill', async (req, res) => {
     const gd = await gr.json();
     if (gd.error) return res.status(502).json({ error: gd.error.message });
     const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const match = text.match(/\{[\s\S]*\}/);
+    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) return res.status(422).json({ error: 'Could not parse document — try a clearer scan or manual input.' });
     res.json({ data: JSON.parse(match[0]) });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1287,26 +1288,30 @@ Your task:
 - Note any Indian regulatory or operational context relevant to the configuration (CERC BESS 2022, IS 16270, CEA Grid Connectivity 2023)
 - Provide a realistic tariff_diff_assumed_rs_kwh based on the use case (ToD: 3–5, DG: 20–28 net of grid charge)
 
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON (no markdown, no code fences). Keep all string values under 200 characters. Schema:
 {"primary":{"unit_model":string,"unit_count":number,"total_kwh":number,"total_kw":number,"application":string,"reasoning":string},"alternatives":[{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string},{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string}],"sizing_logic":{"key_driver":string,"recommended_capacity_kwh":number,"recommended_power_kw":number,"rationale":string},"financial_estimate":{"annual_savings_inr":number,"simple_payback_years":number,"tariff_diff_assumed_rs_kwh":number,"assumptions":string}}`;
 
     const gr = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.15, maxOutputTokens: 2048 },
+          generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
         }),
       }
     );
     const gd = await gr.json();
     if (gd.error) return res.status(502).json({ error: gd.error.message });
     const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const match = text.match(/\{[\s\S]*\}/);
+    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) return res.status(422).json({ error: 'Gemini did not return a valid recommendation. Try again.' });
-    res.json({ data: JSON.parse(match[0]) });
+    let parsed;
+    try { parsed = JSON.parse(match[0]); }
+    catch (pe) { return res.status(422).json({ error: 'Gemini response could not be parsed. Try again.' }); }
+    res.json({ data: parsed });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1411,6 +1416,223 @@ app.post('/api/bess/tariff-structures', async (req, res) => {
        energy_charge_peak||null, energy_charge_offpeak||null, demand_charge||null, fixed_charge||null]
     );
     res.json({ data: t });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Coverage Table (all active SKUs in a category vs a requirement) ───────
+app.get('/api/bess/coverage-table', async (req, res) => {
+  try {
+    const { category, validated_kwh, recommended_uplift_pct = 15,
+            soc_window = 0.90, soh_yr1 = 0.9609, rte_yr1 = 0.9390 } = req.query;
+    if (!category || !validated_kwh) return res.status(400).json({ error: 'category and validated_kwh required' });
+
+    const req_kwh = parseFloat(validated_kwh);
+    const uplift  = parseFloat(recommended_uplift_pct) / 100;
+    const soc     = parseFloat(soc_window);
+    const soh     = parseFloat(soh_yr1);
+    const rte     = parseFloat(rte_yr1);
+    const dispatch_factor = soh * rte * soc;   // yr-1 at-meter factor
+
+    const { rows: skus } = await pool.query(
+      `SELECT id, model, power_kw, energy_kwh, price_ex_gst
+       FROM bess.units
+       WHERE is_active = true AND category = $1
+       ORDER BY energy_kwh`,
+      [category]
+    );
+
+    const table = skus.map(u => {
+      const econ_units  = Math.max(1, Math.ceil(req_kwh / parseFloat(u.energy_kwh)));
+      const recom_units = Math.max(1, Math.ceil((req_kwh * (1 + uplift)) / (parseFloat(u.energy_kwh) * dispatch_factor)));
+      const price       = parseFloat(u.price_ex_gst);
+      return {
+        sku_id:            u.id,
+        sku_model:         u.model,
+        sku_energy_kwh:    parseFloat(u.energy_kwh),
+        sku_power_kw:      parseFloat(u.power_kw),
+        sku_price_ex_gst:  price,
+        econ_units,
+        econ_total_kwh:    econ_units  * parseFloat(u.energy_kwh),
+        econ_total_kw:     econ_units  * parseFloat(u.power_kw),
+        econ_capex:        econ_units  * price,
+        recom_units,
+        recom_total_kwh:   recom_units * parseFloat(u.energy_kwh),
+        recom_total_kw:    recom_units * parseFloat(u.power_kw),
+        recom_capex:       recom_units * price,
+        recom_dispatchable_yr1: recom_units * parseFloat(u.energy_kwh) * dispatch_factor,
+        priced:            price > 0,
+      };
+    });
+
+    res.json({ data: table });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Save Sizing Analysis ───────────────────────────────────────────────────
+app.post('/api/bess/sizing-analyses', async (req, res) => {
+  try {
+    const {
+      client_id, site_id, use_case, site_state, sku_category,
+      load_kwh_per_day, peak_demand_kw, dg_runtime_hours, backup_hours, diesel_price_rs_l,
+      raw_energy_kwh, derate_factor, validated_energy_kwh, required_power_kw,
+      sizing_basis, soc_window, ac_dc_loss_pct, recommended_uplift_pct, created_by
+    } = req.body;
+    if (!use_case || !sku_category || !validated_energy_kwh)
+      return res.status(400).json({ error: 'use_case, sku_category, validated_energy_kwh required' });
+
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO bess.sizing_analyses
+         (client_id, site_id, use_case, site_state, sku_category,
+          load_kwh_per_day, peak_demand_kw, dg_runtime_hours, backup_hours, diesel_price_rs_l,
+          raw_energy_kwh, derate_factor, validated_energy_kwh, required_power_kw,
+          sizing_basis, soc_window, ac_dc_loss_pct, recommended_uplift_pct, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       RETURNING *`,
+      [client_id||null, site_id||null, use_case, site_state||null, sku_category,
+       load_kwh_per_day||null, peak_demand_kw||null, dg_runtime_hours||null,
+       backup_hours||null, diesel_price_rs_l||null,
+       raw_energy_kwh, derate_factor, validated_energy_kwh, required_power_kw,
+       sizing_basis||null, soc_window||0.90, ac_dc_loss_pct||0.05,
+       recommended_uplift_pct||15, created_by||null]
+    );
+    res.json({ data: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bess/sizing-analyses', async (req, res) => {
+  try {
+    const { client_id } = req.query;
+    const where = client_id ? 'WHERE sa.client_id = $1' : '';
+    const params = client_id ? [client_id] : [];
+    const { rows } = await pool.query(
+      `SELECT sa.*, c.company_name
+       FROM bess.sizing_analyses sa
+       LEFT JOIN bess.clients c ON c.id = sa.client_id
+       ${where}
+       ORDER BY sa.created_at DESC`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Save Recommendation Record ─────────────────────────────────────────────
+app.post('/api/bess/recommendation-records', async (req, res) => {
+  try {
+    const {
+      sizing_analysis_id, client_id,
+      sku_id, sku_model, sku_energy_kwh, sku_power_kw, sku_price_ex_gst,
+      econ_units, econ_total_kwh, econ_total_kw, econ_capex,
+      recom_units, recom_total_kwh, recom_total_kw, recom_capex, recom_dispatchable_yr1,
+      selected_config, cycle_dataset_key, coverage_table, gemini_commentary
+    } = req.body;
+    if (!sku_model || econ_units == null || recom_units == null)
+      return res.status(400).json({ error: 'sku_model, econ_units, recom_units required' });
+
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO bess.recommendation_records
+         (sizing_analysis_id, client_id,
+          sku_id, sku_model, sku_energy_kwh, sku_power_kw, sku_price_ex_gst,
+          econ_units, econ_total_kwh, econ_total_kw, econ_capex,
+          recom_units, recom_total_kwh, recom_total_kw, recom_capex, recom_dispatchable_yr1,
+          selected_config, cycle_dataset_key, coverage_table, gemini_commentary)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING *`,
+      [sizing_analysis_id||null, client_id||null,
+       sku_id||null, sku_model, sku_energy_kwh, sku_power_kw, sku_price_ex_gst,
+       econ_units, econ_total_kwh, econ_total_kw, econ_capex,
+       recom_units, recom_total_kwh, recom_total_kw, recom_capex, recom_dispatchable_yr1||null,
+       selected_config||null, cycle_dataset_key||null,
+       coverage_table ? JSON.stringify(coverage_table) : null,
+       gemini_commentary ? JSON.stringify(gemini_commentary) : null]
+    );
+    res.json({ data: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/bess/recommendation-records/:id', async (req, res) => {
+  try {
+    const { selected_config, gemini_commentary } = req.body;
+    const { rows: [row] } = await pool.query(
+      `UPDATE bess.recommendation_records
+       SET selected_config = COALESCE($1, selected_config),
+           gemini_commentary = COALESCE($2, gemini_commentary)
+       WHERE id = $3 RETURNING *`,
+      [selected_config||null,
+       gemini_commentary ? JSON.stringify(gemini_commentary) : null,
+       req.params.id]
+    );
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bess/recommendation-records', async (req, res) => {
+  try {
+    const { client_id, sizing_analysis_id } = req.query;
+    const conditions = [];
+    const params = [];
+    if (client_id)           { params.push(client_id);           conditions.push(`client_id = $${params.length}`); }
+    if (sizing_analysis_id)  { params.push(sizing_analysis_id);  conditions.push(`sizing_analysis_id = $${params.length}`); }
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const { rows } = await pool.query(
+      `SELECT * FROM bess.recommendation_records ${where} ORDER BY created_at DESC`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Save Finance Record ────────────────────────────────────────────────────
+app.post('/api/bess/finance-records', async (req, res) => {
+  try {
+    const {
+      recommendation_id, client_id, selected_config, capex_ex_gst,
+      use_case, benefit_rs_kwh, cycles_per_year, cycle_dataset_key,
+      om_rate_pct, om_escalation_pct, analysis_horizon_years,
+      tariff_structure_id, tariff_snapshot,
+      annual_savings_yr1, simple_payback_years, break_even_year,
+      irr_10yr_pct, npv_10yr_rs, roi_10yr_pct, cashflow_rows
+    } = req.body;
+    if (!selected_config || !capex_ex_gst || !use_case)
+      return res.status(400).json({ error: 'selected_config, capex_ex_gst, use_case required' });
+
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO bess.finance_records
+         (recommendation_id, client_id, selected_config, capex_ex_gst,
+          use_case, benefit_rs_kwh, cycles_per_year, cycle_dataset_key,
+          om_rate_pct, om_escalation_pct, analysis_horizon_years,
+          tariff_structure_id, tariff_snapshot,
+          annual_savings_yr1, simple_payback_years, break_even_year,
+          irr_10yr_pct, npv_10yr_rs, roi_10yr_pct, cashflow_rows)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING *`,
+      [recommendation_id||null, client_id||null, selected_config, capex_ex_gst,
+       use_case, benefit_rs_kwh||null, cycles_per_year||null, cycle_dataset_key||null,
+       om_rate_pct||1.5, om_escalation_pct||3.0, analysis_horizon_years||10,
+       tariff_structure_id||null,
+       tariff_snapshot ? JSON.stringify(tariff_snapshot) : null,
+       annual_savings_yr1||null, simple_payback_years||null, break_even_year||null,
+       irr_10yr_pct||null, npv_10yr_rs||null, roi_10yr_pct||null,
+       cashflow_rows ? JSON.stringify(cashflow_rows) : null]
+    );
+    res.json({ data: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bess/finance-records', async (req, res) => {
+  try {
+    const { recommendation_id, client_id } = req.query;
+    const conditions = [];
+    const params = [];
+    if (recommendation_id)  { params.push(recommendation_id); conditions.push(`recommendation_id = $${params.length}`); }
+    if (client_id)          { params.push(client_id);         conditions.push(`client_id = $${params.length}`); }
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const { rows } = await pool.query(
+      `SELECT * FROM bess.finance_records ${where} ORDER BY computed_at DESC`,
+      params
+    );
+    res.json({ data: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

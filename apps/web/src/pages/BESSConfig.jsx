@@ -131,18 +131,43 @@ function calcIRR(cashflows, guess = 0.15) {
 }
 
 // Build year-by-year net cashflows with SOH/RTE degradation and O&M escalation
+// Returns { flows, rows } where rows is the detailed year-by-year breakdown
 function buildCashflows({ capex, nominalKwh, socWindow, tariffDiff, dataset, years = 10, omRate = 0.015, omEsc = 0.03 }) {
   const flows = [-capex];
+  const rows  = [];
   let om = capex * omRate;
   const lastRow = dataset.years[dataset.years.length - 1];
   for (let yr = 0; yr < years; yr++) {
     const d = dataset.years[yr] ?? lastRow;
     const atMeter  = nominalKwh * d.soh * socWindow * d.rte;
     const gross    = atMeter * tariffDiff * dataset.cycles_per_year;
-    flows.push(gross - om);
+    const net      = gross - om;
+    flows.push(net);
+    rows.push({ year: yr + 1, soh: d.soh, rte: d.rte, at_meter_kwh: Math.round(atMeter), gross_benefit: Math.round(gross), om_cost: Math.round(om), net_cashflow: Math.round(net) });
     om *= (1 + omEsc);
   }
-  return flows;
+  return { flows, rows };
+}
+
+// Break-even year: first year where cumulative net cashflow >= capex
+function calcBreakEvenYear(cashflows) {
+  // cashflows[0] = -capex, cashflows[1..n] = annual net
+  if (cashflows.length < 2) return null;
+  const capex = Math.abs(cashflows[0]);
+  let cumulative = 0;
+  for (let t = 1; t < cashflows.length; t++) {
+    cumulative += cashflows[t];
+    if (cumulative >= capex) return t;
+  }
+  return null; // not reached within horizon
+}
+
+// ROI over horizon: sum of net cashflows / capex * 100
+function calcROI(cashflows) {
+  if (cashflows.length < 2) return null;
+  const capex = Math.abs(cashflows[0]);
+  const totalNet = cashflows.slice(1).reduce((a, b) => a + b, 0);
+  return capex > 0 ? Math.round((totalNet / capex) * 100) : null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -187,12 +212,13 @@ function ChartTooltip({ active, payload, label, unit = '' }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function BESSConfig() {
-  const { units, configs, sites, clients, projects: projectsData } = useApiMulti({
-    units: bessApi.units,
-    configs: bessApi.configs,
-    sites: bessApi.sites,
-    clients: bessApi.clients,
+  const { units, configs, sites, clients, projects: projectsData, tariffs } = useApiMulti({
+    units:    bessApi.units,
+    configs:  bessApi.configs,
+    sites:    bessApi.sites,
+    clients:  bessApi.clients,
     projects: bessApi.projects,
+    tariffs:  bessApi.tariffs,
   });
 
   // ── ALL hooks must be declared before any conditional return ────────────
@@ -205,6 +231,8 @@ export default function BESSConfig() {
   const [socMax,       setSocMax]       = useState(90);
   const [peakKw,       setPeakKw]       = useState('');
   const [tariffDiff,      setTariffDiff]      = useState(4.5);
+  const [selectedState,   setSelectedState]   = useState('');   // drives tariff master lookup
+  const [selectedDiscom,  setSelectedDiscom]  = useState('');   // secondary filter
   const [cycleDatasetKey, setCycleDatasetKey] = useState('q25c_365');
 
   // Load Profile tab state
@@ -235,6 +263,9 @@ export default function BESSConfig() {
 
   // ── Sizing Tool state ──────────────────────────────────────────────────────
   const [szUseCase,       setSzUseCase]       = useState(null); // 'dg'|'tod'
+  const [szCategory,      setSzCategory]      = useState('cabinet'); // 'cabinet'|'container'
+  const [szState,         setSzState]         = useState('');         // Indian state for ToD tariff lookup
+  const [szClientId,      setSzClientId]      = useState('');
   const [szLoadKw,        setSzLoadKw]        = useState('');
   const [szBackupHrs,     setSzBackupHrs]     = useState('4');
   const [szFuelCost,      setSzFuelCost]      = useState('90');
@@ -248,6 +279,8 @@ export default function BESSConfig() {
   const [szResult,        setSzResult]        = useState(null);
   const [szAiNote,        setSzAiNote]        = useState(null);
   const [szAiLoading,     setSzAiLoading]     = useState(false);
+  const [szSaving,        setSzSaving]        = useState(false);
+  const [szSaved,         setSzSaved]         = useState(null); // { sizing_id, rec_id, finance_id }
 
   // ── Save Configuration state ──────────────────────────────────────────────
   const [saveSiteId,      setSaveSiteId]      = useState('');
@@ -316,7 +349,8 @@ export default function BESSConfig() {
       const netYr1 = annual_savings_inr - om1;
       let irrVal = null;
       if (capex > 0 && netYr1 > 0) {
-        const flows = buildCashflows({ capex, nominalKwh: kwh, socWindow: (socMax - socMin) / 100, tariffDiff: annual_savings_inr / Math.max(1, dispatch_kwh_per_year / cyclesPerYear), dataset, years: 10 });
+        const tdiff = annual_savings_inr / Math.max(1, dispatch_kwh_per_year / cyclesPerYear);
+        const { flows } = buildCashflows({ capex, nominalKwh: kwh, socWindow: (socMax - socMin) / 100, tariffDiff: tdiff, dataset, years: 10 });
         const r = calcIRR(flows);
         irrVal = isFinite(r) ? Math.round(r * 100) : null;
       }
@@ -328,9 +362,9 @@ export default function BESSConfig() {
         benefit_kwh: dispatch_kwh_per_year > 0 ? annual_savings_inr / dispatch_kwh_per_year : null,
       };
     };
-    const allConfigs = unitList
-      .filter(u => (u.energy_kwh ?? 0) > 0)
-      .map(unit => {
+    // Filter by selected category (cabinet / container)
+    const categoryUnits = unitList.filter(u => (u.energy_kwh ?? 0) > 0 && (u.category === szCategory || !u.category));
+    const allConfigs = categoryUnits.map(unit => {
         const ecoCount = Math.max(1, Math.ceil(nominal_kwh / unit.energy_kwh));
         const recCount = Math.max(1, Math.ceil((nominal_kwh * 1.15) / unit.energy_kwh));
         return {
@@ -339,7 +373,15 @@ export default function BESSConfig() {
           rec: mkSlot(recCount, recCount * unit.energy_kwh, recCount * unit.power_kw, recCount * (unit.price_ex_gst || 0)),
         };
       });
-    setSzResult({ nominal_kwh, nominal_kw, annual_savings_inr, allConfigs });
+    const derate_factor = 0.05 + (1 - 0.90); // ac_dc_loss + soc_reserve
+    setSzSaved(null); // reset save state for fresh result
+    setSzResult({
+      nominal_kwh, nominal_kw, annual_savings_inr,
+      dispatch_kwh_per_year, allConfigs,
+      use_case: szUseCase, category: szCategory, site_state: szState,
+      derate_factor,
+      validated_energy_kwh: nominal_kwh / (1 - derate_factor),
+    });
     // Async AI narrative — non-blocking
     setSzAiNote(null); setSzAiLoading(true);
     try {
@@ -349,10 +391,110 @@ export default function BESSConfig() {
           nominal_kwh: Math.round(nominal_kwh), nominal_kw: Math.round(nominal_kw),
           annual_savings_inr: Math.round(annual_savings_inr), use_case: szUseCase,
         },
-        available_units: unitList,
+        available_units: categoryUnits,
       });
       setSzAiNote(aiRes?.data ?? aiRes);
     } catch (_) { /* non-blocking */ } finally { setSzAiLoading(false); }
+  };
+
+  // Save sizing analysis + recommendation + finance to DB
+  const saveSizingAnalysis = async (selectedUnit, selectedConfig) => {
+    if (!szResult || !selectedUnit) return;
+    setSzSaving(true);
+    try {
+      const configRow = szResult.allConfigs.find(c => c.unit.id === selectedUnit.id);
+      if (!configRow) return;
+
+      // 1 — sizing analysis
+      const szRes = await bessApi.createSizingAnalysis({
+        client_id:            szClientId ? parseInt(szClientId) : null,
+        use_case:             szResult.use_case,
+        site_state:           szResult.site_state || null,
+        sku_category:         szResult.category,
+        load_kwh_per_day:     szUseCase === 'tod' ? parseFloat(szDispatchKwh) || null : null,
+        peak_demand_kw:       parseFloat(szLoadKw) || null,
+        dg_runtime_hours:     szUseCase === 'dg'  ? parseFloat(szBackupHrs) || null : null,
+        diesel_price_rs_l:    szUseCase === 'dg'  ? parseFloat(szFuelCost)  || null : null,
+        raw_energy_kwh:       Math.round(szResult.nominal_kwh),
+        derate_factor:        szResult.derate_factor,
+        validated_energy_kwh: Math.round(szResult.validated_energy_kwh),
+        required_power_kw:    Math.round(szResult.nominal_kw),
+        sizing_basis:         szUseCase === 'dg'
+          ? `DG: ${szLoadKw}kW × ${szBackupHrs}h, derated 15%`
+          : `ToD: ${szDispatchKwh}kWh dispatch / ${szPeakWindow}h window`,
+      });
+
+      // 2 — recommendation record
+      const ecoRow = configRow.eco;
+      const recRow = configRow.rec;
+      const recRes = await bessApi.createRecommendation({
+        sizing_analysis_id:    szRes.data.id,
+        client_id:             szClientId ? parseInt(szClientId) : null,
+        sku_id:                selectedUnit.id,
+        sku_model:             selectedUnit.model,
+        sku_energy_kwh:        selectedUnit.energy_kwh,
+        sku_power_kw:          selectedUnit.power_kw,
+        sku_price_ex_gst:      selectedUnit.price_ex_gst,
+        econ_units:            ecoRow.count,
+        econ_total_kwh:        ecoRow.kwh,
+        econ_total_kw:         ecoRow.kw,
+        econ_capex:            ecoRow.capex,
+        recom_units:           recRow.count,
+        recom_total_kwh:       recRow.kwh,
+        recom_total_kw:        recRow.kw,
+        recom_capex:           recRow.capex,
+        selected_config:       selectedConfig,
+        cycle_dataset_key:     cycleDatasetKey,
+        coverage_table:        szResult.allConfigs.map(c => ({
+          sku_model: c.unit.model, sku_energy_kwh: c.unit.energy_kwh,
+          econ_units: c.eco.count, econ_capex: c.eco.capex,
+          recom_units: c.rec.count, recom_capex: c.rec.capex,
+        })),
+        gemini_commentary:     szAiNote || null,
+      });
+
+      // 3 — finance record
+      const chosenRow = selectedConfig === 'economical' ? ecoRow : recRow;
+      const benefit_rs_kwh = szResult.dispatch_kwh_per_year > 0
+        ? szResult.annual_savings_inr / szResult.dispatch_kwh_per_year : 0;
+      const tdiff = szResult.dispatch_kwh_per_year > 0
+        ? szResult.annual_savings_inr / (szResult.dispatch_kwh_per_year / dataset.cycles_per_year) : 0;
+      const { flows: finFlows, rows: finRows } = buildCashflows({
+        capex: chosenRow.capex, nominalKwh: chosenRow.kwh,
+        socWindow: 0.90, tariffDiff: tdiff, dataset, years: 10,
+      });
+      const irrR    = calcIRR(finFlows);
+      const irrSave = isFinite(irrR) ? Math.round(irrR * 100) : null;
+      const bey     = calcBreakEvenYear(finFlows);
+      const roi     = calcROI(finFlows);
+      const annYr1  = finRows[0]?.net_cashflow ?? null;
+      const pb      = chosenRow.capex > 0 && annYr1 > 0 ? parseFloat((chosenRow.capex / annYr1).toFixed(2)) : null;
+      const npv     = Math.round(finFlows.reduce((s, cf, t) => s + cf / Math.pow(1.10, t), 0));
+
+      await bessApi.createFinanceRecord({
+        recommendation_id:       recRes.data.id,
+        client_id:               szClientId ? parseInt(szClientId) : null,
+        selected_config:         selectedConfig,
+        capex_ex_gst:            chosenRow.capex,
+        use_case:                szResult.use_case,
+        benefit_rs_kwh:          parseFloat(benefit_rs_kwh.toFixed(2)),
+        cycles_per_year:         dataset.cycles_per_year,
+        cycle_dataset_key:       cycleDatasetKey,
+        annual_savings_yr1:      annYr1,
+        simple_payback_years:    pb,
+        break_even_year:         bey,
+        irr_10yr_pct:            irrSave,
+        npv_10yr_rs:             npv,
+        roi_10yr_pct:            roi,
+        cashflow_rows:           finRows,
+      });
+
+      setSzSaved({ sizing_id: szRes.data.id, rec_id: recRes.data.id });
+    } catch (e) {
+      console.error('Save sizing analysis failed:', e.message);
+    } finally {
+      setSzSaving(false);
+    }
   };
 
   // Proposal modal state
@@ -387,19 +529,26 @@ export default function BESSConfig() {
   const annualSavings = grossSavYr1 - omYr1;       // Year-1 net savings (for display KPIs)
 
   // 10-year degraded cashflows for NPV/IRR
-  const cashflows10 = useMemo(() => {
-    if (!totalPrice || !usableEnergy || !tariffDiff) return [];
+  const financeModel10 = useMemo(() => {
+    if (!totalPrice || !usableEnergy || !tariffDiff) return null;
     return buildCashflows({ capex: totalPrice, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 10 });
   }, [totalPrice, usableEnergy, tariffDiff, cycleDatasetKey]); // eslint-disable-line
 
+  const cashflows10   = financeModel10?.flows ?? [];
+  const cashflowRows  = financeModel10?.rows  ?? [];
   const irrDecimal    = cashflows10.length > 1 && annualSavings > 0 ? calcIRR(cashflows10) : null;
   const irrPct        = irrDecimal != null && isFinite(irrDecimal) ? Math.round(irrDecimal * 100) : null;
   const simplePayback = totalPrice > 0 && annualSavings > 0 ? (totalPrice / annualSavings).toFixed(1) : '—';
+  const breakEvenYear = cashflows10.length > 1 ? calcBreakEvenYear(cashflows10) : null;
+  const roi10Pct      = cashflows10.length > 1 ? calcROI(cashflows10) : null;
+  const npv10         = cashflows10.length > 1
+    ? Math.round(cashflows10.reduce((s, cf, t) => s + cf / Math.pow(1.10, t), 0))
+    : null;
 
-  // 12-year cumulative cashflow for chart (uses degraded cashflows, extended by holding last-year net flat)
+  // 12-year cumulative cashflow for chart
   const paybackData = useMemo(() => {
     if (!totalPrice || !annualSavings) return [];
-    const flows = buildCashflows({ capex: totalPrice, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 12 });
+    const { flows } = buildCashflows({ capex: totalPrice, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 12 });
     let cum = 0;
     return flows.slice(1).map((net, i) => {
       cum += net;
@@ -420,6 +569,53 @@ export default function BESSConfig() {
   const clientList  = clients?.data      ?? [];
   const siteList    = sites?.data        ?? [];
   const projectList = projectsData?.data ?? [];
+  const tariffList  = tariffs?.data      ?? [];
+
+  // Derive unique state list from tariff master for dropdown
+  const stateList = [...new Set(tariffList.map(t => t.state))].sort();
+
+  // DISCOMs available for selected state
+  const discomList = selectedState
+    ? tariffList.filter(t => t.state === selectedState).map(t => t.discom)
+    : [];
+
+  // Active tariff row — matched by state + discom (or first in state)
+  const activeTariffRow = selectedState
+    ? (tariffList.find(t => t.state === selectedState && t.discom === selectedDiscom)
+       ?? tariffList.find(t => t.state === selectedState))
+    : null;
+
+  // When state selector in main panel changes → update tariffDiff reactively
+  const handleStateChange = (state) => {
+    setSelectedState(state);
+    setSelectedDiscom('');
+    const match = tariffList.find(t => t.state === state);
+    if (match) {
+      const spread = parseFloat(match.energy_charge_peak) - parseFloat(match.energy_charge_offpeak);
+      if (spread > 0) setTariffDiff(parseFloat(spread.toFixed(2)));
+    }
+  };
+
+  // When DISCOM selector changes → refine tariffDiff
+  const handleDiscomChange = (discom) => {
+    setSelectedDiscom(discom);
+    const match = tariffList.find(t => t.state === selectedState && t.discom === discom);
+    if (match) {
+      const spread = parseFloat(match.energy_charge_peak) - parseFloat(match.energy_charge_offpeak);
+      if (spread > 0) setTariffDiff(parseFloat(spread.toFixed(2)));
+    }
+  };
+
+  // Auto-fill ToD tariffs when state changes in sizing tool
+  const handleSzStateChange = (state) => {
+    setSzState(state);
+    if (szUseCase !== 'tod') return;
+    const match = tariffList.find(t => t.state === state);
+    if (match) {
+      setSzPeakTariff(String(match.energy_charge_peak ?? ''));
+      setSzOffpeakTariff(String(match.energy_charge_offpeak ?? ''));
+    }
+  };
 
   async function handleGenerateProposal() {
     if (!propClientId) return;
@@ -694,7 +890,7 @@ export default function BESSConfig() {
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                     Financial Assumptions
                   </Label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Peak Load (kW)</Label>
                       <Input
@@ -703,12 +899,59 @@ export default function BESSConfig() {
                         onChange={(e) => setPeakKw(e.target.value)}
                       />
                     </div>
+
+                    {/* Tariff — state-linked, first-class input */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs flex items-center gap-1">
+                        State
+                        <Tooltip>
+                          <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
+                          <TooltipContent>Selects tariff structure from master. Updates Tariff Δ automatically.</TooltipContent>
+                        </Tooltip>
+                      </Label>
+                      <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                        value={selectedState} onChange={e => handleStateChange(e.target.value)}>
+                        <option value="">— Select state —</option>
+                        {stateList.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+
+                    {discomList.length > 1 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">DISCOM</Label>
+                        <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                          value={selectedDiscom} onChange={e => handleDiscomChange(e.target.value)}>
+                          {discomList.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                    )}
+
+                    {activeTariffRow && (
+                      <div className="rounded-md bg-orange-50 border border-orange-200 px-3 py-2 text-xs space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Peak tariff</span>
+                          <span className="font-bold">₹{activeTariffRow.energy_charge_peak}/kWh</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Off-peak tariff</span>
+                          <span className="font-bold">₹{activeTariffRow.energy_charge_offpeak}/kWh</span>
+                        </div>
+                        <div className="flex justify-between border-t border-orange-200 pt-1 mt-1">
+                          <span className="text-orange-700 font-semibold">ToD Spread</span>
+                          <span className="text-orange-700 font-black">₹{tariffDiff}/kWh</span>
+                        </div>
+                        {activeTariffRow.tariff_category && (
+                          <div className="text-[10px] text-muted-foreground pt-0.5">{activeTariffRow.tariff_category}</div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <Label className="text-xs flex items-center gap-1">
                         Tariff Δ (₹/kWh)
                         <Tooltip>
                           <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
-                          <TooltipContent>Peak minus off-peak tariff spread used for arbitrage savings</TooltipContent>
+                          <TooltipContent>Auto-filled from state tariff master. Override manually if needed.</TooltipContent>
                         </Tooltip>
                       </Label>
                       <Input
@@ -957,6 +1200,12 @@ export default function BESSConfig() {
                   label="Simple Payback"
                   value={`${simplePayback} yrs`}
                   sub="At current tariff Δ"
+                  icon={Clock}
+                />
+                <SparkKpi
+                  label="Break-even Year"
+                  value={breakEvenYear != null ? `Yr ${breakEvenYear}` : '—'}
+                  sub="Degradation-adjusted"
                   icon={Clock}
                 />
                 <SparkKpi
@@ -1802,6 +2051,34 @@ export default function BESSConfig() {
                         </span>
                       </div>
 
+                      {/* Category + State + Client row */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">SKU Category</Label>
+                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                            value={szCategory} onChange={e => setSzCategory(e.target.value)}>
+                            <option value="cabinet">Cabinet</option>
+                            <option value="container">Container</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">State</Label>
+                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                            value={szState} onChange={e => handleSzStateChange(e.target.value)}>
+                            <option value="">— Select state —</option>
+                            {stateList.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Client (optional)</Label>
+                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                            value={szClientId} onChange={e => setSzClientId(e.target.value)}>
+                            <option value="">— None —</option>
+                            {clientList.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
                       {szUseCase === 'dg' && (
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
@@ -1882,7 +2159,7 @@ export default function BESSConfig() {
                           {szUseCase === 'dg' ? 'DG Replacement' : 'ToD Arbitrage'} — Sizing Results
                         </span>
                         <button
-                          onClick={() => { setSzResult(null); setSzAiNote(null); }}
+                          onClick={() => { setSzResult(null); setSzAiNote(null); setSzSaved(null); }}
                           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                         >
                           <X className="w-3 h-3" /> Recalculate
@@ -1926,17 +2203,24 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.eco.payback ? `${ac.eco.payback.toFixed(1)} yrs` : '—'}</span></div>
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
                                 </div>
-                                <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full"
-                                  onClick={() => {
-                                    setSelectedUnit(ac.unit); setNumUnits(ac.eco.count);
-                                    if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
-                                      const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
-                                      if (diff > 0) setTariffDiff(diff);
-                                    }
-                                    setActiveTab('summary');
-                                  }}>
-                                  Apply Economical
-                                </Button>
+                                <div className="flex gap-2 mt-1">
+                                  <Button size="sm" variant="outline" className="h-8 text-xs flex-1"
+                                    onClick={() => {
+                                      setSelectedUnit(ac.unit); setNumUnits(ac.eco.count);
+                                      if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
+                                        const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
+                                        if (diff > 0) setTariffDiff(diff);
+                                      }
+                                      setActiveTab('summary');
+                                    }}>
+                                    Apply
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
+                                    disabled={szSaving || !!szSaved}
+                                    onClick={() => saveSizingAnalysis(ac.unit, 'economical')}>
+                                    {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
+                                  </Button>
+                                </div>
                               </CardContent>
                             </Card>
                             <Card className="border-orange-300 bg-orange-50/50">
@@ -1951,17 +2235,24 @@ export default function BESSConfig() {
                                   <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.rec.payback ? `${ac.rec.payback.toFixed(1)} yrs` : '—'}</span></div>
                                   <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
                                 </div>
-                                <Button size="sm" className="h-8 text-xs mt-1 w-full bg-orange-500 hover:bg-orange-600"
-                                  onClick={() => {
-                                    setSelectedUnit(ac.unit); setNumUnits(ac.rec.count);
-                                    if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
-                                      const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
-                                      if (diff > 0) setTariffDiff(diff);
-                                    }
-                                    setActiveTab('summary');
-                                  }}>
-                                  Apply Recommended
-                                </Button>
+                                <div className="flex gap-2 mt-1">
+                                  <Button size="sm" className="h-8 text-xs flex-1 bg-orange-500 hover:bg-orange-600"
+                                    onClick={() => {
+                                      setSelectedUnit(ac.unit); setNumUnits(ac.rec.count);
+                                      if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
+                                        const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
+                                        if (diff > 0) setTariffDiff(diff);
+                                      }
+                                      setActiveTab('summary');
+                                    }}>
+                                    Apply
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
+                                    disabled={szSaving || !!szSaved}
+                                    onClick={() => saveSizingAnalysis(ac.unit, 'recommended')}>
+                                    {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
+                                  </Button>
+                                </div>
                               </CardContent>
                             </Card>
                           </div>

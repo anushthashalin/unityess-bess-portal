@@ -31,6 +31,17 @@ export const bessApi = {
   tariffs:            () => api.get('/api/bess/tariff-structures'),
   loadProfiles:       (site_id) => api.get(`/api/bess/load-profiles?site_id=${site_id}`),
 
+  // Sizing / recommendation / finance persistence
+  coverageTable:          (params) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bess/coverage-table?${q}`); },
+  cycleDatasetsInfo:      () => api.get('/api/bess/cycle-datasets'),
+  sizingAnalyses:         (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bess/sizing-analyses${q ? '?' + q : ''}`); },
+  createSizingAnalysis:   (body) => api.post('/api/bess/sizing-analyses', body),
+  recommendationRecords:  (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bess/recommendation-records${q ? '?' + q : ''}`); },
+  createRecommendation:   (body) => api.post('/api/bess/recommendation-records', body),
+  patchRecommendation:    (id, body) => api.patch(`/api/bess/recommendation-records/${id}`, body),
+  financeRecords:         (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bess/finance-records${q ? '?' + q : ''}`); },
+  createFinanceRecord:    (body) => api.post('/api/bess/finance-records', body),
+
   // POST
   createClient:       (body) => api.post('/api/bess/clients', body),
   createSite:         (body) => api.post('/api/bess/sites', body),
@@ -38,6 +49,9 @@ export const bessApi = {
   createProject:      (body) => api.post('/api/bess/projects', body),
   createLoadProfile:  (body) => api.post('/api/bess/load-profiles', body),
   createTariff:       (body) => api.post('/api/bess/tariff-structures', body),
+  createConfig:       (body) => api.post('/api/bess/bess-configurations', body),
+  recommendBess:      (body) => api.post('/api/bess/recommend', body),
+  parseBill:          (body) => api.post('/api/bess/parse-bill', body),
 };
 
 // ── BD endpoints ───────────────────────────────────────────────────────────
