@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { bdApi } from '../lib/api.js';
 import { date } from '../lib/fmt.js';
@@ -72,6 +73,18 @@ function formatDateTime(ts) {
 }
 
 export default function AuditLog() {
+  const { can } = useAuth();
+
+  if (!can('audit')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-32 text-center gap-3">
+        <div className="text-4xl">🔒</div>
+        <p className="text-lg font-bold text-foreground">Access Restricted</p>
+        <p className="text-sm text-muted-foreground">Audit Log is only available to admins and BD executives.</p>
+      </div>
+    );
+  }
+
   const [search,   setSearch]   = useState('');
   const [resource, setResource] = useState('all');
   const [action,   setAction]   = useState('all');
