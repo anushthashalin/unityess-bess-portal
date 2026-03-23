@@ -1367,6 +1367,59 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── EPC Configurator — AI narrative ────────────────────────────────────────
+app.post('/api/epc/size-narrative', async (req, res) => {
+  try {
+    const {
+      systemKwpDC, annualGenKwh, capexTotal, year1Savings,
+      paybackYrs, irr, npv, gridTariff, systemType,
+      sizingRationale, selfConsumedKwh, exportedKwh,
+    } = req.body;
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
+
+    const prompt = `You are a senior Solar EPC engineer for Indian C&I projects (MNRE, CERC, CEA context). A sizing engine has already computed the following solar PV configuration mathematically. Your role is ONLY to provide a concise expert narrative — do NOT recalculate numbers.
+
+Solar EPC Configuration:
+- System type: ${systemType}
+- DC capacity: ${Number(systemKwpDC).toFixed(1)} kWp
+- Annual generation: ${(Number(annualGenKwh)/1000).toFixed(1)} MWh/year
+- Self-consumed: ${(Number(selfConsumedKwh)/1000).toFixed(1)} MWh/year | Exported: ${(Number(exportedKwh)/1000).toFixed(1)} MWh/year
+- CAPEX: ₹${(Number(capexTotal)/1e5).toFixed(2)}L ex-GST
+- Grid tariff: ₹${Number(gridTariff).toFixed(2)}/kWh
+- Year 1 savings: ₹${(Number(year1Savings)/1e5).toFixed(2)}L
+- Simple payback: ${Number(paybackYrs).toFixed(1)} years
+- IRR (25yr): ${Number(irr).toFixed(1)}%
+- NPV (10%, 25yr): ₹${(Number(npv)/1e5).toFixed(2)}L
+- Sizing basis: ${sizingRationale}
+
+Write a 4–6 sentence plain-language narrative that:
+1. Validates the sizing logic and highlights key assumptions
+2. Comments on the financial viability for an Indian C&I buyer (payback, IRR context)
+3. Notes any relevant Indian regulatory context (net metering, PM Surya Ghar, MNRE norms, DISCOM guidelines)
+4. Flags any risks or considerations (shading, module degradation, net metering caps, DISCOM approval timeline)
+
+Return plain text only — no JSON, no markdown, no headers. Just the narrative paragraph.`;
+
+    const gr = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+        }),
+      }
+    );
+    const gd = await gr.json();
+    if (gd.error) return res.status(502).json({ error: gd.error.message });
+    const narrative = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Narrative unavailable.';
+    res.json({ data: { narrative } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Proposals ─────────────────────────────────────────────────────────────
 app.post('/api/bess/proposals', async (req, res) => {
   try {

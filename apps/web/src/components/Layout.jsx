@@ -38,12 +38,15 @@ const BESS_BD_NAV = [
 ];
 
 const EPC_CORE_NAV = [
-  { label: 'Dashboard',       to: '/epc/dashboard',  icon: LayoutDashboard },
-  { label: 'Command Centre',  to: '/epc/command',    icon: Activity },
-  { label: 'Projects',        to: '/epc/projects',   icon: FolderOpen },
-  { label: 'Proposals',       to: '/epc/proposals',  icon: FileText },
-  { label: 'Clients',         to: '/epc/clients',    icon: Users },
-  { label: 'Sites',           to: '/epc/sites',      icon: MapPin },
+  { label: 'Dashboard',         to: '/epc/dashboard',     icon: LayoutDashboard },
+  { label: 'Command Centre',    to: '/epc/command',       icon: Activity },
+  { label: 'EPC Configurator',  to: '/epc/config',        icon: Zap },
+  { label: 'Proposals',         to: '/epc/proposals',     icon: FileText },
+  { label: 'Projects',          to: '/epc/projects',      icon: FolderOpen },
+  { label: 'Clients',           to: '/epc/clients',       icon: Users },
+  { label: 'Sites',             to: '/epc/sites',         icon: MapPin },
+  { label: 'Tariff Structures', to: '/epc/tariffs',       icon: Receipt },
+  { label: 'Load Profiles',     to: '/epc/load-profiles', icon: BarChart2 },
 ];
 
 const EPC_BD_NAV = [

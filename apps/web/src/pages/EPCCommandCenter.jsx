@@ -1,290 +1,309 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sun, AlertTriangle, CheckCircle2, Clock, TrendingUp,
-  Users, FileText, Bell, ShieldCheck, ArrowRight, Activity,
-  Sparkles, Zap,
+  Sun, AlertTriangle, Clock, TrendingUp,
+  Bell, ShieldCheck, ArrowRight, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { bdApi } from '../lib/api.js';
-import { inr, date } from '../lib/fmt.js';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card.jsx';
-import { Badge } from '../components/ui/badge.jsx';
-import { Button } from '../components/ui/button.jsx';
-import { Separator } from '../components/ui/separator.jsx';
-import { Skeleton } from '../components/ui/skeleton.jsx';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '../components/ui/table.jsx';
+import { inr, date, daysSince } from '../lib/fmt.js';
+import { Spinner, ErrorBanner } from '../components/Spinner.jsx';
+import { SplineScene } from '@/components/ui/spline-scene';
+import { SpotlightSVG, Spotlight } from '@/components/ui/spotlight';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useApi } from '../hooks/useApi.js';
 
-const STAGE_COLOR = {
-  lead:         'bg-blue-50 text-blue-600 border-blue-200',
-  proposal:     'bg-orange-50 text-orange-500 border-orange-200',
-  negotiation:  'bg-amber-50 text-amber-600 border-amber-200',
-  po_received:  'bg-green-50 text-green-600 border-green-200',
-  won:          'bg-emerald-100 text-emerald-800 border-emerald-300',
-  lost:         'bg-red-50 text-red-600 border-red-200',
-};
+// ── Stage config ─────────────────────────────────────────────────────────────
+const STAGES = [
+  { key: 'first_connect',          label: 'First Connect',          color: '#94a3b8' },
+  { key: 'requirement_captured',   label: 'Requirement Captured',   color: '#60a5fa' },
+  { key: 'proposal_sent',          label: 'Proposal Sent',          color: '#a78bfa' },
+  { key: 'technical_closure',      label: 'Technical Closure',      color: '#f59e0b' },
+  { key: 'commercial_negotiation', label: 'Commercial Negotiation', color: '#F26B4E' },
+  { key: 'po_received',            label: 'PO Received',            color: '#10b981' },
+];
 
-function StageBadge({ stage }) {
-  const cls = STAGE_COLOR[stage] ?? 'bg-gray-100 text-gray-500 border-gray-200';
-  const label = (stage ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+// ── KPI card ─────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, color = '#F26B4E', icon: Icon }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cls}`}>
-      {label}
-    </span>
+    <div style={{
+      background: 'rgba(255,255,255,0.92)', borderRadius: 14, padding: '16px 18px',
+      border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
+      display: 'flex', alignItems: 'flex-start', gap: 12,
+    }}>
+      <div style={{ background: color + '18', borderRadius: 10, padding: 8, flexShrink: 0 }}>
+        <Icon size={16} style={{ color }} />
+      </div>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: '#1a1a1a', lineHeight: 1.1 }}>{value}</div>
+        {sub && <div style={{ fontSize: 11, color: '#999', marginTop: 3 }}>{sub}</div>}
+      </div>
+    </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, color, onClick }) {
+// ── Pipeline stage bubbles ────────────────────────────────────────────────────
+function StageBubbles({ opps }) {
   return (
-    <Card
-      className={`border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''}`}
-      onClick={onClick}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+      {STAGES.map(s => {
+        const count = opps.filter(o => o.stage === s.key).length;
+        const val   = opps.filter(o => o.stage === s.key).reduce((a, o) => a + Number(o.estimated_value ?? 0), 0);
+        return (
+          <div key={s.key} style={{
+            background: count > 0 ? s.color + '12' : 'rgba(255,255,255,0.7)',
+            border: `1px solid ${count > 0 ? s.color + '40' : 'rgba(0,0,0,0.06)'}`,
+            borderRadius: 12, padding: '14px 10px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 26, fontWeight: 900, color: count > 0 ? s.color : '#ccc' }}>{count}</div>
+            <div style={{ fontSize: 10, color: '#666', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
+            <div style={{ fontSize: 9, color: '#999', marginTop: 3, lineHeight: 1.3 }}>{s.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Deal row ──────────────────────────────────────────────────────────────────
+function DealRow({ opp, navigate }) {
+  const stage = STAGES.find(s => s.key === opp.stage);
+  const days  = opp.stage_updated_at ? daysSince(opp.stage_updated_at) : null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 14px', borderRadius: 10,
+      background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.05)',
+      marginBottom: 6, cursor: 'pointer', transition: 'box-shadow 0.15s',
+    }}
+      onClick={() => navigate('/epc/bd/opportunities')}
     >
-      <CardContent className="p-4 flex items-start gap-3">
-        <div className={`${color} p-2.5 rounded-xl shrink-0`}>
-          <Icon size={16} />
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+        background: (stage?.color ?? '#ccc') + '20',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 12, fontWeight: 800, color: stage?.color ?? '#ccc',
+      }}>
+        {(opp.company_name ?? opp.account_name ?? '?')[0].toUpperCase()}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {opp.company_name ?? opp.account_name ?? '—'}
         </div>
-        <div>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
-          <p className="text-[22px] font-black text-foreground leading-tight tabular-nums">{value}</p>
-          {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        <div style={{ fontSize: 11, color: '#888', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {opp.title}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{inr(opp.estimated_value)}</div>
+        <div style={{ fontSize: 10, color: stage?.color ?? '#888', fontWeight: 600 }}>{stage?.label ?? opp.stage}</div>
+      </div>
+      {days !== null && (
+        <div style={{
+          fontSize: 10, fontWeight: 700, color: days > 14 ? '#ef4444' : '#10b981',
+          background: days > 14 ? '#fef2f2' : '#f0fdf4',
+          border: `1px solid ${days > 14 ? '#fecaca' : '#bbf7d0'}`,
+          borderRadius: 6, padding: '2px 7px', flexShrink: 0,
+        }}>
+          {days}d
+        </div>
+      )}
+      <ChevronRight size={12} style={{ color: '#ccc', flexShrink: 0 }} />
+    </div>
   );
 }
 
-export default function EPCCommandCenter() {
+// ── Follow-up row ─────────────────────────────────────────────────────────────
+function FuRow({ fu, navigate }) {
+  const due     = fu.due_date ? new Date(fu.due_date) : null;
+  const overdue = due && due < new Date();
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
+      borderRadius: 10, background: overdue ? '#fef2f2' : 'rgba(255,255,255,0.85)',
+      border: `1px solid ${overdue ? '#fecaca' : 'rgba(0,0,0,0.05)'}`,
+      marginBottom: 6, cursor: 'pointer',
+    }}
+      onClick={() => navigate('/epc/bd/follow-ups')}
+    >
+      <div style={{ width: 28, height: 28, borderRadius: 7, background: overdue ? '#fee2e2' : '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Clock size={13} style={{ color: overdue ? '#ef4444' : '#f97316' }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {fu.company_name ?? '—'}
+        </div>
+        <div style={{ fontSize: 11, color: '#888' }}>{fu.opp_title ?? '—'}</div>
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: overdue ? '#ef4444' : '#6b7280', flexShrink: 0 }}>
+        {due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+      </div>
+      <ChevronRight size={12} style={{ color: '#ccc', flexShrink: 0 }} />
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function EPCCommandCenter({ product = 'epc' }) {
   const navigate = useNavigate();
-  const [data, setData]     = useState(null);
-  const [opps, setOpps]     = useState([]);
+  const { data, loading, error, refetch } = useApi(() => bdApi.dashboard());
+
+  const [opps,     setOpps]     = useState([]);
   const [followUps, setFollowUps] = useState([]);
-  const [approvals, setApprovals] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [oppsLoading, setOppsLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      bdApi.dashboard().catch(() => ({})),
       bdApi.opps({ product_type: 'epc' }).catch(() => []),
       bdApi.followUps({ product_type: 'epc' }).catch(() => []),
-      bdApi.approvals({ product_type: 'epc', status: 'pending' }).catch(() => []),
-    ]).then(([dash, o, fu, ap]) => {
-      setData(dash);
+    ]).then(([o, fu]) => {
       setOpps(Array.isArray(o) ? o : o?.data ?? []);
       setFollowUps(Array.isArray(fu) ? fu : fu?.data ?? []);
-      setApprovals(Array.isArray(ap) ? ap : ap?.data ?? []);
-    }).finally(() => setLoading(false));
+    }).finally(() => setOppsLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
-        </div>
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-48 rounded-2xl" />
-      </div>
-    );
-  }
+  if (loading || oppsLoading) return <Spinner />;
+  if (error) return <ErrorBanner message={error} />;
 
-  const now = new Date();
-  const activeOpps   = opps.filter(o => !['won', 'lost'].includes(o.stage));
-  const hotDeals     = opps.filter(o => o.stage === 'negotiation');
-  const overdueFollowUps = followUps.filter(fu => {
-    if (fu.status === 'done') return false;
-    return fu.due_date && new Date(fu.due_date) < now;
-  });
-  const pendingApprovals = approvals.filter(a => a.status === 'pending');
+  const d = data ?? {};
 
-  // Pipeline value by stage
-  const pipelineValue = activeOpps.reduce((s, o) => s + Number(o.value_inr ?? 0), 0);
+  const openOpps         = opps.filter(o => !['won','lost'].includes(o.stage));
+  const totalOpenDeals   = openOpps.length;
+  const totalPipelineVal = openOpps.reduce((s, o) => s + Number(o.estimated_value ?? 0), 0);
+  const overdueFollowUps = followUps.filter(fu => fu.due_date && new Date(fu.due_date) < new Date());
+  const hotDeals         = opps.filter(o => ['commercial_negotiation','technical_closure'].includes(o.stage));
+  const staleDeals       = opps.filter(o => o.stale);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[22px] font-black text-foreground tracking-tight flex items-center gap-2">
-            <Sun size={20} className="text-[#F26B4E]" />
-            EPC Command Centre
+      {/* ── Hero banner with Spline 3D robot ── */}
+      <div className="relative w-full h-[320px] rounded-2xl overflow-hidden bg-[#0d0d0d] mb-7 border border-white/10">
+
+        {/* SVG spotlight sweep */}
+        <SpotlightSVG className="-top-40 left-0 md:left-40 md:-top-20" fill="#F26B4E" />
+
+        {/* Mouse-tracking glow */}
+        <Spotlight className="z-10" size={320} />
+
+        {/* Grid texture */}
+        <div className="absolute inset-0 z-0 opacity-[0.04]" style={{
+          backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }} />
+
+        {/* Left: text */}
+        <div className="absolute inset-0 z-20 flex flex-col justify-center pl-10 pr-4 max-w-lg">
+          <div className="flex items-center gap-2 mb-3">
+            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs font-bold px-3 py-1">
+              Solar EPC · BD Portal
+            </Badge>
+            <Badge variant="outline" className="border-white/20 text-white/50 text-xs">
+              Live
+            </Badge>
+          </div>
+
+          <h1 className="text-4xl font-black leading-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-white/40">
+            EPC Command<br />Centre
           </h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">
-            Live pipeline health for Solar EPC business development.
+
+          <p className="mt-3 text-sm text-white/50 leading-relaxed max-w-sm">
+            Solar EPC pipeline · {totalOpenDeals} open deals ·{' '}
+            <span className="text-orange-400 font-semibold">{inr(totalPipelineVal)}</span> in play
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-white/90 border border-border/50 rounded-xl px-3 py-1.5 shadow-sm">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <Sparkles size={11} className="text-orange-400" />
-            <span className="text-[11px] font-bold text-orange-500">Solar EPC · Live</span>
+
+          <div className="flex items-center gap-3 mt-5">
+            <div className="flex flex-col">
+              <span className="text-2xl font-black text-white">{totalOpenDeals}</span>
+              <span className="text-[10px] text-white/40 uppercase tracking-wider">Open Deals</span>
+            </div>
+            <div className="w-px h-8 bg-white/10" />
+            <div className="flex flex-col">
+              <span className="text-2xl font-black text-orange-400">{overdueFollowUps.length}</span>
+              <span className="text-[10px] text-white/40 uppercase tracking-wider">Overdue</span>
+            </div>
+            <div className="w-px h-8 bg-white/10" />
+            <div className="flex flex-col">
+              <span className="text-2xl font-black text-white">{d.pending_approvals ?? 0}</span>
+              <span className="text-[10px] text-white/40 uppercase tracking-wider">Approvals</span>
+            </div>
           </div>
         </div>
+
+        {/* Right: Spline 3D scene */}
+        <div className="absolute right-0 top-0 h-full w-[55%] z-10">
+          <SplineScene
+            scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* Bottom fade */}
+        <div className="absolute bottom-0 inset-x-0 h-16 z-30 bg-gradient-to-t from-[#0d0d0d] to-transparent" />
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard
-          icon={Activity}      label="Active Opportunities" value={activeOpps.length}
-          sub={`₹${(pipelineValue / 1e5).toFixed(1)}L pipeline`}
-          color="bg-orange-100 text-orange-500"
-          onClick={() => navigate('/epc/bd/opportunities')}
-        />
-        <StatCard
-          icon={TrendingUp}    label="Hot Deals" value={hotDeals.length}
-          sub="In negotiation"
-          color="bg-amber-100 text-amber-600"
-          onClick={() => navigate('/epc/bd/opportunities')}
-        />
-        <StatCard
-          icon={AlertTriangle} label="Overdue Follow-ups" value={overdueFollowUps.length}
-          sub={overdueFollowUps.length > 0 ? 'Needs attention' : 'All clear'}
-          color={overdueFollowUps.length > 0 ? 'bg-red-100 text-red-500' : 'bg-emerald-100 text-emerald-600'}
-          onClick={() => navigate('/epc/bd/follow-ups')}
-        />
-        <StatCard
-          icon={ShieldCheck}   label="Pending Approvals" value={pendingApprovals.length}
-          sub="Awaiting sign-off"
-          color="bg-violet-100 text-violet-600"
-          onClick={() => navigate('/epc/bd/approvals')}
-        />
+      {/* ── KPI row ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+        <KpiCard label="Open Deals"          value={totalOpenDeals}          sub={`${inr(totalPipelineVal)} pipeline`}               color="#F26B4E" icon={TrendingUp} />
+        <KpiCard label="Follow-ups Overdue"  value={overdueFollowUps.length} sub={overdueFollowUps.length > 0 ? 'Action required' : 'All clear'} color={overdueFollowUps.length > 0 ? '#ef4444' : '#10b981'} icon={Clock} />
+        <KpiCard label="Pending Approvals"   value={d.pending_approvals ?? 0} sub={d.pending_approvals > 0 ? 'Waiting on you' : 'Nothing pending'} color={d.pending_approvals > 0 ? '#f59e0b' : '#10b981'} icon={Bell} />
+        <KpiCard label="Stale Deals"         value={staleDeals.length}        sub={staleDeals.length > 0 ? 'Pipeline risk' : 'Pipeline healthy'}   color={staleDeals.length > 0 ? '#f59e0b' : '#10b981'} icon={AlertTriangle} />
       </div>
 
-      {/* Active Opportunities */}
-      <Card className="border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm overflow-hidden">
-        <CardHeader className="py-3.5 px-5 flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle className="text-[14px] font-bold">Active EPC Opportunities</CardTitle>
-            <CardDescription className="text-[11px] mt-0.5">{activeOpps.length} deals in pipeline</CardDescription>
-          </div>
-          <Button size="sm" className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white text-xs h-8 px-4 font-bold rounded-lg"
-            onClick={() => navigate('/epc/bd/opportunities')}>
-            View all <ArrowRight size={12} className="ml-1.5" />
-          </Button>
-        </CardHeader>
-        <Separator />
-        {activeOpps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-2">
-            <Sun size={32} className="opacity-20" />
-            <p className="text-sm">No active EPC opportunities yet.</p>
-            <Button size="sm" variant="outline" className="mt-1 text-xs"
-              onClick={() => navigate('/epc/bd/opportunities')}>
-              Add first opportunity
-            </Button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-[#2D2D2D] hover:bg-[#2D2D2D] border-0">
-                  {['Account', 'Title', 'Value', 'Stage', 'Next Follow-up'].map(h => (
-                    <TableHead key={h} className="text-white/75 text-[10px] font-bold uppercase tracking-widest h-9">{h}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activeOpps.slice(0, 8).map(o => (
-                  <TableRow key={o.id} className="hover:bg-orange-50/50 transition-colors border-border/40">
-                    <TableCell className="font-semibold text-[13px] py-3">{o.account_name ?? '—'}</TableCell>
-                    <TableCell className="font-medium text-[13px] py-3">{o.title}</TableCell>
-                    <TableCell className="font-bold text-[13px] py-3">{inr(o.value_inr)}</TableCell>
-                    <TableCell className="py-3"><StageBadge stage={o.stage} /></TableCell>
-                    <TableCell className="text-muted-foreground text-[13px] py-3">
-                      {o.next_followup ? date(o.next_followup) : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Card>
+      {/* ── Pipeline by stage ── */}
+      <div style={{ background: 'rgba(255,255,255,0.88)', borderRadius: 16, padding: '18px 20px', marginBottom: 20, border: '1px solid rgba(0,0,0,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>Pipeline by Stage</div>
+          <button onClick={refetch} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <RefreshCw size={13} style={{ color: '#999' }} />
+          </button>
+        </div>
+        <StageBubbles opps={opps} />
+      </div>
 
-      {/* Overdue Follow-ups */}
-      {overdueFollowUps.length > 0 && (
-        <Card className="border border-red-200 shadow-sm bg-white/95 backdrop-blur-sm overflow-hidden">
-          <CardHeader className="py-3.5 px-5 flex-row items-center justify-between space-y-0">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={15} className="text-red-500" />
-              <CardTitle className="text-[14px] font-bold text-red-600">Overdue Follow-ups</CardTitle>
-            </div>
-            <Button size="sm" variant="outline" className="text-xs h-8 px-4 rounded-lg border-red-200 text-red-600 hover:bg-red-50"
-              onClick={() => navigate('/epc/bd/follow-ups')}>
-              View all
-            </Button>
-          </CardHeader>
-          <Separator />
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-red-50 hover:bg-red-50 border-0">
-                  {['Account', 'Note', 'Due Date', 'Days Overdue'].map(h => (
-                    <TableHead key={h} className="text-red-400 text-[10px] font-bold uppercase tracking-widest h-9">{h}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {overdueFollowUps.slice(0, 5).map(fu => {
-                  const due = new Date(fu.due_date);
-                  const daysOver = Math.floor((now - due) / 86400000);
-                  return (
-                    <TableRow key={fu.id} className="hover:bg-red-50/50 transition-colors border-border/40">
-                      <TableCell className="font-semibold text-[13px] py-3">{fu.account_name ?? '—'}</TableCell>
-                      <TableCell className="text-[13px] py-3 text-muted-foreground max-w-[260px] truncate">{fu.note ?? '—'}</TableCell>
-                      <TableCell className="text-[13px] py-3 text-red-500 font-semibold">{date(fu.due_date)}</TableCell>
-                      <TableCell className="py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-600 border border-red-200">
-                          {daysOver}d overdue
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      )}
+      {/* ── Two-column: follow-ups + hot deals ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
 
-      {/* Pending Approvals */}
-      {pendingApprovals.length > 0 && (
-        <Card className="border border-violet-200 shadow-sm bg-white/95 backdrop-blur-sm overflow-hidden">
-          <CardHeader className="py-3.5 px-5 flex-row items-center justify-between space-y-0">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={15} className="text-violet-500" />
-              <CardTitle className="text-[14px] font-bold text-violet-700">Pending Approvals</CardTitle>
+        {/* Follow-ups due */}
+        <div style={{ background: 'rgba(255,255,255,0.88)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>
+              Follow-ups Due
+              {overdueFollowUps.length > 0 && (
+                <span style={{ marginLeft: 8, background: '#fef2f2', color: '#ef4444', fontSize: 10, fontWeight: 800, borderRadius: 20, padding: '2px 8px', border: '1px solid #fecaca' }}>
+                  {overdueFollowUps.length} overdue
+                </span>
+              )}
             </div>
-            <Button size="sm" variant="outline" className="text-xs h-8 px-4 rounded-lg border-violet-200 text-violet-600 hover:bg-violet-50"
-              onClick={() => navigate('/epc/bd/approvals')}>
-              Review
-            </Button>
-          </CardHeader>
-          <Separator />
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-violet-50 hover:bg-violet-50 border-0">
-                  {['Title', 'Requested by', 'Value', 'Created'].map(h => (
-                    <TableHead key={h} className="text-violet-400 text-[10px] font-bold uppercase tracking-widest h-9">{h}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingApprovals.slice(0, 5).map(ap => (
-                  <TableRow key={ap.id} className="hover:bg-violet-50/50 transition-colors border-border/40">
-                    <TableCell className="font-semibold text-[13px] py-3">{ap.title}</TableCell>
-                    <TableCell className="text-[13px] py-3 text-muted-foreground">{ap.requested_by ?? '—'}</TableCell>
-                    <TableCell className="font-bold text-[13px] py-3">{inr(ap.value_inr)}</TableCell>
-                    <TableCell className="text-muted-foreground text-[13px] py-3">{date(ap.created_at)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <button onClick={() => navigate('/epc/bd/follow-ups')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#F26B4E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+              View all <ArrowRight size={11} />
+            </button>
           </div>
-        </Card>
-      )}
+          {followUps.length === 0
+            ? <div style={{ textAlign: 'center', color: '#bbb', fontSize: 13, padding: '20px 0' }}>All clear</div>
+            : followUps.slice(0, 5).map(fu => <FuRow key={fu.id} fu={fu} navigate={navigate} />)
+          }
+        </div>
+
+        {/* Hot deals */}
+        <div style={{ background: 'rgba(255,255,255,0.88)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>Hot Deals
+              <span style={{ marginLeft: 8, background: '#fff7ed', color: '#F26B4E', fontSize: 10, fontWeight: 800, borderRadius: 20, padding: '2px 8px', border: '1px solid #fed7aa' }}>
+                {hotDeals.length}
+              </span>
+            </div>
+            <button onClick={() => navigate('/epc/bd/opportunities')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#F26B4E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+              View all <ArrowRight size={11} />
+            </button>
+          </div>
+          {hotDeals.length === 0
+            ? <div style={{ textAlign: 'center', color: '#bbb', fontSize: 13, padding: '20px 0' }}>No hot deals right now</div>
+            : hotDeals.slice(0, 5).map(opp => <DealRow key={opp.id} opp={opp} navigate={navigate} />)
+          }
+        </div>
+      </div>
 
     </div>
   );

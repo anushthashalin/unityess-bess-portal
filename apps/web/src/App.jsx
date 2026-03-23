@@ -28,6 +28,7 @@ import BDImport from './pages/BDImport.jsx';
 // EPC pages
 import EPCDashboard from './pages/EPCDashboard.jsx';
 import EPCCommandCenter from './pages/EPCCommandCenter.jsx';
+import EPCConfig from './pages/EPCConfig.jsx';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -90,12 +91,15 @@ export default function App() {
               <Route path="/bess/bd/import"             element={<BDImport        product="bess" />} />
 
               {/* ── Solar EPC ── */}
-              <Route path="/epc/dashboard"  element={<EPCDashboard />} />
-              <Route path="/epc/command"    element={<EPCCommandCenter />} />
-              <Route path="/epc/projects"   element={<Projects product="epc" />} />
-              <Route path="/epc/proposals"  element={<Proposals product="epc" />} />
-              <Route path="/epc/clients"    element={<Clients product="epc" />} />
-              <Route path="/epc/sites"      element={<Sites product="epc" />} />
+              <Route path="/epc/dashboard"     element={<EPCDashboard />} />
+              <Route path="/epc/command"       element={<EPCCommandCenter />} />
+              <Route path="/epc/config"        element={<EPCConfig />} />
+              <Route path="/epc/proposals"     element={<Proposals product="epc" />} />
+              <Route path="/epc/projects"      element={<Projects product="epc" />} />
+              <Route path="/epc/clients"       element={<Clients product="epc" />} />
+              <Route path="/epc/sites"         element={<Sites product="epc" />} />
+              <Route path="/epc/tariffs"       element={<TariffStructures product="epc" />} />
+              <Route path="/epc/load-profiles" element={<LoadProfiles product="epc" />} />
 
               {/* EPC BD */}
               <Route path="/epc/bd"                    element={<BDCommandCenter product="epc" />} />
