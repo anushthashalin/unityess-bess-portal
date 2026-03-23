@@ -95,7 +95,7 @@ export default function BDActivities({ product = 'bess' }) {
   const weekCount  = activities.filter(a => (Date.now() - new Date(a.logged_at)) < 7 * 86400000).length;
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
       {showLog && (
         <QuickLogModal
           opps={opps.filter(o => !o.closed_at && o.stage !== 'lost')}
@@ -108,7 +108,7 @@ export default function BDActivities({ product = 'bess' }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Activity Log</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
             {todayCount} today · {weekCount} this week · {activities.length} total
           </p>
         </div>
@@ -163,8 +163,8 @@ export default function BDActivities({ product = 'bess' }) {
         <input type="text" placeholder="Search company, opportunity, summary…" value={search} onChange={e => setSearch(e.target.value)}
           style={{
             width: '100%', padding: '9px 12px 9px 34px', borderRadius: 8,
-            border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit',
-            outline: 'none', boxSizing: 'border-box', background: 'hsl(var(--card))',
+            border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit',
+            outline: 'none', boxSizing: 'border-box', background: '#fff',
           }}
           onFocus={e => e.target.style.borderColor = '#F26B4E'}
           onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
@@ -179,7 +179,7 @@ export default function BDActivities({ product = 'bess' }) {
             <div key={dateLabel} style={{ marginBottom: 24 }}>
               {/* Date divider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>
                   {dateLabel}
                 </span>
                 <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
@@ -193,7 +193,7 @@ export default function BDActivities({ product = 'bess' }) {
                   const outcomeColor = OUTCOME_COLORS[a.outcome] ?? '#aaa';
                   return (
                     <div key={a.id} style={{
-                      background: 'hsl(var(--card))', borderRadius: 10, padding: '14px 16px',
+                      background: '#fff', borderRadius: 10, padding: '14px 16px',
                       border: '1px solid #f0f0f0', borderLeft: `4px solid ${tc.color}`,
                       boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                       display: 'flex', gap: 14, alignItems: 'flex-start',
@@ -212,7 +212,7 @@ export default function BDActivities({ product = 'bess' }) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                           <div>
-                            <span style={{ fontWeight: 700, fontSize: 13, color: 'hsl(var(--foreground))' }}>{a.company_name}</span>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: '#2D2D2D' }}>{a.company_name}</span>
                             <span style={{ color: '#aaa', fontSize: 12, marginLeft: 8 }}>via {tc.label}</span>
                             {a.direction === 'inbound' && (
                               <span style={{ marginLeft: 6, fontSize: 10, background: '#f0fdf4', color: '#10b981', fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>
@@ -226,7 +226,7 @@ export default function BDActivities({ product = 'bess' }) {
                           </div>
                         </div>
 
-                        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginBottom: 6, lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 12, color: '#666', marginBottom: 6, lineHeight: 1.5 }}>
                           <span style={{ color: '#aaa', fontSize: 11 }}>{a.opp_title}</span>
                         </div>
 

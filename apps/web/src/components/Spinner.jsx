@@ -26,7 +26,7 @@ export function ErrorBanner({ message }) {
 
 export function Empty({ label = 'No records yet.' }) {
   return (
-    <div style={{ padding: 48, textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: 14 }}>
+    <div style={{ padding: 48, textAlign: 'center', color: '#9CA3AF', fontSize: 14 }}>
       {label}
     </div>
   );

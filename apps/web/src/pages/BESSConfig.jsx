@@ -2405,12 +2405,12 @@ export default function BESSConfig() {
 
                   <div className="space-y-1.5">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link to Project (optional)</Label>
-                    <Select value={propProjectId || '__none__'} onValueChange={v => setPropProjectId(v === '__none__' ? '' : v)}>
+                    <Select value={propProjectId} onValueChange={setPropProjectId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select project…" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">— None —</SelectItem>
+                        <SelectItem value="">— None —</SelectItem>
                         {projectList.map((p) => (
                           <SelectItem key={p.id} value={String(p.id)}>
                             {p.project_code} — {p.company_name}

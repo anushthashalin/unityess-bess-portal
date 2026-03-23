@@ -44,17 +44,17 @@ function OppCard({ opp, onStageChange }) {
 
   return (
     <div style={{
-      background: 'hsl(var(--card))', borderRadius: 8, padding: '12px 14px',
+      background: '#fff', borderRadius: 8, padding: '12px 14px',
       border: `1px solid ${opp.stale ? '#fecaca' : '#eee'}`,
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       borderLeft: `3px solid ${sc.color}`,
       marginBottom: 8,
     }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))', marginBottom: 2, lineHeight: 1.3 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2D2D', marginBottom: 2, lineHeight: 1.3 }}>
         {opp.company_name}
         {opp.stale && <AlertTriangle size={10} color="#ef4444" style={{ marginLeft: 5, verticalAlign: 'middle' }} />}
       </div>
-      <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginBottom: 8 }}>{opp.title}</div>
+      <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{opp.title}</div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: '#F26B4E' }}>
@@ -155,7 +155,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: 'hsl(var(--card))', borderRadius: 12, padding: '28px 32px',
+        background: '#fff', borderRadius: 12, padding: '28px 32px',
         width: 520, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 8px 40px rgba(0,0,0,0.15)',
       }}>
@@ -174,7 +174,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Opportunity Title *</label>
               <input type="text" value={form.title} onChange={e => set('title', e.target.value)}
                 placeholder="e.g. SunSure 500kWh C&I BESS"
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                 onFocus={e => e.target.style.borderColor = '#F26B4E'}
                 onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
             </div>
@@ -183,7 +183,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Account *</label>
               <select value={form.account_id} onChange={e => { set('account_id', e.target.value); set('contact_id', ''); }}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
                 <option value="">— Select account —</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.company_name}</option>)}
               </select>
@@ -195,7 +195,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Contact</label>
                 <select value={form.contact_id} onChange={e => set('contact_id', e.target.value)}
                   disabled={!form.account_id}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))', opacity: form.account_id ? 1 : 0.5 }}>
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff', opacity: form.account_id ? 1 : 0.5 }}>
                   <option value="">— Select contact —</option>
                   {accountContacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -205,7 +205,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>BD Owner</label>
                 <select value={form.owner_id} onChange={e => set('owner_id', e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
                   <option value="">— Unassigned —</option>
                   {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
@@ -215,7 +215,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Scope Type</label>
                 <select value={form.scope_type} onChange={e => set('scope_type', e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
                   <option value="">— Select —</option>
                   {SCOPE_TYPES.map(s => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}
                 </select>
@@ -226,7 +226,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Estimated Value (₹)</label>
                 <input type="number" value={form.estimated_value} onChange={e => set('estimated_value', e.target.value)}
                   placeholder="e.g. 1500000"
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   onFocus={e => e.target.style.borderColor = '#F26B4E'}
                   onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
               </div>
@@ -240,7 +240,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'b
           )}
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               Cancel
             </button>
             <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: saving ? '#f0a899' : '#F26B4E', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -298,7 +298,7 @@ export default function BDOpportunities({ product = 'bess' }) {
   });
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
       {showAdd && (
         <AddOppModal
           accounts={accounts}
@@ -314,20 +314,20 @@ export default function BDOpportunities({ product = 'bess' }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Opportunities</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
             {openOpps.length} open · {inr(totalVal)} pipeline
             {staleCount > 0 && <span style={{ color: '#ef4444', marginLeft: 10 }}>· {staleCount} stale</span>}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {/* View toggle */}
-          <div style={{ display: 'flex', border: '1.5px solid hsl(var(--border))', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', border: '1.5px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
             {[['kanban', LayoutGrid], ['table', List]].map(([v, Icon]) => (
               <button key={v} onClick={() => setView(v)}
                 style={{
                   padding: '7px 12px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                  background: view === v ? '#F26B4E' : 'hsl(var(--card))',
-                  color: view === v ? '#fff' : 'hsl(var(--muted-foreground))',
+                  background: view === v ? '#F26B4E' : '#fff',
+                  color: view === v ? '#fff' : '#888',
                   display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600,
                 }}>
                 <Icon size={13} />
@@ -353,12 +353,12 @@ export default function BDOpportunities({ product = 'bess' }) {
         <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
           <input type="text" placeholder="Search company, title, owner…" value={search} onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: 8, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: 'hsl(var(--card))' }}
+            style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: 8, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
             onFocus={e => e.target.style.borderColor = '#F26B4E'}
             onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
         </div>
         <select value={stageFilter} onChange={e => setStageFilter(e.target.value)}
-          style={{ padding: '9px 12px', borderRadius: 8, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
+          style={{ padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
           <option value="">All Stages</option>
           {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
@@ -405,12 +405,12 @@ export default function BDOpportunities({ product = 'bess' }) {
         </div>
       ) : (
         /* ── TABLE VIEW ── */
-        <div style={{ background: 'hsl(var(--card))', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#fafafa', borderBottom: '2px solid #f0f0f0' }}>
                 {['Opportunity', 'Account', 'Scope', 'Value', 'Stage', 'Owner', 'Silent', 'Next Action'].map(h => (
-                  <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -430,7 +430,7 @@ export default function BDOpportunities({ product = 'bess' }) {
                       <div style={{ fontSize: 11, color: '#aaa' }}>{o.opp_id}</div>
                     </td>
                     <td style={{ padding: '11px 14px', fontWeight: 600, color: '#555' }}>{o.company_name}</td>
-                    <td style={{ padding: '11px 14px', color: 'hsl(var(--muted-foreground))', fontSize: 12 }}>
+                    <td style={{ padding: '11px 14px', color: '#888', fontSize: 12 }}>
                       {SCOPE_LABELS[o.scope_type] ?? o.scope_type ?? '—'}
                     </td>
                     <td style={{ padding: '11px 14px', fontWeight: 700 }}>
@@ -441,7 +441,7 @@ export default function BDOpportunities({ product = 'bess' }) {
                         {sc.label}
                       </span>
                     </td>
-                    <td style={{ padding: '11px 14px', color: 'hsl(var(--muted-foreground))' }}>{o.owner_name ?? '—'}</td>
+                    <td style={{ padding: '11px 14px', color: '#666' }}>{o.owner_name ?? '—'}</td>
                     <td style={{ padding: '11px 14px', color: daysSilent > 7 ? '#ef4444' : '#aaa', fontWeight: daysSilent > 7 ? 700 : 400 }}>
                       {daysSilent != null ? `${daysSilent}d` : '—'}
                     </td>

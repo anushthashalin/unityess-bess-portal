@@ -1,8 +1,14 @@
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+const TOKEN_KEY = 'bess_portal_token';
 
 async function request(path, options = {}) {
+  const token = localStorage.getItem(TOKEN_KEY);
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
     ...options,
   });
   if (!res.ok) {

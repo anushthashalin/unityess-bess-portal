@@ -131,12 +131,12 @@ export default function EmailComposeModal({ proposal, onClose, onSent, sentBy })
   }
 
   const inp = {
-    border: '1px solid hsl(var(--border))', borderRadius: 7, padding: '8px 11px',
-    fontSize: 13, fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))',
+    border: '1px solid #e5e7eb', borderRadius: 7, padding: '8px 11px',
+    fontSize: 13, fontFamily: "'Chivo', sans-serif", color: '#2D2D2D',
     outline: 'none', width: '100%', boxSizing: 'border-box',
   };
   const label = {
-    fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))',
+    fontSize: 11, fontWeight: 700, color: '#888',
     textTransform: 'uppercase', letterSpacing: '0.5px',
     display: 'block', marginBottom: 4,
   };
@@ -148,7 +148,7 @@ export default function EmailComposeModal({ proposal, onClose, onSent, sentBy })
       zIndex: 1100, padding: 20,
     }}>
       <div style={{
-        background: 'hsl(var(--card))', borderRadius: 14, width: '100%', maxWidth: 720,
+        background: '#fff', borderRadius: 14, width: '100%', maxWidth: 720,
         maxHeight: '92vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       }}>
@@ -169,7 +169,7 @@ export default function EmailComposeModal({ proposal, onClose, onSent, sentBy })
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
                 Send Proposal via Email
               </h2>
-              <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                 {proposal.prop_number ?? `Version ${proposal.version}`} · {proposal.company_name}
               </div>
             </div>
@@ -219,8 +219,8 @@ export default function EmailComposeModal({ proposal, onClose, onSent, sentBy })
               <CheckCircle size={30} color="#16a34a" />
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: 'hsl(var(--foreground))' }}>Email sent</div>
-              <div style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginTop: 4 }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#2D2D2D' }}>Email sent</div>
+              <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
                 Proposal marked as sent · Activity logged
               </div>
             </div>
@@ -294,9 +294,9 @@ export default function EmailComposeModal({ proposal, onClose, onSent, sentBy })
                 </div>
                 {previewMode ? (
                   <div style={{
-                    border: '1px solid hsl(var(--border))', borderRadius: 8,
+                    border: '1px solid #e5e7eb', borderRadius: 8,
                     padding: '16px 20px', minHeight: 340, overflowY: 'auto',
-                    background: 'hsl(var(--card))', fontSize: 13,
+                    background: '#fff', fontSize: 13,
                   }}
                     dangerouslySetInnerHTML={{ __html: form.body }}
                   />
@@ -317,8 +317,8 @@ export default function EmailComposeModal({ proposal, onClose, onSent, sentBy })
               display: 'flex', justifyContent: 'flex-end', gap: 10,
             }}>
               <button onClick={onClose} style={{
-                padding: '9px 20px', border: '1px solid hsl(var(--border))', borderRadius: 8,
-                background: 'hsl(var(--card))', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                padding: '9px 20px', border: '1px solid #e5e7eb', borderRadius: 8,
+                background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                 fontFamily: "'Chivo', sans-serif",
               }}>
                 Cancel

@@ -26,8 +26,8 @@ function field(label, children) {
 
 const inputStyle = {
   width: '100%', padding: '8px 10px', borderRadius: 7,
-  border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit',
-  outline: 'none', boxSizing: 'border-box', background: 'hsl(var(--card))',
+  border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit',
+  outline: 'none', boxSizing: 'border-box', background: '#fff',
 };
 
 const selectStyle = { ...inputStyle };
@@ -91,7 +91,7 @@ export default function QuickLogModal({ opps = [], defaultOppId = '', onClose, o
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: 'hsl(var(--card))', borderRadius: 12, padding: '26px 30px',
+        background: '#fff', borderRadius: 12, padding: '26px 30px',
         width: 520, maxHeight: '92vh', overflowY: 'auto',
         boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
         fontFamily: "'Chivo', sans-serif",
@@ -208,7 +208,7 @@ export default function QuickLogModal({ opps = [], defaultOppId = '', onClose, o
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
             <button type="button" onClick={onClose}
-              style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               Cancel
             </button>
             <button type="submit" disabled={saving}

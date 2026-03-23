@@ -365,7 +365,7 @@ export default function BDAccounts({ product = 'bess' }) {
                       {a.opp_count}
                     </span>
                   </TableCell>
-                  <TableCell className="py-3 font-bold text-[13px]" style={{ color: a.pipeline_value > 0 ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))' }}>
+                  <TableCell className="py-3 font-bold text-[13px]" style={{ color: a.pipeline_value > 0 ? '#2D2D2D' : '#ccc' }}>
                     {a.pipeline_value > 0 ? inr(a.pipeline_value) : '—'}
                   </TableCell>
                   <TableCell className="py-3"><StageBadge stage={a.latest_stage} /></TableCell>

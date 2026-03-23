@@ -148,8 +148,8 @@ function StageBubbles({ opps, onRefetch }) {
                 borderRadius: 12, padding: '14px 10px', textAlign: 'center',
               }}>
                 <div style={{ fontSize: 26, fontWeight: 900, color: count > 0 ? s.color : '#ccc' }}>{count}</div>
-                <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
-                <div style={{ fontSize: 9, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.3 }}>{s.label}</div>
+                <div style={{ fontSize: 10, color: '#666', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
+                <div style={{ fontSize: 9, color: '#999', marginTop: 3, lineHeight: 1.3 }}>{s.label}</div>
               </div>
             );
           })}
@@ -179,14 +179,14 @@ function DealRow({ opp, navigate }) {
         {(opp.company_name ?? opp.account_name ?? '?')[0].toUpperCase()}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {opp.company_name ?? opp.account_name ?? '—'}
         </div>
-        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 1 }}>{opp.title}</div>
+        <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{opp.title}</div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700 }}>{inr(opp.estimated_value)}</div>
-        <div style={{ fontSize: 10, color: stage?.color ?? 'hsl(var(--muted-foreground))', fontWeight: 600 }}>{stage?.label ?? opp.stage}</div>
+        <div style={{ fontSize: 10, color: stage?.color ?? '#888', fontWeight: 600 }}>{stage?.label ?? opp.stage}</div>
       </div>
       {days !== null && (
         <div style={{
@@ -216,10 +216,10 @@ function FuRow({ fu, navigate }) {
         <Clock size={13} style={{ color: overdue ? '#ef4444' : '#f97316' }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {fu.company_name ?? '—'}
         </div>
-        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>{fu.opp_title ?? '—'}</div>
+        <div style={{ fontSize: 11, color: '#888' }}>{fu.opp_title ?? '—'}</div>
       </div>
       <div style={{ fontSize: 11, fontWeight: 700, color: overdue ? '#ef4444' : '#6b7280', flexShrink: 0 }}>
         {due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
