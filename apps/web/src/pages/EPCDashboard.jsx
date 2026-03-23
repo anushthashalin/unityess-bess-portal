@@ -37,16 +37,16 @@ const PIPELINE_STAGES = [
 ];
 
 const STATUS_BADGE = {
-  lead:         'bg-blue-50 text-blue-600 border-blue-200',
-  proposal:     'bg-orange-50 text-orange-500 border-orange-200',
-  negotiation:  'bg-amber-50 text-amber-600 border-amber-200',
-  po_received:  'bg-green-50 text-green-600 border-green-200',
-  active:       'bg-green-50 text-green-600 border-green-200',
-  commissioned: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  won:          'bg-emerald-100 text-emerald-800 border-emerald-300',
-  lost:         'bg-red-50 text-red-600 border-red-200',
-  draft:        'bg-gray-100 text-gray-500 border-gray-200',
-  sent:         'bg-blue-50 text-blue-600 border-blue-200',
+  lead:         'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60',
+  proposal:     'bg-orange-50 text-orange-500 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900/60',
+  negotiation:  'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/60',
+  po_received:  'bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/60',
+  active:       'bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/60',
+  commissioned: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/60',
+  won:          'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60',
+  lost:         'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60',
+  draft:        'bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800/60 dark:text-gray-400 dark:border-gray-700/60',
+  sent:         'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60',
 };
 
 function StatusBadge({ status }) {
@@ -83,7 +83,7 @@ function AnimatedNumber({ value }) {
 
 function KPICard({ icon: Icon, label, value, sub, iconBg, accentColor, rawValue }) {
   return (
-    <Card className="relative overflow-hidden border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 bg-white/95 backdrop-blur-sm group">
+    <Card className="relative overflow-hidden border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm group">
       <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl" style={{ background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
         style={{ background: `radial-gradient(ellipse at top right, ${accentColor}08, transparent 60%)` }} />
@@ -114,7 +114,7 @@ function KPICard({ icon: Icon, label, value, sub, iconBg, accentColor, rawValue 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
     return (
-      <div className="bg-white border border-border rounded-xl shadow-xl px-3 py-2.5 text-xs backdrop-blur-sm">
+      <div className="bg-popover text-popover-foreground border border-border rounded-xl shadow-xl px-3 py-2.5 text-xs backdrop-blur-sm">
         <p className="font-bold text-foreground mb-1.5 border-b border-border/50 pb-1.5">{label}</p>
         {payload.map((p, i) => (
           <p key={i} style={{ color: p.color }} className="font-semibold">{p.name}: <span className="text-foreground">{p.value}</span></p>
@@ -128,7 +128,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 // ── Pipeline stage bubbles ────────────────────────────────────────────────────
 function StageBubbles({ opps, onRefetch }) {
   return (
-    <Card className="border border-border/50 shadow-sm bg-white/95">
+    <Card className="border border-border/50 shadow-sm bg-card">
       <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 px-5 pt-5">
         <CardTitle className="text-[14px] font-bold">Pipeline by Stage</CardTitle>
         <button onClick={onRefetch} className="p-1 hover:bg-muted/50 rounded transition-colors">
@@ -167,7 +167,7 @@ function DealRow({ opp, navigate }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
       padding: '10px 14px', borderRadius: 10,
-      background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.05)',
+      background: 'var(--card, rgba(255,255,255,0.85))', border: '1px solid rgba(128,128,128,0.12)',
       marginBottom: 6, cursor: 'pointer',
     }} onClick={() => navigate('/epc/bd/opportunities')}>
       <div style={{
@@ -208,7 +208,7 @@ function FuRow({ fu, navigate }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
-      borderRadius: 10, background: overdue ? '#fef2f2' : 'rgba(255,255,255,0.85)',
+      borderRadius: 10, background: overdue ? '#fef2f2' : 'var(--card, rgba(255,255,255,0.85))',
       border: `1px solid ${overdue ? '#fecaca' : 'rgba(0,0,0,0.05)'}`,
       marginBottom: 6, cursor: 'pointer',
     }} onClick={() => navigate('/epc/bd/follow-ups')}>
@@ -377,7 +377,7 @@ export default function EPCDashboard() {
 
       {/* ── Charts row ── */}
       <div className="grid grid-cols-5 gap-5">
-        <Card className="col-span-3 border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm">
+        <Card className="col-span-3 border border-border/50 shadow-sm bg-card backdrop-blur-sm">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 px-5 pt-5">
             <CardTitle className="text-[14px] font-bold">Opportunities by Stage</CardTitle>
             <Badge variant="outline" className="text-[10px] font-semibold">{opps.length} total</Badge>
@@ -406,7 +406,7 @@ export default function EPCDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm">
+        <Card className="col-span-2 border border-border/50 shadow-sm bg-card backdrop-blur-sm">
           <CardHeader className="pb-3 px-5 pt-5 space-y-0">
             <CardTitle className="text-[14px] font-bold">Weekly Opportunities</CardTitle>
           </CardHeader>
@@ -439,7 +439,7 @@ export default function EPCDashboard() {
 
       {/* ── Follow-ups + Hot deals ── */}
       <div className="grid grid-cols-2 gap-5">
-        <Card className="border border-border/50 shadow-sm bg-white/95">
+        <Card className="border border-border/50 shadow-sm bg-card">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 px-5 pt-5">
             <CardTitle className="text-[14px] font-bold flex items-center gap-2">
               Follow-ups Due
@@ -462,7 +462,7 @@ export default function EPCDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border border-border/50 shadow-sm bg-white/95">
+        <Card className="border border-border/50 shadow-sm bg-card">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 px-5 pt-5">
             <CardTitle className="text-[14px] font-bold flex items-center gap-2">
               Hot Deals
@@ -485,7 +485,7 @@ export default function EPCDashboard() {
       </div>
 
       {/* ── Active Opportunities Table ── */}
-      <Card className="border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm overflow-hidden">
+      <Card className="border border-border/50 shadow-sm bg-card backdrop-blur-sm overflow-hidden">
         <CardHeader className="py-3.5 px-5 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-[14px] font-bold">Active Opportunities</CardTitle>
           <Button size="sm" className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white text-xs h-8 px-4 font-bold rounded-lg"

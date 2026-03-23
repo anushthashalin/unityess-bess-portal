@@ -30,17 +30,17 @@ import {
 const STAGE_ORDER = ['lead','proposal','negotiation','po_received','installation','commissioned','active'];
 
 const STATUS_BADGE = {
-  lead:          'bg-blue-50 text-blue-600 border-blue-200',
-  proposal:      'bg-orange-50 text-orange-500 border-orange-200',
-  negotiation:   'bg-amber-50 text-amber-600 border-amber-200',
-  po_received:   'bg-green-50 text-green-600 border-green-200',
-  active:        'bg-green-50 text-green-600 border-green-200',
-  commissioned:  'bg-emerald-50 text-emerald-700 border-emerald-200',
-  won:           'bg-emerald-100 text-emerald-800 border-emerald-300',
-  lost:          'bg-red-50 text-red-600 border-red-200',
-  draft:         'bg-gray-100 text-gray-500 border-gray-200',
-  sent:          'bg-blue-50 text-blue-600 border-blue-200',
-  installation:  'bg-violet-50 text-violet-600 border-violet-200',
+  lead:          'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60',
+  proposal:      'bg-orange-50 text-orange-500 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900/60',
+  negotiation:   'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/60',
+  po_received:   'bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/60',
+  active:        'bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/60',
+  commissioned:  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/60',
+  won:           'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60',
+  lost:          'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60',
+  draft:         'bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800/60 dark:text-gray-400 dark:border-gray-700/60',
+  sent:          'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60',
+  installation:  'bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-900/60',
 };
 
 function StatusBadge({ status }) {
@@ -77,7 +77,7 @@ function AnimatedNumber({ value }) {
 
 function KPICard({ icon: Icon, label, value, sub, iconBg, accentColor, rawValue }) {
   return (
-    <Card className="relative overflow-hidden border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 bg-white/95 backdrop-blur-sm group">
+    <Card className="relative overflow-hidden border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm group">
       <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl" style={{ background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
         style={{ background: `radial-gradient(ellipse at top right, ${accentColor}08, transparent 60%)` }} />
@@ -108,7 +108,7 @@ function KPICard({ icon: Icon, label, value, sub, iconBg, accentColor, rawValue 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
     return (
-      <div className="bg-white border border-border rounded-xl shadow-xl px-3 py-2.5 text-xs backdrop-blur-sm">
+      <div className="bg-popover text-popover-foreground border border-border rounded-xl shadow-xl px-3 py-2.5 text-xs backdrop-blur-sm">
         <p className="font-bold text-foreground mb-1.5 border-b border-border/50 pb-1.5">{label}</p>
         {payload.map((p, i) => (
           <p key={i} style={{ color: p.color }} className="font-semibold">{p.name}: <span className="text-foreground">{p.value}</span></p>
@@ -213,7 +213,7 @@ function QuickSizer() {
   };
 
   return (
-    <Card className="border-orange-200 bg-gradient-to-br from-orange-50/60 to-white">
+    <Card className="border-orange-200/70 bg-card dark:border-orange-900/40">
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
@@ -222,7 +222,7 @@ function QuickSizer() {
             </div>
             Quick BESS Sizer
           </CardTitle>
-          <div className="flex items-center gap-1 rounded-lg border border-orange-200 bg-white p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-orange-200/70 bg-card dark:border-orange-900/40 p-0.5">
             <button onClick={() => { setUseCase('dg'); setResult(null); setAiNote(null); }}
               className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${useCase === 'dg' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
               DG Replacement
@@ -308,7 +308,7 @@ function QuickSizer() {
               <div className="grid grid-cols-2 gap-3">
                 {[{ label: 'Economical', slot: result.best.eco, accent: false },
                   { label: 'Recommended', slot: result.best.rec, accent: true }].map(({ label, slot, accent }) => (
-                  <div key={label} className={`rounded-lg border p-3 ${accent ? 'border-orange-300 bg-orange-50' : 'border-zinc-200 bg-zinc-50'}`}>
+                  <div key={label} className={`rounded-lg border p-3 ${accent ? 'border-orange-300 bg-orange-50 dark:border-orange-800/60 dark:bg-orange-950/30' : 'border-border bg-muted/50'}`}>
                     <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${accent ? 'text-orange-500' : 'text-zinc-500'}`}>{label}</p>
                     <p className="text-sm font-black text-foreground">
                       {slot.count}× {result.best.unit.unit_name ?? result.best.unit.name}
@@ -504,7 +504,7 @@ export default function Dashboard() {
 
       {/* ── Charts ── */}
       <div className="grid grid-cols-5 gap-5">
-        <Card className="col-span-3 border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm">
+        <Card className="col-span-3 border border-border/50 shadow-sm bg-card backdrop-blur-sm">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 px-5 pt-5">
             <CardTitle className="text-[14px] font-bold">Projects by Stage</CardTitle>
             <Badge variant="outline" className="text-[10px] font-semibold">{pj.length} total</Badge>
@@ -529,7 +529,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm">
+        <Card className="col-span-2 border border-border/50 shadow-sm bg-card backdrop-blur-sm">
           <CardHeader className="pb-3 px-5 pt-5 space-y-0">
             <CardTitle className="text-[14px] font-bold">Weekly Proposals</CardTitle>
           </CardHeader>
@@ -759,7 +759,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Recent Proposals Table ── */}
-      <Card className="border border-border/50 shadow-sm bg-white/95 backdrop-blur-sm overflow-hidden">
+      <Card className="border border-border/50 shadow-sm bg-card backdrop-blur-sm overflow-hidden">
         <CardHeader className="py-3.5 px-5 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-[14px] font-bold">Recent Proposals</CardTitle>
           <span className="text-[11px] text-muted-foreground">{pr.length} total</span>
