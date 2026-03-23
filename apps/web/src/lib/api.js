@@ -1,8 +1,14 @@
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+const TOKEN_KEY = 'bess_portal_token';
 
 async function request(path, options = {}) {
+  const token = localStorage.getItem(TOKEN_KEY);
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
     ...options,
   });
   if (!res.ok) {
@@ -96,4 +102,5 @@ export const bdApi = {
   importAccounts:      (rows) => api.post('/api/bd/import/accounts',      { rows }),
   importContacts:      (rows) => api.post('/api/bd/import/contacts',      { rows }),
   importOpportunities: (rows) => api.post('/api/bd/import/opportunities', { rows }),
+  auditLog:            (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bd/audit-log${q ? '?' + q : ''}`); },
 };

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, MapPin, BarChart2, Zap,
   FileText, FolderOpen, Receipt, Battery, LogOut, ChevronRight,
   Briefcase, Target, Activity, TrendingUp, ClipboardList, Bell,
-  ShieldCheck, Upload, Search, X, Sun,
+  ShieldCheck, Upload, Search, X, Sun, History,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -34,6 +34,7 @@ const BESS_BD_NAV = [
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
   { label: 'Proposals',       to: '/bess/bd/proposals',     icon: FileText },
   { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload },
+  { label: 'Audit Log',       to: '/bess/bd/audit-log',     icon: History },
 ];
 
 const EPC_CORE_NAV = [
@@ -55,6 +56,7 @@ const EPC_BD_NAV = [
   { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },
   { label: 'Proposals',       to: '/epc/bd/proposals',     icon: FileText },
   { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload },
+  { label: 'Audit Log',       to: '/epc/bd/audit-log',     icon: History },
 ];
 
 const ALL_PAGES = [...BESS_CORE_NAV, ...BESS_BD_NAV, ...EPC_CORE_NAV, ...EPC_BD_NAV];

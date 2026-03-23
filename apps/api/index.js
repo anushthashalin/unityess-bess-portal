@@ -9,6 +9,7 @@ const { Pool }     = require('pg');
 const bcrypt       = require('bcryptjs');
 const jwt          = require('jsonwebtoken');
 const nodemailer   = require('nodemailer');
+const rateLimit    = require('express-rate-limit');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
@@ -40,6 +41,35 @@ function requireAuth(req, res, next) {
     next();
   } catch {
     res.status(401).json({ error: 'Token invalid or expired' });
+  }
+}
+
+// ── DB error helper — returns 400 for constraint violations, 500 otherwise ──
+function handleDbError(res, e) {
+  if (e.code === '23502') {
+    return res.status(400).json({ error: `Required field missing: ${e.column || 'unknown'}` });
+  }
+  if (e.code === '23503') {
+    return res.status(400).json({ error: 'Referenced record not found (invalid foreign key)' });
+  }
+  if (e.code === '23505') {
+    return res.status(409).json({ error: 'Duplicate record — this entry already exists' });
+  }
+  console.error('[API Error]', e.message);
+  return res.status(500).json({ error: 'Internal server error' });
+}
+
+// ── Audit log helper ─────────────────────────────────────────────────────────
+async function logAudit(req, action, resource, resourceId, details = {}) {
+  try {
+    await pool.query(
+      `INSERT INTO bd.audit_log (user_id, user_name, action, resource, resource_id, details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user?.id ?? null, req.user?.name ?? 'system', action, resource,
+       resourceId != null ? String(resourceId) : null, JSON.stringify(details)]
+    );
+  } catch (e) {
+    console.error('[Audit] Failed to log:', e.message);
   }
 }
 
@@ -101,6 +131,19 @@ async function runMigrations() {
        ON bd.accounts (LOWER(company_name))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_account_email
        ON bd.contacts (account_id, LOWER(email)) WHERE email IS NOT NULL`,
+    // Audit log
+    `CREATE TABLE IF NOT EXISTS bd.audit_log (
+       id          SERIAL PRIMARY KEY,
+       user_id     INTEGER,
+       user_name   TEXT,
+       action      TEXT NOT NULL,
+       resource    TEXT NOT NULL,
+       resource_id TEXT,
+       details     JSONB,
+       created_at  TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_log_created ON bd.audit_log (created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON bd.audit_log (resource, resource_id)`,
   ];
   for (const sql of migrations) {
     try {
@@ -121,7 +164,39 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// General: 100 requests / 1 min per IP
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please wait a moment and try again.' },
+});
+
+// Auth: 10 login attempts / 15 min per IP (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts — try again in 15 minutes.' },
+});
+
+// Bulk import: 5 import jobs / 10 min per IP
+const importLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many import requests — wait 10 minutes before retrying.' },
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/bd/import', importLimiter);
 
 // ── Root & DevTools probes ──────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -140,6 +215,24 @@ app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
 });
 
 // ── Health ─────────────────────────────────────────────────────────────────
+// ── Audit Log ────────────────────────────────────────────────────────────────
+app.get('/api/bd/audit-log', requireAuth, async (req, res) => {
+  try {
+    const { limit = 200, resource, user_id } = req.query;
+    const where = []; const params = [];
+    if (resource)  { params.push(resource);  where.push(`resource=$${params.length}`); }
+    if (user_id)   { params.push(user_id);   where.push(`user_id=$${params.length}`); }
+    params.push(Math.min(parseInt(limit) || 200, 500));
+    const wc = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { rows } = await pool.query(
+      `SELECT * FROM bd.audit_log ${wc} ORDER BY created_at DESC LIMIT $${params.length}`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (e) { handleDbError(res, e); }
+});
+
+
 app.get('/health', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -176,7 +269,7 @@ app.post('/api/auth/login', async (req, res) => {
     );
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    handleDbError(res, e);
   }
 });
 
@@ -195,7 +288,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 
 // Users
 app.get('/api/bd/users', async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM bd.users WHERE is_active = true ORDER BY name');
+  const { rows } = await pool.query('SELECT id, name, email, role, is_active, created_at FROM bd.users WHERE is_active = true ORDER BY name');
   res.json({ data: rows });
 });
 
@@ -221,22 +314,26 @@ app.get('/api/bd/accounts', async (req, res) => {
        ORDER BY MAX(COALESCE(o.last_activity_at, a.updated_at)) DESC NULLS LAST`, params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/accounts', async (req, res) => {
-  const { company_name, industry, city, state, website, gstin, source, owner_id, product_type } = req.body;
-  const { rows: [c] } = await pool.query(
-    "SELECT COUNT(*) FROM bd.accounts WHERE account_id LIKE $1",
-    [`ACC-${new Date().getFullYear()}%`]
-  );
-  const account_id = `ACC-${new Date().getFullYear()}-${String(parseInt(c.count) + 1).padStart(3,'0')}`;
-  const { rows } = await pool.query(
-    `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id,product_type)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [account_id, company_name, industry, city, state, website, gstin, source, owner_id, product_type ?? 'bess']
-  );
-  res.status(201).json({ data: rows[0] });
+app.post('/api/bd/accounts', requireAuth, async (req, res) => {
+  try {
+    const { company_name, industry, city, state, website, gstin, source, owner_id, product_type } = req.body;
+    if (!company_name) return res.status(400).json({ error: 'company_name is required' });
+    const { rows: [c] } = await pool.query(
+      "SELECT COUNT(*) FROM bd.accounts WHERE account_id LIKE $1",
+      [`ACC-${new Date().getFullYear()}%`]
+    );
+    const account_id = `ACC-${new Date().getFullYear()}-${String(parseInt(c.count) + 1).padStart(3,'0')}`;
+    const { rows } = await pool.query(
+      `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id,product_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [account_id, company_name, industry, city, state, website, gstin, source, owner_id, product_type ?? 'bess']
+    );
+    await logAudit(req, 'create', 'accounts', rows[0].id, { company_name: rows[0].company_name, account_id: rows[0].account_id });
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { handleDbError(res, e); }
 });
 
 // Contacts
@@ -248,14 +345,18 @@ app.get('/api/bd/contacts', async (req, res) => {
   res.json({ data: rows });
 });
 
-app.post('/api/bd/contacts', async (req, res) => {
-  const { account_id, name, designation, email, phone, is_primary, linkedin, notes } = req.body;
-  const { rows } = await pool.query(
-    `INSERT INTO bd.contacts (account_id,name,designation,email,phone,is_primary,linkedin,notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [account_id, name, designation, email, phone, is_primary ?? false, linkedin, notes]
-  );
-  res.status(201).json({ data: rows[0] });
+app.post('/api/bd/contacts', requireAuth, async (req, res) => {
+  try {
+    const { account_id, name, designation, email, phone, is_primary, linkedin, notes } = req.body;
+    if (!account_id || !name) return res.status(400).json({ error: 'account_id and name are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO bd.contacts (account_id,name,designation,email,phone,is_primary,linkedin,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [account_id, name, designation, email, phone, is_primary ?? false, linkedin, notes]
+    );
+    await logAudit(req, 'create', 'contacts', rows[0].id, { name: rows[0].name, account_id: rows[0].account_id });
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { handleDbError(res, e); }
 });
 
 // Opportunities
@@ -282,39 +383,46 @@ app.get('/api/bd/opportunities', async (req, res) => {
   res.json({ data: rows });
 });
 
-app.post('/api/bd/opportunities', async (req, res) => {
-  const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type } = req.body;
-  const { rows: [c] } = await pool.query(
-    "SELECT COUNT(*) FROM bd.opportunities WHERE opp_id LIKE $1",
-    [`OPP-${new Date().getFullYear()}%`]
-  );
-  const opp_id = `OPP-${new Date().getFullYear()}-${String(parseInt(c.count)+1).padStart(3,'0')}`;
-  const next_d = new Date(); next_d.setDate(next_d.getDate()+3);
-  const { rows } = await pool.query(
-    `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date,product_type)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d, product_type ?? 'bess']
-  );
-  res.status(201).json({ data: rows[0] });
+app.post('/api/bd/opportunities', requireAuth, async (req, res) => {
+  try {
+    const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type } = req.body;
+    if (!account_id || !title) return res.status(400).json({ error: 'account_id and title are required' });
+    const { rows: [c] } = await pool.query(
+      "SELECT COUNT(*) FROM bd.opportunities WHERE opp_id LIKE $1",
+      [`OPP-${new Date().getFullYear()}%`]
+    );
+    const opp_id = `OPP-${new Date().getFullYear()}-${String(parseInt(c.count)+1).padStart(3,'0')}`;
+    const next_d = new Date(); next_d.setDate(next_d.getDate()+3);
+    const { rows } = await pool.query(
+      `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date,product_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d, product_type ?? 'bess']
+    );
+    await logAudit(req, 'create', 'opportunities', rows[0].id, { opp_id: rows[0].opp_id, title: rows[0].title });
+    res.status(201).json({ data: rows[0] });
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/opportunities/:id', async (req, res) => {
-  const { id } = req.params;
-  const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
-                   'next_action','next_action_date','stale','stale_reason','lost_reason',
-                   'po_number','po_value','closed_at'];
-  const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
-  if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
-  const keys = updates.map(([k]) => k);
-  const vals = updates.map(([,v]) => v);
-  const stageChanging = keys.includes('stage');
-  const extras = stageChanging ? ', stage_updated_at=NOW(), last_activity_at=NOW()' : ', last_activity_at=NOW()';
-  const set = keys.map((k,i) => `${k}=$${i+2}`).join(', ');
-  const { rows } = await pool.query(
-    `UPDATE bd.opportunities SET ${set}${extras} WHERE id=$1 RETURNING *`,
-    [id, ...vals]
-  );
-  res.json({ data: rows[0] });
+app.patch('/api/bd/opportunities/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
+                     'next_action','next_action_date','stale','stale_reason','lost_reason',
+                     'po_number','po_value','closed_at'];
+    const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+    if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
+    const keys = updates.map(([k]) => k);
+    const vals = updates.map(([,v]) => v);
+    const stageChanging = keys.includes('stage');
+    const extras = stageChanging ? ', stage_updated_at=NOW(), last_activity_at=NOW()' : ', last_activity_at=NOW()';
+    const set = keys.map((k,i) => `${k}=$${i+2}`).join(', ');
+    const { rows } = await pool.query(
+      `UPDATE bd.opportunities SET ${set}${extras} WHERE id=$1 RETURNING *`,
+      [id, ...vals]
+    );
+    await logAudit(req, 'update', 'opportunities', id, Object.fromEntries(updates));
+    res.json({ data: rows[0] });
+  } catch (e) { handleDbError(res, e); }
 });
 
 // Activities
@@ -339,10 +447,10 @@ app.get('/api/bd/activities', async (req, res) => {
            LEFT JOIN bd.accounts ac   ON ac.id = o.account_id
            ORDER BY a.logged_at DESC LIMIT 200`);
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/activities', async (req, res) => {
+app.post('/api/bd/activities', requireAuth, async (req, res) => {
   try {
     const { opp_id, type, direction, summary, outcome, next_action, next_action_date, logged_by, duration_min } = req.body;
     if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type are required' });
@@ -365,7 +473,7 @@ app.post('/api/bd/activities', async (req, res) => {
       await autoCreateFollowUp(opp_id, logged_by, Date.now());
     }
     res.status(201).json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // Follow-ups
@@ -401,10 +509,10 @@ app.get('/api/bd/follow-ups', async (req, res) => {
        ORDER BY f.due_date ASC`, params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/follow-ups', async (req, res) => {
+app.post('/api/bd/follow-ups', requireAuth, async (req, res) => {
   try {
     const { opp_id, due_date, type, assigned_to } = req.body;
     if (!opp_id || !due_date) return res.status(400).json({ error: 'opp_id and due_date required' });
@@ -417,10 +525,10 @@ app.post('/api/bd/follow-ups', async (req, res) => {
       [opp_id, due_date, type ?? 'call', assigned_to ?? null, cnt.n + 1]
     );
     res.status(201).json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/follow-ups/:id', async (req, res) => {
+app.patch('/api/bd/follow-ups/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, snooze_until } = req.body;
@@ -429,7 +537,7 @@ app.patch('/api/bd/follow-ups/:id', async (req, res) => {
       [id, status ?? null, snooze_until ?? null]
     );
     res.json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // Approvals
@@ -460,10 +568,10 @@ app.get('/api/bd/approvals', async (req, res) => {
       `${APPROVAL_WITH_JOINS} ${wc} ORDER BY ap.requested_at DESC`, params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/approvals', async (req, res) => {
+app.post('/api/bd/approvals', requireAuth, async (req, res) => {
   try {
     const { opp_id, type, deviation_value, justification, requested_by, proposal_id } = req.body;
     if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type required' });
@@ -472,11 +580,12 @@ app.post('/api/bd/approvals', async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,'pending') RETURNING *`,
       [opp_id, proposal_id ?? null, type, deviation_value ?? null, justification ?? null, requested_by ?? null]
     );
+    await logAudit(req, 'create', 'approvals', rows[0].id, { type: rows[0].type, opp_id: rows[0].opp_id });
     res.status(201).json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/approvals/:id', async (req, res) => {
+app.patch('/api/bd/approvals/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, approver_notes, approver_id } = req.body;
@@ -488,8 +597,9 @@ app.patch('/api/bd/approvals/:id', async (req, res) => {
       [id, status, approver_notes ?? null, approver_id ?? null]
     );
     const { rows } = await pool.query(`${APPROVAL_WITH_JOINS} WHERE ap.id=$1`, [id]);
+    await logAudit(req, 'update', 'approvals', id, { status, approver_notes });
     res.json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // Proposals (BD)
@@ -517,10 +627,10 @@ app.get('/api/bd/proposals', async (req, res) => {
       `${PROPOSAL_WITH_JOINS} ${where} ORDER BY p.created_at DESC`, params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/proposals', async (req, res) => {
+app.post('/api/bd/proposals', requireAuth, async (req, res) => {
   try {
     const { opp_id, content, created_by } = req.body;
     if (!opp_id) return res.status(400).json({ error: 'opp_id required' });
@@ -542,11 +652,12 @@ app.post('/api/bd/proposals', async (req, res) => {
       [opp_id, version, JSON.stringify(content ?? {}), created_by ?? null, prop_number]
     );
     const { rows: full } = await pool.query(`${PROPOSAL_WITH_JOINS} WHERE p.id=$1`, [rows[0].id]);
+    await logAudit(req, 'create', 'proposals', rows[0].id, { prop_number, opp_id });
     res.status(201).json({ data: full[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/proposals/:id', async (req, res) => {
+app.patch('/api/bd/proposals/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, content } = req.body;
@@ -573,9 +684,10 @@ app.patch('/api/bd/proposals/:id', async (req, res) => {
 
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
     await pool.query(`UPDATE bd.proposals SET ${updates.join(',')} WHERE id=$1`, vals);
+    await logAudit(req, 'update', 'proposals', id, { status, ...(content !== undefined ? { content_updated: true } : {}) });
     const { rows } = await pool.query(`${PROPOSAL_WITH_JOINS} WHERE p.id=$1`, [id]);
     res.json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -590,7 +702,7 @@ app.get('/api/bd/email/status', (req, res) => {
 
 // POST /api/bd/email/send
 // body: { proposal_id, to, cc, subject, body, sent_by }
-app.post('/api/bd/email/send', async (req, res) => {
+app.post('/api/bd/email/send', requireAuth, async (req, res) => {
   try {
     const { proposal_id, to, cc, subject, body: emailBody, sent_by } = req.body;
     if (!to || !subject || !emailBody) {
@@ -647,7 +759,7 @@ app.post('/api/bd/email/send', async (req, res) => {
     res.json({ sent: true, message_id: info.messageId });
   } catch (e) {
     console.error('❌  Email send error:', e.message);
-    res.status(500).json({ error: e.message });
+    handleDbError(res, e);
   }
 });
 
@@ -658,7 +770,7 @@ app.post('/api/bd/email/send', async (req, res) => {
 
 // POST /api/bd/import/accounts
 // body: { rows: [{ company_name, industry, city, state, website, gstin, source, owner_email }] }
-app.post('/api/bd/import/accounts', async (req, res) => {
+app.post('/api/bd/import/accounts', requireAuth, async (req, res) => {
   const { rows = [] } = req.body;
   if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
 
@@ -729,7 +841,7 @@ app.post('/api/bd/import/accounts', async (req, res) => {
 
 // POST /api/bd/import/contacts
 // body: { rows: [{ company_name, name, designation, email, phone, is_primary, linkedin }] }
-app.post('/api/bd/import/contacts', async (req, res) => {
+app.post('/api/bd/import/contacts', requireAuth, async (req, res) => {
   const { rows = [] } = req.body;
   if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
 
@@ -803,7 +915,7 @@ app.post('/api/bd/import/contacts', async (req, res) => {
 
 // POST /api/bd/import/opportunities
 // body: { rows: [{ company_name, contact_email, owner_name, title, scope_type, estimated_value, stage, next_action_date }] }
-app.post('/api/bd/import/opportunities', async (req, res) => {
+app.post('/api/bd/import/opportunities', requireAuth, async (req, res) => {
   const { rows = [] } = req.body;
   if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
 
@@ -958,7 +1070,7 @@ app.get('/api/bd/dashboard', async (req, res) => {
       recent_activities: recentActivities.rows,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    handleDbError(res, e);
   }
 });
 
@@ -974,9 +1086,9 @@ app.get('/api/bess/bess-configurations', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT b.*,s.site_name FROM bess.bess_configurations b JOIN bess.sites s ON s.id=b.site_id ORDER BY b.created_at DESC');
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
-app.post('/api/bess/bess-configurations', async (req, res) => {
+app.post('/api/bess/bess-configurations', requireAuth, async (req, res) => {
   try {
     const { site_id, config_name, num_units, total_power_kw, total_energy_kwh, coupling_type, application, soc_min, soc_max, charge_hours, discharge_hours } = req.body;
     if (!site_id || !config_name || !num_units) return res.status(400).json({ error: 'site_id, config_name and num_units are required' });
@@ -986,7 +1098,7 @@ app.post('/api/bess/bess-configurations', async (req, res) => {
       [site_id, config_name, num_units, total_power_kw ?? null, total_energy_kwh ?? null, coupling_type ?? 'AC', application ?? null, soc_min ?? 20, soc_max ?? 90, JSON.stringify(charge_hours ?? []), JSON.stringify(discharge_hours ?? [])]
     );
     res.status(201).json({ data: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 app.get('/api/bess/tariff-structures',  async (req, res) => { const { rows } = await pool.query('SELECT * FROM bess.tariff_structures ORDER BY state'); res.json({ data: rows }); });
 app.get('/api/bess/load-profiles',      async (req, res) => { const { site_id } = req.query; const { rows } = await pool.query('SELECT * FROM bess.load_profiles WHERE site_id=$1 ORDER BY year,month', [site_id||1]); res.json({ data: rows }); });
@@ -1077,7 +1189,7 @@ async function autoCreateFollowUp(opp_id, assigned_to, baseDateMs) {
 }
 
 // ── Manual trigger endpoint ───────────────────────────────────────────────
-app.post('/api/bd/automation/run', async (req, res) => {
+app.post('/api/bd/automation/run', requireAuth, async (req, res) => {
   await runAutomation();
   res.json({ ran_at: lastAutomationRun, log: lastAutomationLog });
 });
@@ -1091,7 +1203,7 @@ app.get('/api/bd/automation/status', (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Clients ──────────────────────────────────────────────────────────────
-app.post('/api/bess/clients', async (req, res) => {
+app.post('/api/bess/clients', requireAuth, async (req, res) => {
   try {
     const {
       company_name, contact_person, email, phone, city, state, gstin,
@@ -1116,11 +1228,11 @@ app.post('/api/bess/clients', async (req, res) => {
        tech_discussion||false, tc_offer||false, final_quote||false, remarks||null]
     );
     res.json({ data: c });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── PATCH client ──────────────────────────────────────────────────────────
-app.patch('/api/bess/clients/:id', async (req, res) => {
+app.patch('/api/bess/clients/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -1164,7 +1276,7 @@ app.patch('/api/bess/clients/:id', async (req, res) => {
     }
 
     res.json({ data: c });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Geocode helper (Nominatim, no key required) ───────────────────────────
@@ -1182,7 +1294,7 @@ async function geocode(address, state) {
 }
 
 // ── Sites ─────────────────────────────────────────────────────────────────
-app.post('/api/bess/sites', async (req, res) => {
+app.post('/api/bess/sites', requireAuth, async (req, res) => {
   try {
     const { client_id, site_name, address, state, discom, tariff_category,
             sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number,
@@ -1204,11 +1316,11 @@ app.post('/api/bess/sites', async (req, res) => {
        meter_number||null, coords?.lat||null, coords?.lng||null]
     );
     res.json({ data: s });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── PATCH site (update coords or details) ────────────────────────────────
-app.patch('/api/bess/sites/:id', async (req, res) => {
+app.patch('/api/bess/sites/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { lat, lng } = req.body;
@@ -1218,7 +1330,7 @@ app.patch('/api/bess/sites/:id', async (req, res) => {
     );
     if (!s) return res.status(404).json({ error: 'Site not found' });
     res.json({ data: s });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Cycle Datasets (from IEC-certified LFP test data) ────────────────────
@@ -1279,7 +1391,7 @@ app.get('/api/bess/cycle-datasets', (req, res) => {
 });
 
 // ── Gemini Bill Parser ────────────────────────────────────────────────────
-app.post('/api/bess/parse-bill', async (req, res) => {
+app.post('/api/bess/parse-bill', requireAuth, async (req, res) => {
   try {
     const { fileData, mimeType } = req.body;
     if (!fileData || !mimeType) return res.status(400).json({ error: 'fileData and mimeType required' });
@@ -1288,20 +1400,31 @@ app.post('/api/bess/parse-bill', async (req, res) => {
 
     const prompt = `You are analyzing an Indian electricity bill or load data document. Extract these fields and return ONLY a valid JSON object, no explanation:\n{"total_units_kwh":number|null,"max_demand_kw":number|null,"peak_demand_kw":number|null,"tod_peak_kwh":number|null,"tod_offpeak_kwh":number|null,"tod_night_kwh":number|null,"month":number|null,"year":number|null,"sanctioned_load_kva":number|null,"contract_demand_kva":number|null,"tariff_category":string|null,"discom":string|null,"total_amount_inr":number|null,"consumer_name":string|null,"meter_number":string|null}\nUse null for missing fields. Numbers as plain decimals only.`;
 
-    const gr = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: fileData } },
-          ]}],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
-        }),
-      }
-    );
+    const ctrl1 = new AbortController();
+    const t1 = setTimeout(() => ctrl1.abort(), 8000);
+    let gr;
+    try {
+      gr = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: ctrl1.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: fileData } },
+            ]}],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+          }),
+        }
+      );
+    } catch (e) {
+      clearTimeout(t1);
+      if (e.name === 'AbortError') return res.status(503).json({ error: 'AI service timed out — please try again or use manual entry.' });
+      throw e;
+    }
+    clearTimeout(t1);
     const gd = await gr.json();
     if (gd.error) return res.status(502).json({ error: gd.error.message });
     const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
@@ -1309,11 +1432,11 @@ app.post('/api/bess/parse-bill', async (req, res) => {
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) return res.status(422).json({ error: 'Could not parse document — try a clearer scan or manual input.' });
     res.json({ data: JSON.parse(match[0]) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Gemini BESS Recommendation ────────────────────────────────────────────
-app.post('/api/bess/recommend', async (req, res) => {
+app.post('/api/bess/recommend', requireAuth, async (req, res) => {
   try {
     const { load_data, available_units } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
@@ -1343,17 +1466,28 @@ Your task:
 Return ONLY valid JSON (no markdown, no code fences). Keep all string values under 200 characters. Schema:
 {"primary":{"unit_model":string,"unit_count":number,"total_kwh":number,"total_kw":number,"application":string,"reasoning":string},"alternatives":[{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string},{"unit_model":string,"unit_count":number,"total_kwh":number,"label":string,"note":string}],"sizing_logic":{"key_driver":string,"recommended_capacity_kwh":number,"recommended_power_kw":number,"rationale":string},"financial_estimate":{"annual_savings_inr":number,"simple_payback_years":number,"tariff_diff_assumed_rs_kwh":number,"assumptions":string}}`;
 
-    const gr = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
-        }),
-      }
-    );
+    const ctrl2 = new AbortController();
+    const t2 = setTimeout(() => ctrl2.abort(), 8000);
+    let gr;
+    try {
+      gr = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: ctrl2.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
+          }),
+        }
+      );
+    } catch (e) {
+      clearTimeout(t2);
+      if (e.name === 'AbortError') return res.status(503).json({ error: 'AI recommendation timed out — the sizing result is still valid, AI commentary unavailable.' });
+      throw e;
+    }
+    clearTimeout(t2);
     const gd = await gr.json();
     if (gd.error) return res.status(502).json({ error: gd.error.message });
     const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
@@ -1364,11 +1498,11 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
     try { parsed = JSON.parse(match[0]); }
     catch (pe) { return res.status(422).json({ error: 'Gemini response could not be parsed. Try again.' }); }
     res.json({ data: parsed });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── EPC Configurator — AI narrative ────────────────────────────────────────
-app.post('/api/epc/size-narrative', async (req, res) => {
+app.post('/api/epc/size-narrative', requireAuth, async (req, res) => {
   try {
     const {
       systemKwpDC, annualGenKwh, capexTotal, year1Savings,
@@ -1417,11 +1551,11 @@ Return plain text only — no JSON, no markdown, no headers. Just the narrative 
     if (gd.error) return res.status(502).json({ error: gd.error.message });
     const narrative = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Narrative unavailable.';
     res.json({ data: { narrative } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Proposals ─────────────────────────────────────────────────────────────
-app.post('/api/bess/proposals', async (req, res) => {
+app.post('/api/bess/proposals', requireAuth, async (req, res) => {
   try {
     const { client_id, site_id, bess_config_id, project_id, proposal_date, status,
             capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes } = req.body;
@@ -1439,10 +1573,10 @@ app.post('/api/bess/proposals', async (req, res) => {
        payback_years||null, irr_percent||null, validity_days||30, notes||null]
     );
     res.json({ data: p });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bess/proposals/:id', async (req, res) => {
+app.patch('/api/bess/proposals/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, notes, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days } = req.body;
@@ -1460,11 +1594,11 @@ app.patch('/api/bess/proposals/:id', async (req, res) => {
     vals.push(id);
     await pool.query(`UPDATE bess.proposals SET ${updates.join(',')} WHERE id=$${i}`, vals);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Projects ──────────────────────────────────────────────────────────────
-app.post('/api/bess/projects', async (req, res) => {
+app.post('/api/bess/projects', requireAuth, async (req, res) => {
   try {
     const { client_id, site_id, proposal_id, status, po_number, po_value_inr,
             installation_date, commissioning_date, warranty_expiry } = req.body;
@@ -1480,10 +1614,10 @@ app.post('/api/bess/projects', async (req, res) => {
        installation_date||null, commissioning_date||null, warranty_expiry||null]
     );
     res.json({ data: pj });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bess/projects/:id', async (req, res) => {
+app.patch('/api/bess/projects/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry } = req.body;
@@ -1501,11 +1635,11 @@ app.patch('/api/bess/projects/:id', async (req, res) => {
     );
     if (!pj) return res.status(404).json({ error: 'Project not found' });
     res.json({ data: pj });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Load Profiles ─────────────────────────────────────────────────────────
-app.post('/api/bess/load-profiles', async (req, res) => {
+app.post('/api/bess/load-profiles', requireAuth, async (req, res) => {
   try {
     const { site_id, month, year, total_units_kwh, max_demand_kw,
             peak_demand_kw, tod_peak_kwh, tod_offpeak_kwh, tod_night_kwh } = req.body;
@@ -1524,11 +1658,11 @@ app.post('/api/bess/load-profiles', async (req, res) => {
        tod_peak_kwh||0, tod_offpeak_kwh||0, tod_night_kwh||0]
     );
     res.json({ data: lp });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Tariff Structures ─────────────────────────────────────────────────────
-app.post('/api/bess/tariff-structures', async (req, res) => {
+app.post('/api/bess/tariff-structures', requireAuth, async (req, res) => {
   try {
     const { state, discom, tariff_category, effective_date,
             energy_charge_peak, energy_charge_offpeak, demand_charge, fixed_charge } = req.body;
@@ -1542,7 +1676,7 @@ app.post('/api/bess/tariff-structures', async (req, res) => {
        energy_charge_peak||null, energy_charge_offpeak||null, demand_charge||null, fixed_charge||null]
     );
     res.json({ data: t });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Coverage Table (all active SKUs in a category vs a requirement) ───────
@@ -1591,11 +1725,11 @@ app.get('/api/bess/coverage-table', async (req, res) => {
     });
 
     res.json({ data: table });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Save Sizing Analysis ───────────────────────────────────────────────────
-app.post('/api/bess/sizing-analyses', async (req, res) => {
+app.post('/api/bess/sizing-analyses', requireAuth, async (req, res) => {
   try {
     const {
       client_id, site_id, use_case, site_state, sku_category,
@@ -1622,7 +1756,7 @@ app.post('/api/bess/sizing-analyses', async (req, res) => {
        recommended_uplift_pct||15, created_by||null]
     );
     res.json({ data: row });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 app.get('/api/bess/sizing-analyses', async (req, res) => {
@@ -1639,11 +1773,11 @@ app.get('/api/bess/sizing-analyses', async (req, res) => {
       params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Save Recommendation Record ─────────────────────────────────────────────
-app.post('/api/bess/recommendation-records', async (req, res) => {
+app.post('/api/bess/recommendation-records', requireAuth, async (req, res) => {
   try {
     const {
       sizing_analysis_id, client_id,
@@ -1673,10 +1807,10 @@ app.post('/api/bess/recommendation-records', async (req, res) => {
        gemini_commentary ? JSON.stringify(gemini_commentary) : null]
     );
     res.json({ data: row });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bess/recommendation-records/:id', async (req, res) => {
+app.patch('/api/bess/recommendation-records/:id', requireAuth, async (req, res) => {
   try {
     const { selected_config, gemini_commentary } = req.body;
     const { rows: [row] } = await pool.query(
@@ -1690,7 +1824,7 @@ app.patch('/api/bess/recommendation-records/:id', async (req, res) => {
     );
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json({ data: row });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 app.get('/api/bess/recommendation-records', async (req, res) => {
@@ -1706,11 +1840,11 @@ app.get('/api/bess/recommendation-records', async (req, res) => {
       params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Save Finance Record ────────────────────────────────────────────────────
-app.post('/api/bess/finance-records', async (req, res) => {
+app.post('/api/bess/finance-records', requireAuth, async (req, res) => {
   try {
     const {
       recommendation_id, client_id, selected_config, capex_ex_gst,
@@ -1743,7 +1877,7 @@ app.post('/api/bess/finance-records', async (req, res) => {
        cashflow_rows ? JSON.stringify(cashflow_rows) : null]
     );
     res.json({ data: row });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 app.get('/api/bess/finance-records', async (req, res) => {
@@ -1759,7 +1893,7 @@ app.get('/api/bess/finance-records', async (req, res) => {
       params
     );
     res.json({ data: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { handleDbError(res, e); }
 });
 
 // ── Global JSON error handler (prevents HTML 500 responses) ──────────────

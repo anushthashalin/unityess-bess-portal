@@ -78,8 +78,8 @@ export default function LoadProfiles() {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:900, color:'#2D2D2D', margin:0 }}>Load Profiles</h1>
-          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>EB meter data by site</p>
+          <h1 style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))', margin:0 }}>Load Profiles</h1>
+          <p style={{ fontSize:13, color:'hsl(var(--muted-foreground))', margin:'4px 0 0' }}>EB meter data by site</p>
         </div>
         <div style={{ display:'flex', gap:10 }}>
           <select className="bess-input" value={siteId ?? ''}
@@ -94,7 +94,7 @@ export default function LoadProfiles() {
       </div>
 
       {rows.length === 0
-        ? <div style={{ padding:64, textAlign:'center', color:'#9CA3AF', fontSize:14 }}>
+        ? <div style={{ padding:64, textAlign:'center', color:'hsl(var(--muted-foreground))', fontSize:14 }}>
             No load profile data for this site yet. Upload the first month's EB data.
           </div>
         : <>
@@ -102,7 +102,7 @@ export default function LoadProfiles() {
             <div className="section-card">
               <div className="section-header">
                 <span className="section-title">Monthly ToD Energy</span>
-                <span style={{ fontSize:12, color:'#9CA3AF' }}>kWh by slot</span>
+                <span style={{ fontSize:12, color:'hsl(var(--muted-foreground))' }}>kWh by slot</span>
               </div>
               <div style={{ padding:'16px 8px' }}>
                 <ResponsiveContainer width="100%" height={260}>
@@ -124,7 +124,7 @@ export default function LoadProfiles() {
             <div className="section-card">
               <div className="section-header">
                 <span className="section-title">Max Demand Trend</span>
-                <span style={{ fontSize:12, color:'#9CA3AF' }}>kW</span>
+                <span style={{ fontSize:12, color:'hsl(var(--muted-foreground))' }}>kW</span>
               </div>
               <div style={{ padding:'16px 8px' }}>
                 <ResponsiveContainer width="100%" height={200}>
@@ -198,8 +198,8 @@ export default function LoadProfiles() {
             </Field>
           </FormGrid>
 
-          <div style={{ borderTop:'1px solid #F3F4F6', paddingTop:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>EB Bill Summary</div>
+          <div style={{ borderTop:'1px solid hsl(var(--border))', paddingTop:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>EB Bill Summary</div>
             <FormGrid cols={3}>
               <Field label="Total Units (kWh)" required>
                 <Input type="number" min="0" step="1" placeholder="e.g. 45000"
@@ -216,8 +216,8 @@ export default function LoadProfiles() {
             </FormGrid>
           </div>
 
-          <div style={{ borderTop:'1px solid #F3F4F6', paddingTop:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>ToD Slot Consumption</div>
+          <div style={{ borderTop:'1px solid hsl(var(--border))', paddingTop:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>ToD Slot Consumption</div>
             <FormGrid cols={3}>
               <Field label="Peak Slot (kWh)" hint="High tariff hours">
                 <Input type="number" min="0" step="1" placeholder="e.g. 12000"

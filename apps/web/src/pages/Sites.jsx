@@ -103,8 +103,8 @@ export default function Sites() {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:900, color:'#2D2D2D', margin:0 }}>Sites</h1>
-          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>{rows.length} registered sites</p>
+          <h1 style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))', margin:0 }}>Sites</h1>
+          <p style={{ fontSize:13, color:'hsl(var(--muted-foreground))', margin:'4px 0 0' }}>{rows.length} registered sites</p>
         </div>
         <button className="btn-primary" onClick={openAdd}>
           <Plus size={14} style={{ marginRight:6, display:'inline' }} />Add Site
@@ -113,7 +113,7 @@ export default function Sites() {
 
       {/* Tile grid */}
       {rows.length === 0
-        ? <div style={{ padding:48, textAlign:'center', color:'#9CA3AF', fontSize:14 }}>No sites yet.</div>
+        ? <div style={{ padding:48, textAlign:'center', color:'hsl(var(--muted-foreground))', fontSize:14 }}>No sites yet.</div>
         : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:16 }}>
             {rows.map(s => {
               const ck = catKey(s.tariff_category);
@@ -122,7 +122,7 @@ export default function Sites() {
                 <div key={s.id} className="kpi-card" style={{ position:'relative' }}>
                   <button
                     onClick={() => openEdit(s)}
-                    style={{ position:'absolute', top:12, right:12, background:'#F3F4F6', border:'none', borderRadius:6, padding:'5px 7px', cursor:'pointer', color:'#6B7280', display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:600 }}
+                    style={{ position:'absolute', top:12, right:12, background:'hsl(var(--muted))', border:'none', borderRadius:6, padding:'5px 7px', cursor:'pointer', color:'hsl(var(--muted-foreground))', display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:600 }}
                     onMouseEnter={e => { e.currentTarget.style.background='#FEF2EF'; e.currentTarget.style.color='#F26B4E'; }}
                     onMouseLeave={e => { e.currentTarget.style.background='#F3F4F6'; e.currentTarget.style.color='#6B7280'; }}
                   >
@@ -134,8 +134,8 @@ export default function Sites() {
                       <MapPin size={17} color={cc} />
                     </div>
                     <div>
-                      <div style={{ fontWeight:800, fontSize:14, color:'#2D2D2D', lineHeight:1.3 }}>{s.site_name}</div>
-                      <div style={{ fontSize:12, color:'#6B7280', marginTop:2 }}>{s.company_name}</div>
+                      <div style={{ fontWeight:800, fontSize:14, color:'hsl(var(--foreground))', lineHeight:1.3 }}>{s.site_name}</div>
+                      <div style={{ fontSize:12, color:'hsl(var(--muted-foreground))', marginTop:2 }}>{s.company_name}</div>
                     </div>
                   </div>
 
@@ -146,30 +146,30 @@ export default function Sites() {
                   )}
 
                   {(s.state || s.discom) && (
-                    <div style={{ fontSize:12, color:'#6B7280', marginBottom:10 }}>
+                    <div style={{ fontSize:12, color:'hsl(var(--muted-foreground))', marginBottom:10 }}>
                       {[s.state, s.discom].filter(Boolean).join(' · ')}
                     </div>
                   )}
 
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', borderTop:'1px solid #F3F4F6', paddingTop:10, gap:6 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', borderTop:'1px solid hsl(var(--border))', paddingTop:10, gap:6 }}>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:800, color:'#2D2D2D', display:'flex', alignItems:'center', gap:4 }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:'hsl(var(--foreground))', display:'flex', alignItems:'center', gap:4 }}>
                         <Zap size={11} color="#F26B4E" />{Number(s.sanctioned_load_kva || 0).toLocaleString('en-IN')}
                       </div>
-                      <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase', marginTop:1 }}>Sanct. kVA</div>
+                      <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:600, textTransform:'uppercase', marginTop:1 }}>Sanct. kVA</div>
                     </div>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:800, color:'#2D2D2D' }}>{Number(s.contract_demand_kva || 0).toLocaleString('en-IN')}</div>
-                      <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase', marginTop:1 }}>Contract kVA</div>
+                      <div style={{ fontSize:12, fontWeight:800, color:'hsl(var(--foreground))' }}>{Number(s.contract_demand_kva || 0).toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:600, textTransform:'uppercase', marginTop:1 }}>Contract kVA</div>
                     </div>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:800, color:'#2D2D2D', fontFamily:'monospace' }}>{s.connection_voltage_kv || '—'} kV</div>
-                      <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase', marginTop:1 }}>Voltage</div>
+                      <div style={{ fontSize:12, fontWeight:800, color:'hsl(var(--foreground))', fontFamily:'monospace' }}>{s.connection_voltage_kv || '—'} kV</div>
+                      <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:600, textTransform:'uppercase', marginTop:1 }}>Voltage</div>
                     </div>
                   </div>
 
                   {s.meter_number && (
-                    <div style={{ marginTop:8, fontSize:11, color:'#9CA3AF', fontFamily:'monospace' }}>Meter: {s.meter_number}</div>
+                    <div style={{ marginTop:8, fontSize:11, color:'hsl(var(--muted-foreground))', fontFamily:'monospace' }}>Meter: {s.meter_number}</div>
                   )}
                 </div>
               );

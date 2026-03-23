@@ -24,6 +24,7 @@ import BDFollowUps from './pages/BDFollowUps.jsx';
 import BDApprovals from './pages/BDApprovals.jsx';
 import BDProposals from './pages/BDProposals.jsx';
 import BDImport from './pages/BDImport.jsx';
+import AuditLog from './pages/AuditLog.jsx';
 
 // EPC pages
 import EPCDashboard from './pages/EPCDashboard.jsx';
@@ -89,6 +90,7 @@ export default function App() {
               <Route path="/bess/bd/approvals"          element={<BDApprovals     product="bess" />} />
               <Route path="/bess/bd/proposals"          element={<BDProposals     product="bess" />} />
               <Route path="/bess/bd/import"             element={<BDImport        product="bess" />} />
+              <Route path="/bess/bd/audit-log"          element={<AuditLog />} />
 
               {/* ── Solar EPC ── */}
               <Route path="/epc/dashboard"     element={<EPCDashboard />} />
@@ -112,6 +114,7 @@ export default function App() {
               <Route path="/epc/bd/approvals"          element={<BDApprovals     product="epc" />} />
               <Route path="/epc/bd/proposals"          element={<BDProposals     product="epc" />} />
               <Route path="/epc/bd/import"             element={<BDImport        product="epc" />} />
+              <Route path="/epc/bd/audit-log"          element={<AuditLog />} />
             </Routes>
           </Layout>
         </RequireAuth>

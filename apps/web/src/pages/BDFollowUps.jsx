@@ -66,7 +66,7 @@ function AddFollowUpModal({ opps, users, onClose, onSaved }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 12, padding: '26px 30px', width: 460, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', fontFamily: "'Chivo', sans-serif" }}>
+      <div style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '26px 30px', width: 460, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', fontFamily: "'Chivo', sans-serif" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Add Follow-up</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}><X size={18} /></button>
@@ -76,7 +76,7 @@ function AddFollowUpModal({ opps, users, onClose, onSaved }) {
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Opportunity *</label>
               <select value={form.opp_id} onChange={e => set('opp_id', e.target.value)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
                 <option value="">— Select opportunity —</option>
                 {opps.map(o => <option key={o.id} value={o.id}>{o.company_name} — {o.title}</option>)}
               </select>
@@ -85,14 +85,14 @@ function AddFollowUpModal({ opps, users, onClose, onSaved }) {
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Due Date *</label>
                 <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   onFocus={e => e.target.style.borderColor = '#F26B4E'}
                   onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Type</label>
                 <select value={form.type} onChange={e => set('type', e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
                   {Object.entries(TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </div>
@@ -100,7 +100,7 @@ function AddFollowUpModal({ opps, users, onClose, onSaved }) {
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Assign To</label>
               <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
                 <option value="">— Unassigned —</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
@@ -108,7 +108,7 @@ function AddFollowUpModal({ opps, users, onClose, onSaved }) {
           </div>
           {error && <div style={{ marginTop: 12, background: '#fff5f3', border: '1px solid #F26B4E', borderRadius: 7, padding: '8px 12px', fontSize: 12, color: '#c0392b' }}>{error}</div>}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             <button type="submit" disabled={saving} style={{ padding: '9px 18px', borderRadius: 7, border: 'none', background: saving ? '#f0a899' : '#F26B4E', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
               {saving ? 'Saving…' : 'Add Follow-up'}
             </button>
@@ -128,7 +128,7 @@ function FollowUpCard({ f, onDone, onSnooze, onLog }) {
 
   return (
     <div style={{
-      background: '#fff', borderRadius: 10, padding: '14px 16px',
+      background: 'hsl(var(--card))', borderRadius: 10, padding: '14px 16px',
       border: `1px solid ${overdue ? '#fecaca' : dueToday ? '#fde68a' : '#e8f4ff'}`,
       borderLeft: `4px solid ${overdue ? '#ef4444' : dueToday ? '#f59e0b' : '#3b82f6'}`,
       boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -161,7 +161,7 @@ function FollowUpCard({ f, onDone, onSnooze, onLog }) {
           </div>
         </div>
 
-        <div style={{ fontSize: 11, color: '#888', marginTop: 2, marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2, marginBottom: 8 }}>
           {f.opp_title}
           {f.stage && (
             <span style={{
@@ -179,7 +179,7 @@ function FollowUpCard({ f, onDone, onSnooze, onLog }) {
           <button onClick={() => onLog(f)}
             style={{
               padding: '5px 12px', borderRadius: 6, border: '1.5px solid #F26B4E',
-              background: '#fff', color: '#F26B4E', fontSize: 11, fontWeight: 700,
+              background: 'hsl(var(--card))', color: '#F26B4E', fontSize: 11, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
             }}>
             Log Activity
@@ -187,7 +187,7 @@ function FollowUpCard({ f, onDone, onSnooze, onLog }) {
           <button onClick={() => onDone(f.id)}
             style={{
               padding: '5px 12px', borderRadius: 6, border: '1.5px solid #10b981',
-              background: '#fff', color: '#10b981', fontSize: 11, fontWeight: 700,
+              background: 'hsl(var(--card))', color: '#10b981', fontSize: 11, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
@@ -195,8 +195,8 @@ function FollowUpCard({ f, onDone, onSnooze, onLog }) {
           </button>
           <button onClick={() => onSnooze(f.id)}
             style={{
-              padding: '5px 12px', borderRadius: 6, border: '1.5px solid #e0e0e0',
-              background: '#fff', color: '#888', fontSize: 11,
+              padding: '5px 12px', borderRadius: 6, border: '1.5px solid hsl(var(--border))',
+              background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))', fontSize: 11,
               cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
@@ -280,7 +280,7 @@ export default function BDFollowUps({ product = 'bess' }) {
   const openOpps = opps.filter(o => !o.closed_at && o.stage !== 'lost');
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
       {showAdd && (
         <AddFollowUpModal
           opps={openOpps}
@@ -303,7 +303,7 @@ export default function BDFollowUps({ product = 'bess' }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Follow-up Queue</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
             {overdue.length > 0 && <span style={{ color: '#ef4444', fontWeight: 700 }}>{overdue.length} overdue · </span>}
             {dueToday.length} due today · {upcoming.length} this week · {later.length} later
           </p>
@@ -345,7 +345,7 @@ export default function BDFollowUps({ product = 'bess' }) {
                       border: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     }}>
                       <div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#888' }}>{f.company_name}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--muted-foreground))' }}>{f.company_name}</span>
                         <span style={{ fontSize: 11, color: '#bbb', marginLeft: 8 }}>{f.opp_title}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#bbb' }}>

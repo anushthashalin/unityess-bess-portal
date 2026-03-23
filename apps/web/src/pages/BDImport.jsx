@@ -129,10 +129,10 @@ function ColMapper({ parsedHeaders, mapping, onMapping, importType }) {
 
   return (
     <div style={{
-      background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 10,
+      background: '#fafafa', border: '1px solid hsl(var(--border))', borderRadius: 10,
       padding: '16px 20px', marginBottom: 20,
     }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
         letterSpacing: '0.5px', marginBottom: 12 }}>
         Column Mapping
       </div>
@@ -141,9 +141,9 @@ function ColMapper({ parsedHeaders, mapping, onMapping, importType }) {
           const required = requiredCols.includes(col);
           const mapped   = mapping[col];
           return (
-            <div key={col} style={{ background: '#fff', border: `1px solid ${required && !mapped ? '#fecaca' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px' }}>
+            <div key={col} style={{ background: 'hsl(var(--card))', border: `1px solid ${required && !mapped ? '#fecaca' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#2D2D2D' }}>{col}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{col}</span>
                 {required && <span style={{ fontSize: 9, fontWeight: 700, color: '#ef4444', background: '#fef2f2', padding: '1px 5px', borderRadius: 4 }}>REQUIRED</span>}
               </div>
               <select
@@ -151,8 +151,8 @@ function ColMapper({ parsedHeaders, mapping, onMapping, importType }) {
                 onChange={e => onMapping(col, e.target.value || null)}
                 style={{
                   width: '100%', padding: '5px 8px', borderRadius: 6,
-                  border: '1px solid #e5e7eb', fontSize: 12,
-                  fontFamily: "'Chivo', sans-serif", background: '#fff',
+                  border: '1px solid hsl(var(--border))', fontSize: 12,
+                  fontFamily: "'Chivo', sans-serif", background: 'hsl(var(--card))',
                 }}
               >
                 <option value="">— Not mapped —</option>
@@ -190,10 +190,10 @@ function PreviewTable({ rows, mapping, importType, maxRows = 50 }) {
     });
 
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e5e7eb', marginBottom: 20 }}>
+    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid hsl(var(--border))', marginBottom: 20 }}>
       <div style={{ padding: '10px 16px', background: '#fafafa', borderBottom: '1px solid #e5e7eb',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#888' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--muted-foreground))' }}>
           Preview — {rows.length} rows {rows.length > maxRows && `(showing first ${maxRows})`}
         </span>
         <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
@@ -208,8 +208,8 @@ function PreviewTable({ rows, mapping, importType, maxRows = 50 }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#2D2D2D' }}>
-            <th style={{ padding: '8px 12px', color: '#888', fontWeight: 700, fontSize: 10, textAlign: 'left', width: 32 }}>#</th>
-            <th style={{ padding: '8px 12px', color: '#888', fontWeight: 700, fontSize: 10, textAlign: 'left', width: 40 }}>OK</th>
+            <th style={{ padding: '8px 12px', color: 'hsl(var(--muted-foreground))', fontWeight: 700, fontSize: 10, textAlign: 'left', width: 32 }}>#</th>
+            <th style={{ padding: '8px 12px', color: 'hsl(var(--muted-foreground))', fontWeight: 700, fontSize: 10, textAlign: 'left', width: 40 }}>OK</th>
             {activeCols.map(col => (
               <th key={col} style={{ padding: '8px 12px', color: '#ccc', fontWeight: 700, fontSize: 10,
                 textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
@@ -236,7 +236,7 @@ function PreviewTable({ rows, mapping, importType, maxRows = 50 }) {
                   return (
                     <td key={col} style={{
                       padding: '7px 12px',
-                      color: missing ? '#ef4444' : '#2D2D2D',
+                      color: missing ? '#ef4444' : 'hsl(var(--foreground))',
                       fontWeight: missing ? 700 : 400,
                       maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
@@ -274,10 +274,10 @@ function ResultBanner({ result, onReset }) {
           }
         </div>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#2D2D2D' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: 'hsl(var(--foreground))' }}>
             Import complete — {result.imported} imported, {result.skipped} skipped
           </div>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
             {hasErrors ? `${result.errors.length} row(s) had errors — see below` : 'All rows processed successfully'}
           </div>
         </div>
@@ -285,8 +285,8 @@ function ResultBanner({ result, onReset }) {
           onClick={onReset}
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 14px', border: '1px solid #e5e7eb', borderRadius: 8,
-            background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+            padding: '7px 14px', border: '1px solid hsl(var(--border))', borderRadius: 8,
+            background: 'hsl(var(--card))', cursor: 'pointer', fontSize: 12, fontWeight: 700,
             fontFamily: "'Chivo', sans-serif", flexShrink: 0,
           }}
         >
@@ -295,7 +295,7 @@ function ResultBanner({ result, onReset }) {
       </div>
 
       {hasErrors && (
-        <div style={{ marginTop: 12, background: '#fff', borderRadius: 8, border: '1px solid #fde68a', overflow: 'hidden' }}>
+        <div style={{ marginTop: 12, background: 'hsl(var(--card))', borderRadius: 8, border: '1px solid #fde68a', overflow: 'hidden' }}>
           <div style={{ padding: '8px 14px', background: '#fef3c7', fontSize: 11, fontWeight: 700, color: '#92400e',
             textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Row Errors
@@ -306,7 +306,7 @@ function ResultBanner({ result, onReset }) {
               display: 'flex', gap: 12,
             }}>
               <span style={{ fontWeight: 700, color: '#d97706', flexShrink: 0 }}>Row {e.row}</span>
-              <span style={{ color: '#666' }}>{e.message}</span>
+              <span style={{ color: 'hsl(var(--muted-foreground))' }}>{e.message}</span>
             </div>
           ))}
         </div>
@@ -401,12 +401,12 @@ export default function BDImport() {
   }, [mappedRows, cfg]);
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D', maxWidth: 980, margin: '0 auto' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))', maxWidth: 980, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Sheets Import</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
           Copy data directly from Google Sheets and paste it here — no file upload needed
         </p>
       </div>
@@ -427,11 +427,11 @@ export default function BDImport() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <FileSpreadsheet size={16} color={importType === key ? c.color : '#aaa'} />
-              <span style={{ fontSize: 14, fontWeight: 800, color: importType === key ? c.color : '#2D2D2D' }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: importType === key ? c.color : 'hsl(var(--foreground))' }}>
                 {c.label}
               </span>
             </div>
-            <div style={{ fontSize: 11, color: '#888', lineHeight: 1.4 }}>{c.description}</div>
+            <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>{c.description}</div>
           </button>
         ))}
       </div>
@@ -445,7 +445,7 @@ export default function BDImport() {
           {['paste','map','preview','done'].map((s, i, arr) => (
             <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{
-                color: step === s ? '#2D2D2D' : arr.indexOf(step) > i ? '#16a34a' : '#aaa',
+                color: step === s ? 'hsl(var(--foreground))' : arr.indexOf(step) > i ? '#16a34a' : 'hsl(var(--muted-foreground))',
                 fontWeight: step === s ? 700 : 400, textTransform: 'capitalize',
               }}>
                 {s === 'paste' ? '1. Paste' : s === 'map' ? '2. Map Columns' : s === 'preview' ? '3. Preview' : '4. Done'}
@@ -458,11 +458,11 @@ export default function BDImport() {
 
       {/* ── Step 1: Paste ── */}
       {step === 'paste' && (
-        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Paste your data</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
+              <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
                 In Google Sheets: select all cells including the header row → Copy (Ctrl+C) → paste below.
                 The first row must be the header.
               </div>
@@ -471,8 +471,8 @@ export default function BDImport() {
               onClick={() => downloadTemplate(importType)}
               style={{
                 flexShrink: 0, marginLeft: 16, display: 'flex', alignItems: 'center', gap: 6,
-                padding: '7px 14px', border: '1px solid #e5e7eb', borderRadius: 8,
-                background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                padding: '7px 14px', border: '1px solid hsl(var(--border))', borderRadius: 8,
+                background: 'hsl(var(--card))', cursor: 'pointer', fontSize: 12, fontWeight: 700,
                 fontFamily: "'Chivo', sans-serif", color: '#555',
               }}
             >
@@ -500,10 +500,10 @@ export default function BDImport() {
             placeholder={`Paste Google Sheets data here (Tab-separated or CSV)...\n\nExample:\n${IMPORT_TYPES[importType].templateRows[0].join('\t')}\n${IMPORT_TYPES[importType].templateRows[1].join('\t')}`}
             rows={12}
             style={{
-              width: '100%', border: '1px solid #e5e7eb', borderRadius: 8,
+              width: '100%', border: '1px solid hsl(var(--border))', borderRadius: 8,
               padding: '12px 14px', fontSize: 12, fontFamily: 'monospace',
               resize: 'vertical', outline: 'none', boxSizing: 'border-box',
-              lineHeight: 1.6, color: '#2D2D2D',
+              lineHeight: 1.6, color: 'hsl(var(--foreground))',
             }}
             onFocus={e => e.target.style.borderColor = cfg.color}
             onBlur={e => e.target.style.borderColor = '#e5e7eb'}
@@ -530,12 +530,12 @@ export default function BDImport() {
       {/* ── Step 2: Map columns ── */}
       {step === 'map' && parsed && (
         <div>
-          <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px',
+          <div style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '24px 28px',
             boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
               Map your columns
             </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginBottom: 16 }}>
               Detected {parsed.headers.length} columns, {parsed.rows.length} data rows.
               Columns were auto-mapped where possible — adjust if needed.
             </div>
@@ -549,8 +549,8 @@ export default function BDImport() {
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
             <button onClick={handleReset} style={{
-              padding: '9px 18px', border: '1px solid #e5e7eb', borderRadius: 8,
-              background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              padding: '9px 18px', border: '1px solid hsl(var(--border))', borderRadius: 8,
+              background: 'hsl(var(--card))', cursor: 'pointer', fontSize: 13, fontWeight: 600,
               fontFamily: "'Chivo', sans-serif",
             }}>
               ← Back
@@ -573,12 +573,12 @@ export default function BDImport() {
       {/* ── Step 3: Preview ── */}
       {step === 'preview' && parsed && (
         <div>
-          <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px',
+          <div style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '24px 28px',
             boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
               Review before importing
             </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginBottom: 16 }}>
               {validRowCount} of {parsed.rows.length} rows are valid and will be imported.
               Invalid rows will be skipped.
             </div>
@@ -591,8 +591,8 @@ export default function BDImport() {
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
             <button onClick={() => setStep('map')} style={{
-              padding: '9px 18px', border: '1px solid #e5e7eb', borderRadius: 8,
-              background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              padding: '9px 18px', border: '1px solid hsl(var(--border))', borderRadius: 8,
+              background: 'hsl(var(--card))', cursor: 'pointer', fontSize: 13, fontWeight: 600,
               fontFamily: "'Chivo', sans-serif",
             }}>
               ← Adjust Mapping
@@ -625,7 +625,7 @@ export default function BDImport() {
       {/* Order guide */}
       {step === 'paste' && (
         <div style={{
-          marginTop: 24, background: '#fff', borderRadius: 12, padding: '20px 24px',
+          marginTop: 24, background: 'hsl(var(--card))', borderRadius: 12, padding: '20px 24px',
           boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
         }}>
           <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Import order matters</div>
