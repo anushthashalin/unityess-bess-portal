@@ -16,14 +16,12 @@ import ThemeToggle from './ThemeToggle.jsx';
 // ── Nav definitions ──────────────────────────────────────────────────────────
 
 const BESS_CORE_NAV = [
-  { label: 'Dashboard',         to: '/bess/dashboard',     icon: LayoutDashboard },
-  { label: 'BESS Configurator', to: '/bess/config',        icon: Zap },
-  { label: 'Proposals',         to: '/bess/proposals',     icon: FileText },
-  { label: 'Projects',          to: '/bess/projects',      icon: FolderOpen },
-  { label: 'Clients',           to: '/bess/clients',       icon: Users },
-  { label: 'Sites',             to: '/bess/sites',         icon: MapPin },
-  { label: 'Tariff Structures', to: '/bess/tariffs',       icon: Receipt },
-  { label: 'Load Profiles',     to: '/bess/load-profiles', icon: BarChart2 },
+  { label: 'Dashboard',         to: '/bess/dashboard',  icon: LayoutDashboard },
+  { label: 'Clients',           to: '/bess/clients',    icon: Users },
+  { label: 'BESS Configurator', to: '/bess/config',     icon: Zap },
+  { label: 'Projects',          to: '/bess/projects',   icon: FolderOpen },
+  { label: 'Proposals',         to: '/bess/proposals',  icon: FileText },
+  { label: 'Tariff Structures', to: '/bess/tariffs',    icon: Receipt },
 ];
 
 const BESS_BD_NAV = [
@@ -36,14 +34,12 @@ const BESS_BD_NAV = [
 ];
 
 const EPC_CORE_NAV = [
-  { label: 'Dashboard',         to: '/epc/dashboard',     icon: LayoutDashboard },
-  { label: 'EPC Configurator',  to: '/epc/config',        icon: Zap },
-  { label: 'Proposals',         to: '/epc/proposals',     icon: FileText },
-  { label: 'Projects',          to: '/epc/projects',      icon: FolderOpen },
-  { label: 'Clients',           to: '/epc/clients',       icon: Users },
-  { label: 'Sites',             to: '/epc/sites',         icon: MapPin },
-  { label: 'Tariff Structures', to: '/epc/tariffs',       icon: Receipt },
-  { label: 'Load Profiles',     to: '/epc/load-profiles', icon: BarChart2 },
+  { label: 'Dashboard',        to: '/epc/dashboard',  icon: LayoutDashboard },
+  { label: 'Clients',          to: '/epc/clients',    icon: Users },
+  { label: 'EPC Configurator', to: '/epc/config',     icon: Zap },
+  { label: 'Projects',         to: '/epc/projects',   icon: FolderOpen },
+  { label: 'Proposals',        to: '/epc/proposals',  icon: FileText },
+  { label: 'Tariff Structures',to: '/epc/tariffs',    icon: Receipt },
 ];
 
 const EPC_BD_NAV = [
