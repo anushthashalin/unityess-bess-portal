@@ -271,7 +271,8 @@ export default function BESSConfig() {
   const [szFuelCost,      setSzFuelCost]      = useState('90');
   const [szDgEff,         setSzDgEff]         = useState('0.31');
   const [szDgDays,        setSzDgDays]        = useState('300');
-  const [szDispatchKwh,   setSzDispatchKwh]   = useState('');
+  const [szCapacityMwh,   setSzCapacityMwh]   = useState('');   // MWh of BESS deployed for ToD
+  const [szDod,           setSzDod]           = useState('85');  // Depth of Discharge %
   const [szPeakTariff,    setSzPeakTariff]    = useState('');
   const [szOffpeakTariff, setSzOffpeakTariff] = useState('');
   const [szPeakWindow,    setSzPeakWindow]    = useState('4');
@@ -320,6 +321,7 @@ export default function BESSConfig() {
 
   const runSizing = async () => {
     let nominal_kwh = 0, nominal_kw = 0, annual_savings_inr = 0, dispatch_kwh_per_year = 0;
+    const todExtra = {};  // populated in the ToD branch, spread into setSzResult
     if (szUseCase === 'dg') {
       const load = parseFloat(szLoadKw) || 0;
       const hrs  = parseFloat(szBackupHrs) || 0;
@@ -334,15 +336,19 @@ export default function BESSConfig() {
       dispatch_kwh_per_year = load * hrs * days;
       annual_savings_inr    = dispatch_kwh_per_year * Math.max(0, net_benefit_kwh);
     } else {
-      const dispatch = parseFloat(szDispatchKwh) || 0;
-      const peak     = parseFloat(szPeakTariff) || 0;
-      const offpeak  = parseFloat(szOffpeakTariff) || 0;
-      const window   = parseFloat(szPeakWindow) || 4;
-      const days     = parseFloat(szTodDays) || 300;
-      nominal_kwh           = dispatch / 0.85;
-      nominal_kw            = dispatch / window;
-      dispatch_kwh_per_year = dispatch * days;
-      annual_savings_inr    = dispatch * (peak - offpeak) * days;
+      const capacity_mwh = parseFloat(szCapacityMwh) || 0;
+      const dod          = (parseFloat(szDod) || 85) / 100;
+      const peak         = parseFloat(szPeakTariff) || 0;
+      const offpeak      = parseFloat(szOffpeakTariff) || 0;
+      const window       = parseFloat(szPeakWindow) || 4;
+      const days         = parseFloat(szTodDays) || 300;
+      const usable_kwh   = capacity_mwh * 1000 * dod;     // kWh dischargeable per cycle
+      nominal_kwh           = capacity_mwh * 1000;          // installed nominal kWh
+      nominal_kw            = usable_kwh / window;          // minimum PCS power rating
+      dispatch_kwh_per_year = usable_kwh * days;
+      annual_savings_inr    = usable_kwh * (peak - offpeak) * days;
+      // Attach ToD-specific fields to result object below
+      Object.assign(todExtra, { capacity_mwh, usable_kwh_per_day: usable_kwh, dod_pct: parseFloat(szDod) || 85 });
     }
     const mkSlot = (count, kwh, kw, capex) => {
       const om1    = capex * 0.015;
@@ -381,6 +387,7 @@ export default function BESSConfig() {
       use_case: szUseCase, category: szCategory, site_state: szState,
       derate_factor,
       validated_energy_kwh: nominal_kwh / (1 - derate_factor),
+      ...todExtra,
     });
     // Async AI narrative — non-blocking
     setSzAiNote(null); setSzAiLoading(true);
@@ -411,7 +418,7 @@ export default function BESSConfig() {
         use_case:             szResult.use_case,
         site_state:           szResult.site_state || null,
         sku_category:         szResult.category,
-        load_kwh_per_day:     szUseCase === 'tod' ? parseFloat(szDispatchKwh) || null : null,
+        load_kwh_per_day:     szUseCase === 'tod' ? (szResult.usable_kwh_per_day || null) : null,
         peak_demand_kw:       parseFloat(szLoadKw) || null,
         dg_runtime_hours:     szUseCase === 'dg'  ? parseFloat(szBackupHrs) || null : null,
         diesel_price_rs_l:    szUseCase === 'dg'  ? parseFloat(szFuelCost)  || null : null,
@@ -421,7 +428,7 @@ export default function BESSConfig() {
         required_power_kw:    Math.round(szResult.nominal_kw),
         sizing_basis:         szUseCase === 'dg'
           ? `DG: ${szLoadKw}kW × ${szBackupHrs}h, derated 15%`
-          : `ToD: ${szDispatchKwh}kWh dispatch / ${szPeakWindow}h window`,
+          : `ToD: ${szCapacityMwh}MWh × ${szDod}% DoD / ${szPeakWindow}h peak window`,
       });
 
       // 2 — recommendation record
@@ -2112,14 +2119,24 @@ export default function BESSConfig() {
                       {szUseCase === 'tod' && (
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Daily Dispatch (kWh/day)</Label>
-                            <Input type="number" min="0" placeholder="e.g. 500" className="h-9 text-xs"
-                              value={szDispatchKwh} onChange={e => setSzDispatchKwh(e.target.value)} />
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">BESS Capacity (MWh)</Label>
+                            <Input type="number" min="0" step="0.1" placeholder="e.g. 1.0" className="h-9 text-xs"
+                              value={szCapacityMwh} onChange={e => setSzCapacityMwh(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Depth of Discharge (%)</Label>
+                            <Input type="number" min="50" max="100" step="1" placeholder="e.g. 85" className="h-9 text-xs"
+                              value={szDod} onChange={e => setSzDod(e.target.value)} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Window (hrs)</Label>
                             <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4" className="h-9 text-xs"
                               value={szPeakWindow} onChange={e => setSzPeakWindow(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
+                            <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
+                              value={szTodDays} onChange={e => setSzTodDays(e.target.value)} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Tariff (₹/kWh)</Label>
@@ -2131,11 +2148,6 @@ export default function BESSConfig() {
                             <Input type="number" min="0" step="0.1" placeholder="e.g. 5.5" className="h-9 text-xs"
                               value={szOffpeakTariff} onChange={e => setSzOffpeakTariff(e.target.value)} />
                           </div>
-                          <div className="space-y-1.5 col-span-2">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
-                            <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
-                              value={szTodDays} onChange={e => setSzTodDays(e.target.value)} />
-                          </div>
                         </div>
                       )}
 
@@ -2143,7 +2155,7 @@ export default function BESSConfig() {
                         className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
                         disabled={szUseCase === 'dg'
                           ? !(szLoadKw && szBackupHrs)
-                          : !(szDispatchKwh && szPeakTariff && szOffpeakTariff)}
+                          : !(szCapacityMwh && szPeakTariff && szOffpeakTariff)}
                         onClick={runSizing}
                       >
                         <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Calculate Sizing
@@ -2166,98 +2178,143 @@ export default function BESSConfig() {
                         </button>
                       </div>
 
-                      {/* Nominal requirement */}
-                      <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Nominal Requirement</p>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <p className="text-[10px] text-gray-400">Energy</p>
-                            <p className="text-xl font-black text-orange-500">{Math.round(szResult.nominal_kwh).toLocaleString('en-IN')} kWh</p>
+                      {/* ── ToD capacity-first results ── */}
+                      {szResult.use_case === 'tod' ? (
+                        <>
+                          {/* Capacity summary card */}
+                          <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Capacity Summary</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-[10px] text-gray-400">Installed Capacity</p>
+                                <p className="text-xl font-black text-orange-500">{szResult.capacity_mwh} MWh</p>
+                                <p className="text-[10px] text-gray-500 mt-0.5">{szResult.dod_pct}% DoD → {Math.round(szResult.usable_kwh_per_day).toLocaleString('en-IN')} kWh usable/day</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-gray-400">Minimum PCS Rating</p>
+                                <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
+                                <p className="text-[10px] text-gray-500 mt-0.5">over {szPeakWindow}h peak window</p>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-[10px] text-gray-400">Power</p>
-                            <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-gray-400">Annual Savings</p>
-                            <p className="text-xl font-black text-green-400">{inrL(szResult.annual_savings_inr)}</p>
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Economical + Recommended cards for active unit */}
-                      {(() => {
-                        const ac = szResult.allConfigs.find(c => c.unit.id === activeUnit?.id);
-                        if (!ac) return null;
-                        return (
-                          <div className="grid grid-cols-2 gap-3">
-                            <Card className="border-border">
-                              <CardContent className="p-4 flex flex-col gap-2">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Economical</p>
-                                <p className="text-sm font-black">{ac.eco.count} × {ac.unit.model}</p>
-                                <p className="text-[11px] text-muted-foreground">{ac.eco.kwh.toLocaleString('en-IN')} kWh · {ac.eco.kw.toLocaleString('en-IN')} kW</p>
-                                <Separator />
-                                <div className="space-y-1 text-xs">
-                                  <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.eco.capex > 0 ? inrCr(ac.eco.capex) : 'On request'}</span></div>
-                                  <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold">{ac.eco.headroom}%</span></div>
-                                  <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.eco.payback ? `${ac.eco.payback.toFixed(1)} yrs` : '—'}</span></div>
-                                  <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
-                                </div>
-                                <div className="flex gap-2 mt-1">
-                                  <Button size="sm" variant="outline" className="h-8 text-xs flex-1"
-                                    onClick={() => {
-                                      setSelectedUnit(ac.unit); setNumUnits(ac.eco.count);
-                                      if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
-                                        const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
-                                        if (diff > 0) setTariffDiff(diff);
-                                      }
-                                      setActiveTab('summary');
-                                    }}>
-                                    Apply
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
-                                    disabled={szSaving || !!szSaved}
-                                    onClick={() => saveSizingAnalysis(ac.unit, 'economical')}>
-                                    {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                            <Card className="border-orange-300 bg-orange-50/50">
-                              <CardContent className="p-4 flex flex-col gap-2">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">★ Recommended</p>
-                                <p className="text-sm font-black">{ac.rec.count} × {ac.unit.model}</p>
-                                <p className="text-[11px] text-muted-foreground">{ac.rec.kwh.toLocaleString('en-IN')} kWh · {ac.rec.kw.toLocaleString('en-IN')} kW</p>
-                                <Separator />
-                                <div className="space-y-1 text-xs">
-                                  <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.rec.capex > 0 ? inrCr(ac.rec.capex) : 'On request'}</span></div>
-                                  <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold text-orange-500">{ac.rec.headroom}%</span></div>
-                                  <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.rec.payback ? `${ac.rec.payback.toFixed(1)} yrs` : '—'}</span></div>
-                                  <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
-                                </div>
-                                <div className="flex gap-2 mt-1">
-                                  <Button size="sm" className="h-8 text-xs flex-1 bg-orange-500 hover:bg-orange-600"
-                                    onClick={() => {
-                                      setSelectedUnit(ac.unit); setNumUnits(ac.rec.count);
-                                      if (szUseCase === 'tod' && szPeakTariff && szOffpeakTariff) {
-                                        const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
-                                        if (diff > 0) setTariffDiff(diff);
-                                      }
-                                      setActiveTab('summary');
-                                    }}>
-                                    Apply
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
-                                    disabled={szSaving || !!szSaved}
-                                    onClick={() => saveSizingAnalysis(ac.unit, 'recommended')}>
-                                    {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
+                          {/* Financial return card */}
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-green-700 mb-3">Financial Return</p>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <p className="text-[10px] text-green-600 font-bold uppercase">Annual Savings</p>
+                                <p className="text-lg font-black text-green-700">{inrL(szResult.annual_savings_inr)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Annual Dispatch</p>
+                                <p className="text-lg font-black">{(szResult.dispatch_kwh_per_year / 1000).toFixed(1)} MWh</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">₹/kWh Benefit</p>
+                                <p className="text-lg font-black">
+                                  {szResult.dispatch_kwh_per_year > 0
+                                    ? `₹${(szResult.annual_savings_inr / szResult.dispatch_kwh_per_year).toFixed(2)}`
+                                    : '—'}
+                                </p>
+                              </div>
+                            </div>
                           </div>
-                        );
-                      })()}
+
+                          {/* Apply + Save row */}
+                          <div className="flex gap-2">
+                            <Button className="flex-1 bg-orange-500 hover:bg-orange-600 h-9 text-xs font-bold"
+                              onClick={() => {
+                                if (szPeakTariff && szOffpeakTariff) {
+                                  const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
+                                  if (diff > 0) setTariffDiff(diff);
+                                }
+                                setActiveTab('summary');
+                              }}>
+                              Apply to Configurator →
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* DG path: original Nominal Requirement card */}
+                          <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Nominal Requirement</p>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <p className="text-[10px] text-gray-400">Energy</p>
+                                <p className="text-xl font-black text-orange-500">{Math.round(szResult.nominal_kwh).toLocaleString('en-IN')} kWh</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-gray-400">Power</p>
+                                <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-gray-400">Annual Savings</p>
+                                <p className="text-xl font-black text-green-400">{inrL(szResult.annual_savings_inr)}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* DG path: Economical + Recommended cards for active unit */}
+                          {(() => {
+                            const ac = szResult.allConfigs.find(c => c.unit.id === activeUnit?.id);
+                            if (!ac) return null;
+                            return (
+                              <div className="grid grid-cols-2 gap-3">
+                                <Card className="border-border">
+                                  <CardContent className="p-4 flex flex-col gap-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Economical</p>
+                                    <p className="text-sm font-black">{ac.eco.count} × {ac.unit.model}</p>
+                                    <p className="text-[11px] text-muted-foreground">{ac.eco.kwh.toLocaleString('en-IN')} kWh · {ac.eco.kw.toLocaleString('en-IN')} kW</p>
+                                    <Separator />
+                                    <div className="space-y-1 text-xs">
+                                      <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.eco.capex > 0 ? inrCr(ac.eco.capex) : 'On request'}</span></div>
+                                      <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold">{ac.eco.headroom}%</span></div>
+                                      <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.eco.payback ? `${ac.eco.payback.toFixed(1)} yrs` : '—'}</span></div>
+                                      <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
+                                    </div>
+                                    <div className="flex gap-2 mt-1">
+                                      <Button size="sm" variant="outline" className="h-8 text-xs flex-1"
+                                        onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.eco.count); setActiveTab('summary'); }}>
+                                        Apply
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
+                                        disabled={szSaving || !!szSaved}
+                                        onClick={() => saveSizingAnalysis(ac.unit, 'economical')}>
+                                        {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
+                                      </Button>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                                <Card className="border-orange-300 bg-orange-50/50">
+                                  <CardContent className="p-4 flex flex-col gap-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">★ Recommended</p>
+                                    <p className="text-sm font-black">{ac.rec.count} × {ac.unit.model}</p>
+                                    <p className="text-[11px] text-muted-foreground">{ac.rec.kwh.toLocaleString('en-IN')} kWh · {ac.rec.kw.toLocaleString('en-IN')} kW</p>
+                                    <Separator />
+                                    <div className="space-y-1 text-xs">
+                                      <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.rec.capex > 0 ? inrCr(ac.rec.capex) : 'On request'}</span></div>
+                                      <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold text-orange-500">{ac.rec.headroom}%</span></div>
+                                      <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.rec.payback ? `${ac.rec.payback.toFixed(1)} yrs` : '—'}</span></div>
+                                      <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
+                                    </div>
+                                    <div className="flex gap-2 mt-1">
+                                      <Button size="sm" className="h-8 text-xs flex-1 bg-orange-500 hover:bg-orange-600"
+                                        onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.rec.count); setActiveTab('summary'); }}>
+                                        Apply
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
+                                        disabled={szSaving || !!szSaved}
+                                        onClick={() => saveSizingAnalysis(ac.unit, 'recommended')}>
+                                        {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
+                                      </Button>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            );
+                          })()}
 
                       {/* All configurations comparison table */}
                       <div className="flex flex-col gap-2">
@@ -2301,6 +2358,8 @@ export default function BESSConfig() {
                           Economical = minimum units to meet nominal. Recommended = ≥15% headroom for derating and dispatch buffer.
                         </p>
                       </div>
+                        </>
+                      )}
 
                       {/* AI narrative */}
                       {szAiLoading && (
@@ -2405,12 +2464,12 @@ export default function BESSConfig() {
 
                   <div className="space-y-1.5">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link to Project (optional)</Label>
-                    <Select value={propProjectId} onValueChange={setPropProjectId}>
+                    <Select value={propProjectId || '__none__'} onValueChange={v => setPropProjectId(v === '__none__' ? '' : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select project…" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
+                        <SelectItem value="__none__">— None —</SelectItem>
                         {projectList.map((p) => (
                           <SelectItem key={p.id} value={String(p.id)}>
                             {p.project_code} — {p.company_name}
