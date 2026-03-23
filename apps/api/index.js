@@ -157,6 +157,18 @@ async function runMigrations() {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_audit_log_created ON bd.audit_log (created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON bd.audit_log (resource, resource_id)`,
+    // Two-tier CAPEX: supply-only + supply+install prices on SKU
+    `ALTER TABLE bess.units ADD COLUMN IF NOT EXISTS price_installed_ex_gst NUMERIC(15,2)`,
+    `UPDATE bess.units SET price_installed_ex_gst = ROUND(price_ex_gst * 1.12)
+     WHERE price_installed_ex_gst IS NULL AND price_ex_gst > 0`,
+    // Proposals: offer type + price breakdown
+    `ALTER TABLE bess.proposals ADD COLUMN IF NOT EXISTS offer_type            TEXT DEFAULT 'budgetary'`,
+    `ALTER TABLE bess.proposals ADD COLUMN IF NOT EXISTS price_supply_ex_gst   NUMERIC(15,2)`,
+    `ALTER TABLE bess.proposals ADD COLUMN IF NOT EXISTS price_install_ex_gst  NUMERIC(15,2)`,
+    // Finance records: offer type + price breakdown
+    `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS offer_type            TEXT DEFAULT 'budgetary'`,
+    `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS price_supply_ex_gst   NUMERIC(15,2)`,
+    `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS price_install_ex_gst  NUMERIC(15,2)`,
   ];
   for (const sql of migrations) {
     try {
@@ -1571,19 +1583,22 @@ Return plain text only — no JSON, no markdown, no headers. Just the narrative 
 app.post('/api/bess/proposals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { client_id, site_id, bess_config_id, project_id, proposal_date, status,
-            capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes } = req.body;
+            capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes,
+            offer_type, price_supply_ex_gst, price_install_ex_gst } = req.body;
     if (!client_id)    return res.status(400).json({ error: 'client_id required' });
     if (!capex_ex_gst) return res.status(400).json({ error: 'capex_ex_gst required' });
     const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM bess.proposals');
     const propNum = `PROP-${new Date().getFullYear()}-${String(parseInt(count)+1).padStart(4,'0')}`;
     const { rows: [p] } = await pool.query(
       `INSERT INTO bess.proposals (client_id, site_id, bess_config_id, project_id, proposal_number, proposal_date,
-         status, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+         status, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes,
+         offer_type, price_supply_ex_gst, price_install_ex_gst)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [client_id, site_id||null, bess_config_id||null, project_id||null, propNum,
        proposal_date||new Date().toISOString().split('T')[0],
        status||'draft', capex_ex_gst||null, annual_savings||null,
-       payback_years||null, irr_percent||null, validity_days||30, notes||null]
+       payback_years||null, irr_percent||null, validity_days||30, notes||null,
+       offer_type||'budgetary', price_supply_ex_gst||null, price_install_ex_gst||null]
     );
     res.json({ data: p });
   } catch (e) { handleDbError(res, e); }
@@ -1707,7 +1722,7 @@ app.get('/api/bess/coverage-table', async (req, res) => {
     const dispatch_factor = soh * rte * soc;   // yr-1 at-meter factor
 
     const { rows: skus } = await pool.query(
-      `SELECT id, model, power_kw, energy_kwh, price_ex_gst
+      `SELECT id, model, power_kw, energy_kwh, price_ex_gst, price_installed_ex_gst
        FROM bess.units
        WHERE is_active = true AND category = $1
        ORDER BY energy_kwh`,
@@ -1717,13 +1732,15 @@ app.get('/api/bess/coverage-table', async (req, res) => {
     const table = skus.map(u => {
       const econ_units  = Math.max(1, Math.ceil(req_kwh / parseFloat(u.energy_kwh)));
       const recom_units = Math.max(1, Math.ceil((req_kwh * (1 + uplift)) / (parseFloat(u.energy_kwh) * dispatch_factor)));
-      const price       = parseFloat(u.price_ex_gst);
+      const price           = parseFloat(u.price_ex_gst);
+      const priceInstalled  = parseFloat(u.price_installed_ex_gst) || 0;
       return {
-        sku_id:            u.id,
-        sku_model:         u.model,
-        sku_energy_kwh:    parseFloat(u.energy_kwh),
-        sku_power_kw:      parseFloat(u.power_kw),
-        sku_price_ex_gst:  price,
+        sku_id:                     u.id,
+        sku_model:                  u.model,
+        sku_energy_kwh:             parseFloat(u.energy_kwh),
+        sku_power_kw:               parseFloat(u.power_kw),
+        sku_price_ex_gst:           price,
+        sku_price_installed_ex_gst: priceInstalled,
         econ_units,
         econ_total_kwh:    econ_units  * parseFloat(u.energy_kwh),
         econ_total_kw:     econ_units  * parseFloat(u.power_kw),
@@ -1865,7 +1882,8 @@ app.post('/api/bess/finance-records', requireAuth, requireRole('admin','bd_exec'
       om_rate_pct, om_escalation_pct, analysis_horizon_years,
       tariff_structure_id, tariff_snapshot,
       annual_savings_yr1, simple_payback_years, break_even_year,
-      irr_10yr_pct, npv_10yr_rs, roi_10yr_pct, cashflow_rows
+      irr_10yr_pct, npv_10yr_rs, roi_10yr_pct, cashflow_rows,
+      offer_type, price_supply_ex_gst, price_install_ex_gst,
     } = req.body;
     if (!selected_config || !capex_ex_gst || !use_case)
       return res.status(400).json({ error: 'selected_config, capex_ex_gst, use_case required' });
@@ -1877,8 +1895,9 @@ app.post('/api/bess/finance-records', requireAuth, requireRole('admin','bd_exec'
           om_rate_pct, om_escalation_pct, analysis_horizon_years,
           tariff_structure_id, tariff_snapshot,
           annual_savings_yr1, simple_payback_years, break_even_year,
-          irr_10yr_pct, npv_10yr_rs, roi_10yr_pct, cashflow_rows)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          irr_10yr_pct, npv_10yr_rs, roi_10yr_pct, cashflow_rows,
+          offer_type, price_supply_ex_gst, price_install_ex_gst)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING *`,
       [recommendation_id||null, client_id||null, selected_config, capex_ex_gst,
        use_case, benefit_rs_kwh||null, cycles_per_year||null, cycle_dataset_key||null,
@@ -1887,7 +1906,8 @@ app.post('/api/bess/finance-records', requireAuth, requireRole('admin','bd_exec'
        tariff_snapshot ? JSON.stringify(tariff_snapshot) : null,
        annual_savings_yr1||null, simple_payback_years||null, break_even_year||null,
        irr_10yr_pct||null, npv_10yr_rs||null, roi_10yr_pct||null,
-       cashflow_rows ? JSON.stringify(cashflow_rows) : null]
+       cashflow_rows ? JSON.stringify(cashflow_rows) : null,
+       offer_type||'budgetary', price_supply_ex_gst||null, price_install_ex_gst||null]
     );
     res.json({ data: row });
   } catch (e) { handleDbError(res, e); }
