@@ -67,7 +67,7 @@ function RequestModal({ opps, users, currentUser, onClose, onSaved }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '26px 30px', width: 500, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', fontFamily: "'Chivo', sans-serif" }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: '26px 30px', width: 500, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', fontFamily: "'Chivo', sans-serif" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Request Approval</h2>
@@ -89,7 +89,7 @@ function RequestModal({ opps, users, currentUser, onClose, onSaved }) {
                       padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
                       border: form.type === t.key ? `2px solid ${t.color}` : '1.5px solid #e8e8e8',
                       background: form.type === t.key ? t.color + '12' : '#fafafa',
-                      color: 'hsl(var(--foreground))', fontSize: 13, textAlign: 'left',
+                      color: '#2D2D2D', fontSize: 13, textAlign: 'left',
                       display: 'flex', alignItems: 'center', gap: 10,
                       transition: 'all 0.12s',
                     }}>
@@ -109,7 +109,7 @@ function RequestModal({ opps, users, currentUser, onClose, onSaved }) {
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Opportunity *</label>
               <select value={form.opp_id} onChange={e => set('opp_id', e.target.value)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
                 <option value="">— Select opportunity —</option>
                 {opps.map(o => <option key={o.id} value={o.id}>{o.company_name} — {o.title}</option>)}
               </select>
@@ -123,7 +123,7 @@ function RequestModal({ opps, users, currentUser, onClose, onSaved }) {
                 </label>
                 <input type="number" step="0.01" value={form.deviation_value} onChange={e => set('deviation_value', e.target.value)}
                   placeholder={form.type === 'discount' ? 'e.g. 2.5' : 'e.g. 15000'}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   onFocus={e => e.target.style.borderColor = '#F26B4E'}
                   onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
                 {form.type === 'discount' && form.deviation_value > 5 && (
@@ -137,7 +137,7 @@ function RequestModal({ opps, users, currentUser, onClose, onSaved }) {
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Justification *</label>
               <textarea value={form.justification} onChange={e => set('justification', e.target.value)} rows={3}
                 placeholder="Why is this approval needed? What's the business case?"
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', resize: 'vertical' }}
                 onFocus={e => e.target.style.borderColor = '#F26B4E'}
                 onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
             </div>
@@ -146,7 +146,7 @@ function RequestModal({ opps, users, currentUser, onClose, onSaved }) {
           {error && <div style={{ marginTop: 12, background: '#fff5f3', border: '1px solid #F26B4E', borderRadius: 7, padding: '8px 12px', fontSize: 12, color: '#c0392b' }}>{error}</div>}
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: saving ? '#f0a899' : '#F26B4E', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
               {saving ? 'Submitting…' : 'Submit Request'}
             </button>
@@ -184,7 +184,7 @@ function DecisionModal({ approval, currentUser, onClose, onDecision }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '26px 30px', width: 480, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', fontFamily: "'Chivo', sans-serif" }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: '26px 30px', width: 480, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', fontFamily: "'Chivo', sans-serif" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Review Approval Request</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}><X size={18} /></button>
@@ -196,11 +196,11 @@ function DecisionModal({ approval, currentUser, onClose, onDecision }) {
             <span style={{ fontSize: 20 }}>{tc.icon}</span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: tc.color }}>{tc.label}</div>
-              <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>Requested by {approval.requested_by_name} · {date(approval.requested_at)}</div>
+              <div style={{ fontSize: 11, color: '#888' }}>Requested by {approval.requested_by_name} · {date(approval.requested_at)}</div>
             </div>
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{approval.company_name}</div>
-          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginBottom: 6 }}>{approval.opp_title}</div>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>{approval.opp_title}</div>
           {approval.deviation_value != null && (
             <div style={{ fontSize: 12, color: tc.color, fontWeight: 700 }}>
               {approval.type === 'discount' ? `${approval.deviation_value}% discount` : `₹${Number(approval.deviation_value).toLocaleString('en-IN')} waiver`}
@@ -221,7 +221,7 @@ function DecisionModal({ approval, currentUser, onClose, onDecision }) {
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Notes (optional)</label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
             placeholder="Add conditions, remarks, or reason for rejection…"
-            style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', resize: 'none' }}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', resize: 'none' }}
             onFocus={e => e.target.style.borderColor = '#F26B4E'}
             onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
         </div>
@@ -263,7 +263,7 @@ function ApprovalCard({ ap, isApprover, onReview }) {
 
   return (
     <div style={{
-      background: 'hsl(var(--card))', borderRadius: 10, padding: '14px 16px',
+      background: '#fff', borderRadius: 10, padding: '14px 16px',
       border: '1px solid #f0f0f0', borderLeft: `4px solid ${tc.color}`,
       boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     }}>
@@ -275,7 +275,7 @@ function ApprovalCard({ ap, isApprover, onReview }) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 13 }}>{ap.company_name}</div>
-            <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 1 }}>{ap.opp_title}</div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{ap.opp_title}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: 11, fontWeight: 700, background: tc.color + '18', color: tc.color, padding: '2px 8px', borderRadius: 20 }}>
                 {tc.label}
@@ -305,7 +305,7 @@ function ApprovalCard({ ap, isApprover, onReview }) {
               <button onClick={() => onReview(ap)}
                 style={{
                   padding: '6px 14px', borderRadius: 7, border: '2px solid #F26B4E',
-                  background: 'hsl(var(--card))', color: '#F26B4E', fontSize: 12, fontWeight: 700,
+                  background: '#fff', color: '#F26B4E', fontSize: 12, fontWeight: 700,
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}>
                 Review
@@ -338,8 +338,8 @@ function ApprovalCard({ ap, isApprover, onReview }) {
       {expanded && (
         <div style={{ marginTop: 10, padding: '10px 12px', background: '#f9fafb', borderRadius: 8, fontSize: 12 }}>
           {ap.justification && <div style={{ color: '#555', marginBottom: 6 }}><strong>Justification:</strong> {ap.justification}</div>}
-          <div style={{ color: '#aaa' }}>Requested by <strong style={{ color: 'hsl(var(--muted-foreground))' }}>{ap.requested_by_name}</strong></div>
-          {ap.approver_name && <div style={{ color: '#aaa', marginTop: 4 }}>Reviewed by <strong style={{ color: 'hsl(var(--muted-foreground))' }}>{ap.approver_name}</strong>{ap.approved_at ? ` on ${date(ap.approved_at)}` : ''}</div>}
+          <div style={{ color: '#aaa' }}>Requested by <strong style={{ color: '#666' }}>{ap.requested_by_name}</strong></div>
+          {ap.approver_name && <div style={{ color: '#aaa', marginTop: 4 }}>Reviewed by <strong style={{ color: '#666' }}>{ap.approver_name}</strong>{ap.approved_at ? ` on ${date(ap.approved_at)}` : ''}</div>}
           {ap.approver_notes && <div style={{ marginTop: 6, color: '#555', fontStyle: 'italic' }}>"{ap.approver_notes}"</div>}
         </div>
       )}
@@ -375,7 +375,7 @@ export default function BDApprovals({ product = 'bess' }) {
   const openOpps   = opps.filter(o => !o.closed_at && o.stage !== 'lost');
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
       {showRequest && (
         <RequestModal
           opps={openOpps}
@@ -398,7 +398,7 @@ export default function BDApprovals({ product = 'bess' }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Approvals</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
             {pending.length > 0
               ? <span style={{ color: '#f59e0b', fontWeight: 700 }}>{pending.length} pending review</span>
               : 'No pending approvals'

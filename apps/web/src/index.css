@@ -39,30 +39,30 @@
 
   /* ── DARK ── */
   .dark {
-    --background:           0 0% 5%;
-    --foreground:           0 0% 95%;
-    --card:                 0 0% 10%;
-    --card-foreground:      0 0% 95%;
-    --popover:              0 0% 9%;
-    --popover-foreground:   0 0% 95%;
+    --background:           0 0% 4%;
+    --foreground:           0 0% 93%;
+    --card:                 0 0% 7%;
+    --card-foreground:      0 0% 93%;
+    --popover:              0 0% 6%;
+    --popover-foreground:   0 0% 93%;
     --primary:              14 87% 60%;
     --primary-foreground:   0 0% 100%;
-    --secondary:            0 0% 14%;
-    --secondary-foreground: 0 0% 85%;
-    --muted:                0 0% 14%;
-    --muted-foreground:     0 0% 62%;
-    --accent:               14 60% 15%;
-    --accent-foreground:    14 87% 72%;
+    --secondary:            0 0% 11%;
+    --secondary-foreground: 0 0% 80%;
+    --muted:                0 0% 11%;
+    --muted-foreground:     0 0% 48%;
+    --accent:               14 60% 14%;
+    --accent-foreground:    14 87% 70%;
     --destructive:          0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border:               0 0% 20%;
-    --input:                0 0% 16%;
+    --border:               0 0% 13%;
+    --input:                0 0% 13%;
     --ring:                 14 87% 60%;
 
-    --main-bg:              rgba(8, 8, 10, 0.98);
-    --topbar-bg:            rgba(16, 16, 18, 0.96);
-    --topbar-border:        rgba(255, 255, 255, 0.08);
-    --scrollbar-thumb:      #3a3a3a;
+    --main-bg:              rgba(6, 6, 8, 0.97);
+    --topbar-bg:            rgba(12, 12, 14, 0.92);
+    --topbar-border:        rgba(255, 255, 255, 0.06);
+    --scrollbar-thumb:      #2e2e2e;
   }
 
   /* ── SOLAR (warm cream) ── */
@@ -141,22 +141,21 @@ header, main, aside {
 /* ─── KPI card ───────────────────────────────────────────────────────────── */
 .kpi-card {
   background: hsl(var(--card));
-  color: hsl(var(--card-foreground));
   backdrop-filter: blur(8px);
   border-radius: 14px; padding: 20px 22px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   border: 1px solid hsl(var(--border));
-  transition: box-shadow 0.2s, transform 0.2s, background-color 0.25s, color 0.25s;
+  transition: box-shadow 0.2s, transform 0.2s, background-color 0.25s;
 }
 .kpi-card:hover {
   box-shadow: 0 8px 24px rgba(242,107,78,0.12);
   transform: translateY(-2px);
 }
 .dark .kpi-card {
-  box-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
 }
 .dark .kpi-card:hover {
-  box-shadow: 0 8px 28px rgba(242,107,78,0.25), 0 0 0 1px rgba(242,107,78,0.20);
+  box-shadow: 0 8px 24px rgba(242,107,78,0.20), 0 0 0 1px rgba(242,107,78,0.15);
 }
 
 /* ─── status badges ──────────────────────────────────────────────────────── */

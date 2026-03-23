@@ -364,12 +364,12 @@ function ContactsTab({ accounts, contacts, refetch }) {
             className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl"/>
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
         </div>
-        <Select value={filterAcc || '__all__'} onValueChange={v => setFilterAcc(v === '__all__' ? '' : v)}>
+        <Select value={filterAcc} onValueChange={setFilterAcc}>
           <SelectTrigger className="w-48 h-9 text-sm rounded-xl border-border/50 bg-card">
             <SelectValue placeholder="All Accounts"/>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Accounts</SelectItem>
+            <SelectItem value="">All Accounts</SelectItem>
             {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.company_name}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -546,12 +546,12 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
             placeholder="Search company, title, owner…"
             className="pl-9 h-9 text-sm bg-card border-border/50 rounded-xl"/>
         </div>
-        <Select value={stageFilter || '__all__'} onValueChange={v => setStageFilter(v === '__all__' ? '' : v)}>
+        <Select value={stageFilter} onValueChange={setStageFilter}>
           <SelectTrigger className="w-40 h-9 text-sm rounded-xl border-border/50 bg-card">
             <SelectValue placeholder="All Stages"/>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Stages</SelectItem>
+            <SelectItem value="">All Stages</SelectItem>
             {STAGES.map(s => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
