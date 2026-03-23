@@ -36,7 +36,7 @@ function AddContactModal({ accounts, onClose, onSaved }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: '#fff', borderRadius: 12, padding: '28px 32px',
+        background: 'hsl(var(--card))', borderRadius: 12, padding: '28px 32px',
         width: 500, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 8px 40px rgba(0,0,0,0.15)',
       }}>
@@ -53,7 +53,7 @@ function AddContactModal({ accounts, onClose, onSaved }) {
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>Account *</label>
               <select value={form.account_id} onChange={e => set('account_id', e.target.value)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))' }}>
                 <option value="">— Select account —</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.company_name}</option>)}
               </select>
@@ -75,7 +75,7 @@ function AddContactModal({ accounts, onClose, onSaved }) {
                     onChange={e => set(key, e.target.value)}
                     style={{
                       width: '100%', padding: '8px 10px', borderRadius: 7,
-                      border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit',
+                      border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit',
                       outline: 'none', boxSizing: 'border-box',
                     }}
                     onFocus={e => e.target.style.borderColor = '#F26B4E'}
@@ -93,7 +93,7 @@ function AddContactModal({ accounts, onClose, onSaved }) {
                   rows={2}
                   style={{
                     width: '100%', padding: '8px 10px', borderRadius: 7,
-                    border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit',
+                    border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit',
                     outline: 'none', boxSizing: 'border-box', resize: 'vertical',
                   }}
                   onFocus={e => e.target.style.borderColor = '#F26B4E'}
@@ -121,7 +121,7 @@ function AddContactModal({ accounts, onClose, onSaved }) {
           )}
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, border: '1.5px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               Cancel
             </button>
             <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: saving ? '#f0a899' : '#F26B4E', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -162,7 +162,7 @@ export default function BDContacts({ product = 'bess' }) {
   });
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
       {showAdd && (
         <AddContactModal
           accounts={accounts}
@@ -175,7 +175,7 @@ export default function BDContacts({ product = 'bess' }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Contacts</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
             {contacts.length} contacts across {accounts.length} accounts
           </p>
         </div>
@@ -203,8 +203,8 @@ export default function BDContacts({ product = 'bess' }) {
             onChange={e => setSearch(e.target.value)}
             style={{
               width: '100%', padding: '9px 12px 9px 34px', borderRadius: 8,
-              border: '1.5px solid #e0e0e0', fontSize: 13, fontFamily: 'inherit',
-              outline: 'none', boxSizing: 'border-box', background: '#fff',
+              border: '1.5px solid hsl(var(--border))', fontSize: 13, fontFamily: 'inherit',
+              outline: 'none', boxSizing: 'border-box', background: 'hsl(var(--card))',
             }}
             onFocus={e => e.target.style.borderColor = '#F26B4E'}
             onBlur={e => e.target.style.borderColor = '#e0e0e0'}
@@ -214,8 +214,8 @@ export default function BDContacts({ product = 'bess' }) {
           value={filterAcc}
           onChange={e => setFilterAcc(e.target.value)}
           style={{
-            padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e0e0e0',
-            fontSize: 13, fontFamily: 'inherit', background: '#fff', minWidth: 200,
+            padding: '9px 12px', borderRadius: 8, border: '1.5px solid hsl(var(--border))',
+            fontSize: 13, fontFamily: 'inherit', background: 'hsl(var(--card))', minWidth: 200,
           }}
         >
           <option value="">All Accounts</option>
@@ -227,12 +227,12 @@ export default function BDContacts({ product = 'bess' }) {
       {filtered.length === 0
         ? <Empty message={search || filterAcc ? 'No contacts match the filter.' : 'No contacts yet — add your first contact.'} />
         : (
-          <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          <div style={{ background: 'hsl(var(--card))', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#fafafa', borderBottom: '2px solid #f0f0f0' }}>
                   {['Name', 'Account', 'Designation', 'Email', 'Phone', ''].map((h, i) => (
-                    <th key={i} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <th key={i} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       {h}
                     </th>
                   ))}
@@ -266,7 +266,7 @@ export default function BDContacts({ product = 'bess' }) {
                     <td style={{ padding: '12px 14px', color: '#555', fontWeight: 600 }}>
                       {c.company_name || '—'}
                     </td>
-                    <td style={{ padding: '12px 14px', color: '#666' }}>
+                    <td style={{ padding: '12px 14px', color: 'hsl(var(--muted-foreground))' }}>
                       {c.designation || '—'}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
@@ -277,7 +277,7 @@ export default function BDContacts({ product = 'bess' }) {
                         : <span style={{ color: '#ccc' }}>—</span>
                       }
                     </td>
-                    <td style={{ padding: '12px 14px', color: '#666' }}>
+                    <td style={{ padding: '12px 14px', color: 'hsl(var(--muted-foreground))' }}>
                       {c.phone
                         ? <a href={`tel:${c.phone}`} style={{ color: '#555', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
                             <Phone size={12} /> {c.phone}

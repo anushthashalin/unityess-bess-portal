@@ -140,7 +140,7 @@ export default function TariffStructures() {
                 }}>
                   <div>
                     <div style={{ fontWeight: 800, color: 'white', fontSize: 14 }}>{t.state}</div>
-                    <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{t.discom}</div>
+                    <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 1 }}>{t.discom}</div>
                   </div>
                   <span style={{
                     background: '#F26B4E', color: 'white',
@@ -159,10 +159,10 @@ export default function TariffStructures() {
                   ].map(([k, v], i, arr) => (
                     <div key={k} style={{
                       display: 'flex', justifyContent: 'space-between', padding: '7px 0',
-                      borderBottom: i < arr.length - 1 ? '1px solid #F3F4F6' : 'none',
+                      borderBottom: i < arr.length - 1 ? '1px solid hsl(var(--border))' : 'none',
                     }}>
-                      <span style={{ fontSize: 12, color: '#9CA3AF' }}>{k}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: k === 'ToD Spread' ? '#F26B4E' : '#2D2D2D' }}>{v}</span>
+                      <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{k}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: k === 'ToD Spread' ? '#F26B4E' : 'hsl(var(--foreground))' }}>{v}</span>
                     </div>
                   ))}
                 </div>
@@ -217,10 +217,10 @@ export default function TariffStructures() {
 
         {/* Regulatory References panel */}
         <div style={{
-          background: 'rgba(255,255,255,0.95)',
+          background: 'hsl(var(--card))',
           borderRadius: 16,
           overflow: 'hidden',
-          border: '1px solid rgba(0,0,0,0.07)',
+          border: '1px solid hsl(var(--border))',
           boxShadow: '0 2px 16px rgba(0,0,0,0.07)',
         }}>
           {/* Panel header */}
@@ -249,7 +249,7 @@ export default function TariffStructures() {
                   style={{
                     padding: '10px 14px',
                     display: 'flex', alignItems: 'flex-start', gap: 10,
-                    borderBottom: i < REFS.length - 1 ? '1px solid #F5F5F5' : 'none',
+                    borderBottom: i < REFS.length - 1 ? '1px solid hsl(var(--border))' : 'none',
                     transition: 'background 0.12s',
                     cursor: 'pointer',
                   }}
@@ -266,10 +266,10 @@ export default function TariffStructures() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#2D2D2D', lineHeight: 1.3 }}>{label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1.3 }}>{label}</span>
                       {url !== '#' && <ArrowUpRight size={11} color="#9CA3AF" style={{ flexShrink: 0 }} />}
                     </div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2, lineHeight: 1.4 }}>{body}</div>
+                    <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginTop: 2, lineHeight: 1.4 }}>{body}</div>
                     <span style={{
                       display: 'inline-block', marginTop: 5,
                       fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
@@ -285,9 +285,9 @@ export default function TariffStructures() {
           {/* Footer note */}
           <div style={{
             padding: '10px 14px',
-            background: '#FAFAFA',
-            borderTop: '1px solid #F0F0F0',
-            fontSize: 10, color: '#BBBBBB', lineHeight: 1.5,
+            background: 'hsl(var(--muted))',
+            borderTop: '1px solid hsl(var(--border))',
+            fontSize: 10, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5,
             fontStyle: 'italic',
           }}>
             Always verify tariff data against the latest DISCOM order before finalising proposals.
@@ -323,8 +323,8 @@ export default function TariffStructures() {
             </Field>
           </FormGrid>
 
-          <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>ToD Energy Charges</div>
+          <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>ToD Energy Charges</div>
             <FormGrid cols={2}>
               <Field label="Peak Energy Charge (₹/kWh)" required>
                 <Input type="number" min="0" step="0.01" placeholder="e.g. 9.50"
@@ -342,8 +342,8 @@ export default function TariffStructures() {
             )}
           </div>
 
-          <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Fixed & Demand Charges</div>
+          <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Fixed & Demand Charges</div>
             <FormGrid cols={2}>
               <Field label="Demand Charge (₹/kVA/month)">
                 <Input type="number" min="0" step="0.5" placeholder="e.g. 320"

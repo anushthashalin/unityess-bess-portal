@@ -108,11 +108,11 @@ function CreateProposalModal({ opps, onClose, onSave }) {
   }
 
   const inp = {
-    border: '1px solid #e5e7eb', borderRadius: 7, padding: '8px 11px',
-    fontSize: 13, fontFamily: "'Chivo', sans-serif", color: '#2D2D2D',
+    border: '1px solid hsl(var(--border))', borderRadius: 7, padding: '8px 11px',
+    fontSize: 13, fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))',
     outline: 'none', width: '100%', boxSizing: 'border-box',
   };
-  const label = { fontSize: 11, fontWeight: 700, color: '#888',
+  const label = { fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))',
     textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 4 };
 
   return (
@@ -122,7 +122,7 @@ function CreateProposalModal({ opps, onClose, onSave }) {
       zIndex: 1000, padding: 20,
     }}>
       <div style={{
-        background: '#fff', borderRadius: 14, width: '100%', maxWidth: 680,
+        background: 'hsl(var(--card))', borderRadius: 14, width: '100%', maxWidth: 680,
         maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
@@ -130,11 +130,11 @@ function CreateProposalModal({ opps, onClose, onSave }) {
         <div style={{
           padding: '20px 24px 16px', borderBottom: '1px solid #f0f0f0',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          position: 'sticky', top: 0, background: '#fff', zIndex: 1,
+          position: 'sticky', top: 0, background: 'hsl(var(--card))', zIndex: 1,
         }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>New Proposal</h2>
-            <p style={{ margin: '3px 0 0', fontSize: 12, color: '#888' }}>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
               A new version will be auto-assigned for the selected opportunity
             </p>
           </div>
@@ -171,7 +171,7 @@ function CreateProposalModal({ opps, onClose, onSave }) {
             <div style={{
               background: '#F26B4E0e', border: '1px solid #F26B4E30',
               borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-              fontSize: 12, color: '#2D2D2D',
+              fontSize: 12, color: 'hsl(var(--foreground))',
             }}>
               <strong>{selectedOpp.company_name}</strong> · {selectedOpp.city}, {selectedOpp.state}
               {selectedOpp.contact_name && <> · Contact: {selectedOpp.contact_name}</>}
@@ -206,16 +206,16 @@ function CreateProposalModal({ opps, onClose, onSave }) {
             </div>
             <div>
               <label style={label}>Total Capacity</label>
-              <input value={`${totalKwh} kWh`} disabled style={{ ...inp, background: '#f9f9f9', color: '#888' }} />
+              <input value={`${totalKwh} kWh`} disabled style={{ ...inp, background: '#f9f9f9', color: 'hsl(var(--muted-foreground))' }} />
             </div>
           </div>
 
           {/* Pricing grid */}
           <div style={{
             background: '#fafafa', borderRadius: 10, padding: '16px',
-            border: '1px solid #e5e7eb', marginBottom: 16,
+            border: '1px solid hsl(var(--border))', marginBottom: 16,
           }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
               letterSpacing: '0.5px', marginBottom: 12 }}>Pricing (Ex-GST)</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
               <div>
@@ -242,8 +242,8 @@ function CreateProposalModal({ opps, onClose, onSave }) {
                   ['GST @ 18%', gst18],
                 ].map(([label, val]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ color: '#666' }}>{label}</span>
-                    <span style={{ fontWeight: 600, color: val < 0 ? '#ef4444' : '#2D2D2D' }}>
+                    <span style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</span>
+                    <span style={{ fontWeight: 600, color: val < 0 ? '#ef4444' : 'hsl(var(--foreground))' }}>
                       {val < 0 ? `(${inr(-val)})` : inr(val)}
                     </span>
                   </div>
@@ -303,8 +303,8 @@ function CreateProposalModal({ opps, onClose, onSave }) {
           {/* Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button onClick={onClose} style={{
-              padding: '9px 20px', border: '1px solid #e5e7eb', borderRadius: 8,
-              background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              padding: '9px 20px', border: '1px solid hsl(var(--border))', borderRadius: 8,
+              background: 'hsl(var(--card))', cursor: 'pointer', fontSize: 13, fontWeight: 600,
               fontFamily: "'Chivo', sans-serif",
             }}>
               Cancel
@@ -338,21 +338,21 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
   const row = (label, val) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0',
       borderBottom: '1px solid #f5f5f5', fontSize: 13 }}>
-      <span style={{ color: '#888' }}>{label}</span>
-      <span style={{ fontWeight: 600, color: '#2D2D2D', textAlign: 'right', maxWidth: '60%' }}>{val}</span>
+      <span style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</span>
+      <span style={{ fontWeight: 600, color: 'hsl(var(--foreground))', textAlign: 'right', maxWidth: '60%' }}>{val}</span>
     </div>
   );
 
   return (
     <div style={{
       position: 'fixed', right: 0, top: 0, bottom: 0, width: 440,
-      background: '#fff', boxShadow: '-4px 0 30px rgba(0,0,0,0.12)',
+      background: 'hsl(var(--card))', boxShadow: '-4px 0 30px rgba(0,0,0,0.12)',
       zIndex: 900, display: 'flex', flexDirection: 'column', overflowY: 'auto',
     }}>
       {/* Header */}
       <div style={{
         padding: '20px 24px', borderBottom: '1px solid #f0f0f0',
-        position: 'sticky', top: 0, background: '#fff', zIndex: 1,
+        position: 'sticky', top: 0, background: 'hsl(var(--card))', zIndex: 1,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -360,7 +360,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
               <span style={{ fontSize: 15, fontWeight: 800 }}>{proposal.prop_number ?? `Proposal v${proposal.version}`}</span>
               <StatusChip status={proposal.status} />
             </div>
-            <div style={{ fontSize: 12, color: '#888' }}>
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
               {proposal.company_name} · {proposal.opp_title}
             </div>
           </div>
@@ -373,7 +373,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
       <div style={{ padding: '16px 24px', flex: 1 }}>
         {/* Client */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
             letterSpacing: '0.5px', marginBottom: 8 }}>Client</div>
           {row('Company', proposal.company_name)}
           {row('Location', [proposal.city, proposal.state].filter(Boolean).join(', ') || '—')}
@@ -385,15 +385,15 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
         {/* Scope */}
         {c.scope_description && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
               letterSpacing: '0.5px', marginBottom: 8 }}>Scope</div>
-            <div style={{ fontSize: 13, color: '#2D2D2D', lineHeight: 1.6 }}>{c.scope_description}</div>
+            <div style={{ fontSize: 13, color: 'hsl(var(--foreground))', lineHeight: 1.6 }}>{c.scope_description}</div>
           </div>
         )}
 
         {/* Sizing */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
             letterSpacing: '0.5px', marginBottom: 8 }}>System Configuration</div>
           {row('Units', `${c.units ?? '—'} × UESS-125-${c.unit_kwh ?? 261}`)}
           {row('Total Capacity', `${c.total_kwh ?? '—'} kWh`)}
@@ -401,7 +401,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
 
         {/* Pricing */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
             letterSpacing: '0.5px', marginBottom: 8 }}>Pricing</div>
           {row('Unit Price (ex-GST)', inr(c.unit_price))}
           {row('Gross Value (ex-GST)', inr(c.units * c.unit_price))}
@@ -420,7 +420,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
 
         {/* Commercial */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
             letterSpacing: '0.5px', marginBottom: 8 }}>Commercial Terms</div>
           {row('Payment Terms', c.payment_terms ?? '—')}
           {row('Delivery', `${c.delivery_weeks ?? '—'} weeks from advance receipt`)}
@@ -430,9 +430,9 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
         {/* Notes */}
         {c.notes && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
               letterSpacing: '0.5px', marginBottom: 8 }}>Notes</div>
-            <div style={{ fontSize: 12, color: '#666', lineHeight: 1.7,
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.7,
               background: '#f9f9f9', borderRadius: 8, padding: '10px 12px' }}>
               {c.notes}
             </div>
@@ -441,7 +441,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
 
         {/* Meta */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase',
             letterSpacing: '0.5px', marginBottom: 8 }}>History</div>
           {row('Created', `${date(proposal.created_at)}${proposal.created_by_name ? ` by ${proposal.created_by_name}` : ''}`)}
           {proposal.sent_at && row('Sent', date(proposal.sent_at))}
@@ -452,7 +452,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
       {/* Status action buttons */}
       <div style={{
         padding: '14px 24px', borderTop: '1px solid #f0f0f0',
-        position: 'sticky', bottom: 0, background: '#fff',
+        position: 'sticky', bottom: 0, background: 'hsl(var(--card))',
         display: 'flex', gap: 8, flexWrap: 'wrap',
       }}>
         {/* Email button — always available while draft or sent */}
@@ -515,8 +515,8 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
               onClick={() => doStatus('expired')} disabled={changing}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8,
-                background: '#fff', color: '#64748b', cursor: 'pointer',
+                padding: '9px 14px', border: '1px solid hsl(var(--border))', borderRadius: 8,
+                background: 'hsl(var(--card))', color: '#64748b', cursor: 'pointer',
                 fontSize: 12, fontWeight: 700, fontFamily: "'Chivo', sans-serif",
               }}
             >
@@ -526,7 +526,7 @@ function ProposalPanel({ proposal, onClose, onStatusChange, onEmail }) {
           </>
         )}
         {['accepted','rejected','expired'].includes(proposal.status) && (
-          <div style={{ fontSize: 12, color: '#888', padding: '10px 0' }}>
+          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '10px 0' }}>
             Proposal closed — create a new version if needed.
           </div>
         )}
@@ -549,13 +549,13 @@ function OppVersionGroup({ oppKey, proposals, onView, onEmail }) {
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '10px 16px', background: '#fafafa',
           borderRadius: expanded ? '8px 8px 0 0' : 8,
-          border: '1px solid #e5e7eb',
+          border: '1px solid hsl(var(--border))',
           cursor: 'pointer', userSelect: 'none',
         }}
       >
         {expanded ? <ChevronDown size={14} color="#888" /> : <ChevronRight size={14} color="#888" />}
         <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{latest.company_name}</span>
-        <span style={{ fontSize: 12, color: '#888' }}>{latest.opp_title}</span>
+        <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{latest.opp_title}</span>
         <span style={{
           fontSize: 10, fontWeight: 700, color: '#F26B4E',
           background: '#F26B4E0f', padding: '2px 8px', borderRadius: 20,
@@ -565,7 +565,7 @@ function OppVersionGroup({ oppKey, proposals, onView, onEmail }) {
       </div>
 
       {expanded && (
-        <div style={{ border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+        <div style={{ border: '1px solid hsl(var(--border))', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
           {proposals.map((p, i) => {
             const c = p.content ?? {};
             return (
@@ -589,12 +589,12 @@ function OppVersionGroup({ oppKey, proposals, onView, onEmail }) {
 
                 {/* Prop number */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2D2D' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))' }}>
                     {p.prop_number ?? `Version ${p.version}`}
                   </div>
                   {c.scope_description && (
                     <div style={{
-                      fontSize: 11, color: '#888', marginTop: 1,
+                      fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 1,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       {c.scope_description}
@@ -663,9 +663,9 @@ function OppVersionGroup({ oppKey, proposals, onView, onEmail }) {
                     onClick={() => onView(p)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 4,
-                      padding: '5px 10px', border: '1px solid #e5e7eb', borderRadius: 7,
-                      background: '#fff', cursor: 'pointer',
-                      fontSize: 11, fontWeight: 700, color: '#2D2D2D',
+                      padding: '5px 10px', border: '1px solid hsl(var(--border))', borderRadius: 7,
+                      background: 'hsl(var(--card))', cursor: 'pointer',
+                      fontSize: 11, fontWeight: 700, color: 'hsl(var(--foreground))',
                       fontFamily: "'Chivo', sans-serif",
                     }}
                   >
@@ -747,13 +747,13 @@ export default function BDProposals({ product = 'bess' }) {
   if (error)   return <ErrorBanner message={error} />;
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Proposals</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
             Commercial proposals with full version history per opportunity
           </p>
         </div>
@@ -781,12 +781,12 @@ export default function BDProposals({ product = 'bess' }) {
           { label: 'Pipeline Value', val: inr(kpi.totalValue), color: '#F26B4E', wide: true },
         ].map(k => (
           <div key={k.label} style={{
-            background: '#fff', borderRadius: 10, padding: '14px 16px',
+            background: 'hsl(var(--card))', borderRadius: 10, padding: '14px 16px',
             boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
             borderLeft: `3px solid ${k.color}`,
           }}>
             <div style={{ fontSize: k.wide ? 16 : 22, fontWeight: 800, color: k.color }}>{k.val}</div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{k.label}</div>
+            <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{k.label}</div>
           </div>
         ))}
       </div>
@@ -798,9 +798,9 @@ export default function BDProposals({ product = 'bess' }) {
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by company, opportunity, or proposal no…"
           style={{
-            flex: 1, border: '1px solid #e5e7eb', borderRadius: 8,
+            flex: 1, border: '1px solid hsl(var(--border))', borderRadius: 8,
             padding: '8px 12px', fontSize: 13, fontFamily: "'Chivo', sans-serif",
-            outline: 'none', color: '#2D2D2D',
+            outline: 'none', color: 'hsl(var(--foreground))',
           }}
         />
         <div style={{ display: 'flex', gap: 6 }}>
@@ -809,9 +809,9 @@ export default function BDProposals({ product = 'bess' }) {
               key={s}
               onClick={() => setFilterStatus(s)}
               style={{
-                padding: '7px 14px', border: '1px solid #e5e7eb', borderRadius: 7,
-                background: filterStatus === s ? '#2D2D2D' : '#fff',
-                color: filterStatus === s ? '#fff' : '#666',
+                padding: '7px 14px', border: '1px solid hsl(var(--border))', borderRadius: 7,
+                background: filterStatus === s ? 'hsl(var(--foreground))' : 'hsl(var(--card))',
+                color: filterStatus === s ? 'hsl(var(--card))' : 'hsl(var(--muted-foreground))',
                 cursor: 'pointer', fontSize: 11, fontWeight: 700,
                 textTransform: 'capitalize', fontFamily: "'Chivo', sans-serif",
               }}

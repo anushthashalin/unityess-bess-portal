@@ -38,7 +38,7 @@ export default function Login() {
       style={{ fontFamily: "'Chivo', sans-serif" }}
     >
       <div style={{
-        background: '#fff',
+        background: 'hsl(var(--card))',
         borderRadius: 12,
         padding: '48px 40px',
         width: 400,
@@ -53,21 +53,21 @@ export default function Login() {
             color: '#fff', fontWeight: 700, fontSize: 18,
           }}>U</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: '#2D2D2D', lineHeight: 1.2 }}>UnityESS Portal</div>
-            <div style={{ fontSize: 12, color: '#888' }}>Ornate Solar — Internal</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: 'hsl(var(--foreground))', lineHeight: 1.2 }}>UnityESS Portal</div>
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>Ornate Solar — Internal</div>
           </div>
         </div>
 
-        <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, color: '#2D2D2D', textAlign: 'center' }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, color: 'hsl(var(--foreground))', textAlign: 'center' }}>
           Sign in
         </h2>
-        <p style={{ margin: '0 0 28px', fontSize: 13, color: '#888', textAlign: 'center' }}>
+        <p style={{ margin: '0 0 28px', fontSize: 13, color: 'hsl(var(--muted-foreground))', textAlign: 'center' }}>
           Use your Ornate Solar email to continue
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#2D2D2D', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
               Email
             </label>
             <input
@@ -79,7 +79,7 @@ export default function Login() {
               autoFocus
               style={{
                 width: '100%', padding: '10px 12px', borderRadius: 8,
-                border: '1.5px solid #ddd', fontSize: 14, fontFamily: 'inherit',
+                border: '1.5px solid hsl(var(--border))', fontSize: 14, fontFamily: 'inherit',
                 outline: 'none', boxSizing: 'border-box',
                 transition: 'border-color 0.2s',
               }}
@@ -89,7 +89,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#2D2D2D', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
               Password
             </label>
             <input
@@ -100,7 +100,7 @@ export default function Login() {
               required
               style={{
                 width: '100%', padding: '10px 12px', borderRadius: 8,
-                border: '1.5px solid #ddd', fontSize: 14, fontFamily: 'inherit',
+                border: '1.5px solid hsl(var(--border))', fontSize: 14, fontFamily: 'inherit',
                 outline: 'none', boxSizing: 'border-box',
                 transition: 'border-color 0.2s',
               }}

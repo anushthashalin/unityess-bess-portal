@@ -68,7 +68,7 @@ const EMPTY = {
 
 function SectionLabel({ children }) {
   return (
-    <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.6px', borderBottom:'1px solid #F3F4F6', paddingBottom:8, marginTop:4 }}>
+    <div style={{ fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', textTransform:'uppercase', letterSpacing:'0.6px', borderBottom:'1px solid #F3F4F6', paddingBottom:8, marginTop:4 }}>
       {children}
     </div>
   );
@@ -76,7 +76,7 @@ function SectionLabel({ children }) {
 
 function CheckBox({ label, checked, onChange }) {
   return (
-    <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:12, color:'#2D2D2D', fontWeight:600, userSelect:'none' }}>
+    <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:12, color:'hsl(var(--foreground))', fontWeight:600, userSelect:'none' }}>
       <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)}
         style={{ width:15, height:15, accentColor:'#F26B4E', cursor:'pointer' }} />
       {label}
@@ -138,10 +138,10 @@ function LeafletMap({ clients }) {
   return (
     <div className="section-card" style={{ padding:20 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-        <span style={{ fontSize:13, fontWeight:700, color:'#2D2D2D' }}>Client Locations</span>
-        <span style={{ fontSize:12, color:'#9CA3AF' }}>{clients.filter(c=>c.state&&STATE_LATLNG[c.state]).length} of {clients.length} clients mapped</span>
+        <span style={{ fontSize:13, fontWeight:700, color:'hsl(var(--foreground))' }}>Client Locations</span>
+        <span style={{ fontSize:12, color:'hsl(var(--muted-foreground))' }}>{clients.filter(c=>c.state&&STATE_LATLNG[c.state]).length} of {clients.length} clients mapped</span>
       </div>
-      {!ready && <div style={{ height:420, display:'flex', alignItems:'center', justifyContent:'center', background:'#F9FAFB', borderRadius:12, color:'#9CA3AF', fontSize:13 }}>Loading map…</div>}
+      {!ready && <div style={{ height:420, display:'flex', alignItems:'center', justifyContent:'center', background:'hsl(var(--muted))', borderRadius:12, color:'hsl(var(--muted-foreground))', fontSize:13 }}>Loading map…</div>}
       <div ref={mapRef} style={{ height:420, borderRadius:12, overflow:'hidden', display: ready ? 'block' : 'none' }} />
     </div>
   );
@@ -244,13 +244,13 @@ export default function Clients() {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:900, color:'#2D2D2D', margin:0 }}>Clients</h1>
-          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>{cl.length} clients</p>
+          <h1 style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))', margin:0 }}>Clients</h1>
+          <p style={{ fontSize:13, color:'hsl(var(--muted-foreground))', margin:'4px 0 0' }}>{cl.length} clients</p>
         </div>
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-          <div style={{ display:'flex', background:'#F3F4F6', borderRadius:8, padding:3 }}>
+          <div style={{ display:'flex', background:'hsl(var(--muted))', borderRadius:8, padding:3 }}>
             {['grid','map'].map(v => (
-              <button key={v} onClick={() => setView(v)} style={{ padding:'5px 10px', borderRadius:6, border:'none', cursor:'pointer', background: view===v ? 'white' : 'transparent', color: view===v ? '#2D2D2D' : '#9CA3AF', fontWeight:700, fontSize:12, boxShadow: view===v ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+              <button key={v} onClick={() => setView(v)} style={{ padding:'5px 10px', borderRadius:6, border:'none', cursor:'pointer', background: view===v ? 'hsl(var(--card))' : 'transparent', color: view===v ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight:700, fontSize:12, boxShadow: view===v ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
                 {v === 'grid' ? '⊞ Grid' : '⊕ Map'}
               </button>
             ))}
@@ -263,7 +263,7 @@ export default function Clients() {
 
       {/* Search */}
       <div style={{ position:'relative', maxWidth:360 }}>
-        <Search size={14} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#9CA3AF' }} />
+        <Search size={14} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'hsl(var(--muted-foreground))' }} />
         <input className="bess-input" style={{ paddingLeft:36, width:'100%' }}
           placeholder="Search by name, city, state, industry…"
           value={search} onChange={e => setSearch(e.target.value)} />
@@ -273,7 +273,7 @@ export default function Clients() {
 
       {view === 'grid' && (
         filtered.length === 0
-          ? <div style={{ padding:48, textAlign:'center', color:'#9CA3AF', fontSize:14 }}>No clients found.</div>
+          ? <div style={{ padding:48, textAlign:'center', color:'hsl(var(--muted-foreground))', fontSize:14 }}>No clients found.</div>
           : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:16 }}>
               {filtered.map(client => {
                 const clientProposals = pr.filter(p => p.client_id === client.id);
@@ -283,7 +283,7 @@ export default function Clients() {
                 return (
                   <div key={client.id} className="kpi-card" style={{ position:'relative' }}>
                     <button onClick={() => openEdit(client)}
-                      style={{ position:'absolute', top:12, right:12, background:'#F3F4F6', border:'none', borderRadius:6, padding:'5px 7px', cursor:'pointer', color:'#6B7280', display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:600 }}
+                      style={{ position:'absolute', top:12, right:12, background:'hsl(var(--muted))', border:'none', borderRadius:6, padding:'5px 7px', cursor:'pointer', color:'hsl(var(--muted-foreground))', display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:600 }}
                       onMouseEnter={e => { e.currentTarget.style.background='#FEF2EF'; e.currentTarget.style.color='#F26B4E'; }}
                       onMouseLeave={e => { e.currentTarget.style.background='#F3F4F6'; e.currentTarget.style.color='#6B7280'; }}>
                       <Pencil size={11} /> Edit
@@ -295,8 +295,8 @@ export default function Clients() {
                           <Building size={17} color="#F26B4E" />
                         </div>
                         <div>
-                          <div style={{ fontWeight:800, fontSize:14, color:'#2D2D2D' }}>{client.company_name}</div>
-                          <div style={{ fontSize:11, color:'#6B7280', marginTop:1 }}>{client.contact_person || '—'}</div>
+                          <div style={{ fontWeight:800, fontSize:14, color:'hsl(var(--foreground))' }}>{client.company_name}</div>
+                          <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', marginTop:1 }}>{client.contact_person || '—'}</div>
                         </div>
                       </div>
                     </div>
@@ -309,17 +309,17 @@ export default function Clients() {
                         </span>
                       )}
                       {client.industry_type && (
-                        <span style={{ fontSize:10, fontWeight:600, background:'#F3F4F6', color:'#6B7280', padding:'2px 8px', borderRadius:10 }}>
+                        <span style={{ fontSize:10, fontWeight:600, background:'hsl(var(--muted))', color:'hsl(var(--muted-foreground))', padding:'2px 8px', borderRadius:10 }}>
                           {client.industry_type}
                         </span>
                       )}
                     </div>
 
                     <div style={{ display:'flex', flexDirection:'column', gap:5, marginBottom:10 }}>
-                      {client.email && <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:'#6B7280' }}><Mail size={11} color="#9CA3AF" />{client.email}</div>}
-                      {client.phone && <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:'#6B7280' }}><Phone size={11} color="#9CA3AF" />{client.phone}</div>}
-                      {(client.city || client.state) && <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:'#6B7280' }}><MapPin size={11} color="#9CA3AF" />{[client.city, client.state].filter(Boolean).join(', ')}</div>}
-                      {client.requirement_kwh && <div style={{ fontSize:12, color:'#6B7280' }}>Requirement: <strong style={{ color:'#2D2D2D' }}>{Number(client.requirement_kwh).toLocaleString('en-IN')} kWh</strong></div>}
+                      {client.email && <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:'hsl(var(--muted-foreground))' }}><Mail size={11} color="#9CA3AF" />{client.email}</div>}
+                      {client.phone && <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:'hsl(var(--muted-foreground))' }}><Phone size={11} color="#9CA3AF" />{client.phone}</div>}
+                      {(client.city || client.state) && <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:'hsl(var(--muted-foreground))' }}><MapPin size={11} color="#9CA3AF" />{[client.city, client.state].filter(Boolean).join(', ')}</div>}
+                      {client.requirement_kwh && <div style={{ fontSize:12, color:'hsl(var(--muted-foreground))' }}>Requirement: <strong style={{ color:'hsl(var(--foreground))' }}>{Number(client.requirement_kwh).toLocaleString('en-IN')} kWh</strong></div>}
                     </div>
 
                     {/* BD milestones */}
@@ -331,18 +331,18 @@ export default function Clients() {
                       </div>
                     )}
 
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', borderTop:'1px solid #F3F4F6', paddingTop:10, gap:6 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', borderTop:'1px solid hsl(var(--border))', paddingTop:10, gap:6 }}>
                       <div style={{ textAlign:'center' }}>
-                        <div style={{ fontSize:16, fontWeight:900, color:'#2D2D2D' }}>{clientProposals.length}</div>
-                        <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Proposals</div>
+                        <div style={{ fontSize:16, fontWeight:900, color:'hsl(var(--foreground))' }}>{clientProposals.length}</div>
+                        <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:600, textTransform:'uppercase' }}>Proposals</div>
                       </div>
                       <div style={{ textAlign:'center', borderLeft:'1px solid #F3F4F6', borderRight:'1px solid #F3F4F6' }}>
-                        <div style={{ fontSize:16, fontWeight:900, color:'#2D2D2D' }}>{clientProjects.length}</div>
-                        <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Projects</div>
+                        <div style={{ fontSize:16, fontWeight:900, color:'hsl(var(--foreground))' }}>{clientProjects.length}</div>
+                        <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:600, textTransform:'uppercase' }}>Projects</div>
                       </div>
                       <div style={{ textAlign:'center' }}>
                         <div style={{ fontSize:14, fontWeight:900, color:'#F26B4E' }}>{inr(totalCapex)}</div>
-                        <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Value</div>
+                        <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:600, textTransform:'uppercase' }}>Value</div>
                       </div>
                     </div>
                   </div>
@@ -470,7 +470,7 @@ export default function Clients() {
             <textarea value={form.remarks} onChange={e => set('remarks', e.target.value)}
               placeholder="Key observations, site conditions, decision makers, blockers…"
               rows={3}
-              style={{ border:'1px solid #E5E7EB', borderRadius:8, padding:'9px 12px', fontSize:13, fontFamily:'Chivo, sans-serif', color:'#2D2D2D', outline:'none', width:'100%', resize:'vertical', boxSizing:'border-box', transition:'border-color 0.15s, box-shadow 0.15s' }}
+              style={{ border:'1px solid #E5E7EB', borderRadius:8, padding:'9px 12px', fontSize:13, fontFamily:'Chivo, sans-serif', color:'hsl(var(--foreground))', outline:'none', width:'100%', resize:'vertical', boxSizing:'border-box', transition:'border-color 0.15s, box-shadow 0.15s' }}
               onFocus={e => { e.target.style.borderColor='#F26B4E'; e.target.style.boxShadow='0 0 0 3px rgba(242,107,78,0.12)'; }}
               onBlur={e => { e.target.style.borderColor='#E5E7EB'; e.target.style.boxShadow='none'; }}
             />
