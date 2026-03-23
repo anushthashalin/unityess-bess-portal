@@ -683,9 +683,9 @@ function OppVersionGroup({ oppKey, proposals, onView, onEmail }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-export default function BDProposals() {
-  const { data: propsData, loading, error, refetch } = useApi(bdApi.proposals);
-  const { data: oppsData } = useApi(bdApi.opps);
+export default function BDProposals({ product = 'bess' }) {
+  const { data: propsData, loading, error, refetch } = useApi(() => bdApi.proposals(undefined), [product]);
+  const { data: oppsData } = useApi(() => bdApi.opps({ product_type: product }), [product]);
   const [showCreate, setShowCreate]     = useState(false);
   const [viewProposal, setViewProposal] = useState(null);
   const [emailProposal, setEmailProposal] = useState(null);

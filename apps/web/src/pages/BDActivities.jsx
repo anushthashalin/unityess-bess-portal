@@ -62,15 +62,15 @@ function groupByDate(activities) {
   return Object.entries(groups);
 }
 
-export default function BDActivities() {
+export default function BDActivities({ product = 'bess' }) {
   const [showLog,     setShowLog]     = useState(false);
   const [search,      setSearch]      = useState('');
   const [typeFilter,  setTypeFilter]  = useState('');
 
   const { activities: activitiesRes, opps: oppsRes, loading, error, refetch } = useApiMulti({
     activities: bdApi.activities,
-    opps:       bdApi.opps,
-  });
+    opps:       () => bdApi.opps({ product_type: product }),
+  }, [product]);
 
   if (loading) return <Spinner />;
   if (error)   return <ErrorBanner message={error} />;

@@ -135,15 +135,15 @@ function AddContactModal({ accounts, onClose, onSaved }) {
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
-export default function BDContacts() {
+export default function BDContacts({ product = 'bess' }) {
   const [search,   setSearch]   = useState('');
   const [showAdd,  setShowAdd]  = useState(false);
   const [filterAcc, setFilterAcc] = useState('');
 
   const { contacts: contactsRes, accounts: accountsRes, loading, error, refetch } = useApiMulti({
     contacts: bdApi.contacts,
-    accounts: bdApi.accounts,
-  });
+    accounts: () => bdApi.accounts({ product_type: product }),
+  }, [product]);
 
   if (loading) return <Spinner />;
   if (error)   return <ErrorBanner message={error} />;

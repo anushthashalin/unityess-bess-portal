@@ -66,7 +66,7 @@ function OwnerAvatar({ name }) {
 }
 
 // Add Account Dialog
-function AddAccountDialog({ open, onOpenChange, users, onSaved }) {
+function AddAccountDialog({ open, onOpenChange, users, onSaved, product = 'bess' }) {
   const [form, setForm] = useState({
     company_name: '', industry: '', city: '', state: '',
     website: '', gstin: '', source: '', owner_id: '',
@@ -82,7 +82,7 @@ function AddAccountDialog({ open, onOpenChange, users, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      await bdApi.createAccount({ ...form, owner_id: form.owner_id || null });
+      await bdApi.createAccount({ ...form, owner_id: form.owner_id || null, product_type: product });
       setForm({ company_name: '', industry: '', city: '', state: '', website: '', gstin: '', source: '', owner_id: '' });
       onSaved();
       onOpenChange(false);
@@ -161,7 +161,7 @@ function AddAccountDialog({ open, onOpenChange, users, onSaved }) {
   );
 }
 
-export default function BDAccounts() {
+export default function BDAccounts({ product = 'bess' }) {
   const [search, setSearch]         = useState('');
   const [showAdd, setShowAdd]       = useState(false);
   const [sortField, setSortField]   = useState('company_name');
@@ -169,9 +169,9 @@ export default function BDAccounts() {
   const [industryFilter, setIndustryFilter] = useState('');
 
   const { accounts: accountsRes, users: usersRes, loading, error, refetch } = useApiMulti({
-    accounts: bdApi.accounts,
+    accounts: () => bdApi.accounts({ product_type: product }),
     users:    bdApi.users,
-  });
+  }, [product]);
 
   const accounts = accountsRes?.data ?? [];
   const users    = usersRes?.data    ?? [];
@@ -234,6 +234,7 @@ export default function BDAccounts() {
         onOpenChange={setShowAdd}
         users={users}
         onSaved={refetch}
+        product={product}
       />
 
       {/* Header */}

@@ -82,7 +82,7 @@ function SectionHeader({ title, count, color = '#2D2D2D' }) {
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
-export default function BDCommandCenter() {
+export default function BDCommandCenter({ product = 'bess' }) {
   const { data, loading, error, refetch } = useApi(bdApi.dashboard);
   const { data: autoStatus, refetch: refetchAuto } = useApi(bdApi.automationStatus);
   const [runningAuto, setRunningAuto] = useState(false);

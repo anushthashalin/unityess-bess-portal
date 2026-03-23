@@ -348,7 +348,7 @@ function ApprovalCard({ ap, isApprover, onReview }) {
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
-export default function BDApprovals() {
+export default function BDApprovals({ product = 'bess' }) {
   const { user } = useAuth();
   const [showRequest,  setShowRequest]  = useState(false);
   const [reviewing,    setReviewing]    = useState(null);
@@ -357,11 +357,11 @@ export default function BDApprovals() {
   const isApprover = user?.role === 'approver';
 
   const { pending: pendingRes, history: historyRes, opps: oppsRes, users: usersRes, loading, error, refetch } = useApiMulti({
-    pending:  () => bdApi.approvals(),
-    history:  () => bdApi.approvals({ status: 'all' }),
-    opps:     bdApi.opps,
+    pending:  () => bdApi.approvals({ product_type: product }),
+    history:  () => bdApi.approvals({ status: 'all', product_type: product }),
+    opps:     () => bdApi.opps({ product_type: product }),
     users:    bdApi.users,
-  });
+  }, [product]);
 
   if (loading) return <Spinner />;
   if (error)   return <ErrorBanner message={error} />;

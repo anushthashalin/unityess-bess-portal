@@ -4,43 +4,69 @@ import {
   LayoutDashboard, Users, MapPin, BarChart2, Zap,
   FileText, FolderOpen, Receipt, Battery, LogOut, ChevronRight,
   Briefcase, Target, Activity, TrendingUp, ClipboardList, Bell,
-  ShieldCheck, Upload, Search, Command, X,
+  ShieldCheck, Upload, Search, X, Sun,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { WavyBackground } from './ui/wavy-background.jsx';
 import { Avatar, AvatarFallback } from './ui/avatar.jsx';
 import { cn } from '../lib/utils.js';
 
-const BESS_NAV = [
-  { label: 'Dashboard',         to: '/dashboard',      icon: LayoutDashboard },
-  { label: 'Command Centre',    to: '/bess-command',   icon: Activity },
-  { label: 'BESS Configurator', to: '/bess-config',    icon: Zap },
-  { label: 'Proposals',         to: '/proposals',      icon: FileText },
-  { label: 'Projects',          to: '/projects',       icon: FolderOpen },
-  { label: 'Clients',           to: '/clients',        icon: Users },
-  { label: 'Sites',             to: '/sites',          icon: MapPin },
-  { label: 'Tariff Structures', to: '/tariffs',        icon: Receipt },
+// ── Nav definitions ──────────────────────────────────────────────────────────
+
+const BESS_CORE_NAV = [
+  { label: 'Dashboard',         to: '/bess/dashboard',     icon: LayoutDashboard },
+  { label: 'Command Centre',    to: '/bess/command',       icon: Activity },
+  { label: 'BESS Configurator', to: '/bess/config',        icon: Zap },
+  { label: 'Proposals',         to: '/bess/proposals',     icon: FileText },
+  { label: 'Projects',          to: '/bess/projects',      icon: FolderOpen },
+  { label: 'Clients',           to: '/bess/clients',       icon: Users },
+  { label: 'Sites',             to: '/bess/sites',         icon: MapPin },
+  { label: 'Tariff Structures', to: '/bess/tariffs',       icon: Receipt },
+  { label: 'Load Profiles',     to: '/bess/load-profiles', icon: BarChart2 },
 ];
 
-const BD_NAV = [
-  { label: 'Command Center',  to: '/bd',               icon: Target },
-  { label: 'Accounts',        to: '/bd/accounts',      icon: Briefcase },
-  { label: 'Contacts',        to: '/bd/contacts',      icon: Users },
-  { label: 'Opportunities',   to: '/bd/opportunities', icon: TrendingUp },
-  { label: 'Activity Log',    to: '/bd/activities',    icon: ClipboardList },
-  { label: 'Follow-up Queue', to: '/bd/follow-ups',    icon: Bell },
-  { label: 'Approvals',       to: '/bd/approvals',     icon: ShieldCheck },
-  { label: 'Proposals',       to: '/bd/proposals',     icon: FileText },
-  { label: 'Sheets Import',   to: '/bd/import',        icon: Upload },
+const BESS_BD_NAV = [
+  { label: 'Command Centre',  to: '/bess/bd',               icon: Target },
+  { label: 'Accounts',        to: '/bess/bd/accounts',      icon: Briefcase },
+  { label: 'Contacts',        to: '/bess/bd/contacts',      icon: Users },
+  { label: 'Opportunities',   to: '/bess/bd/opportunities', icon: TrendingUp },
+  { label: 'Activity Log',    to: '/bess/bd/activities',    icon: ClipboardList },
+  { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
+  { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
+  { label: 'Proposals',       to: '/bess/bd/proposals',     icon: FileText },
+  { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload },
 ];
 
-const ALL_PAGES = [...BESS_NAV, ...BD_NAV];
+const EPC_CORE_NAV = [
+  { label: 'Dashboard',       to: '/epc/dashboard',  icon: LayoutDashboard },
+  { label: 'Command Centre',  to: '/epc/command',    icon: Activity },
+  { label: 'Projects',        to: '/epc/projects',   icon: FolderOpen },
+  { label: 'Proposals',       to: '/epc/proposals',  icon: FileText },
+  { label: 'Clients',         to: '/epc/clients',    icon: Users },
+  { label: 'Sites',           to: '/epc/sites',      icon: MapPin },
+];
+
+const EPC_BD_NAV = [
+  { label: 'Command Centre',  to: '/epc/bd',               icon: Target },
+  { label: 'Accounts',        to: '/epc/bd/accounts',      icon: Briefcase },
+  { label: 'Contacts',        to: '/epc/bd/contacts',      icon: Users },
+  { label: 'Opportunities',   to: '/epc/bd/opportunities', icon: TrendingUp },
+  { label: 'Activity Log',    to: '/epc/bd/activities',    icon: ClipboardList },
+  { label: 'Follow-up Queue', to: '/epc/bd/follow-ups',    icon: Bell },
+  { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },
+  { label: 'Proposals',       to: '/epc/bd/proposals',     icon: FileText },
+  { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload },
+];
+
+const ALL_PAGES = [...BESS_CORE_NAV, ...BESS_BD_NAV, ...EPC_CORE_NAV, ...EPC_BD_NAV];
+
+// ── NavItem ───────────────────────────────────────────────────────────────────
 
 function NavItem({ label, to, icon: Icon }) {
   return (
     <NavLink
       to={to}
-      end={to === '/bd'}
+      end={to === '/bess/bd' || to === '/epc/bd'}
       className={({ isActive }) => cn(
         'group flex items-center gap-2.5 mx-2 px-3 py-2 rounded-lg text-[12.5px] font-medium transition-all duration-150',
         isActive
@@ -59,6 +85,8 @@ function NavItem({ label, to, icon: Icon }) {
   );
 }
 
+// ── Layout ────────────────────────────────────────────────────────────────────
+
 export default function Layout({ children }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -66,19 +94,24 @@ export default function Layout({ children }) {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
 
-  const pageTitle = ALL_PAGES.find(n => pathname === n.to || (n.to !== '/bd' && pathname.startsWith(n.to)))?.label ?? 'BESS Portal';
+  // Derive active product from URL; default to 'bess'
+  const activeProduct = pathname.startsWith('/epc') ? 'epc' : 'bess';
+
+  const coreNav = activeProduct === 'epc' ? EPC_CORE_NAV : BESS_CORE_NAV;
+  const bdNav   = activeProduct === 'epc' ? EPC_BD_NAV   : BESS_BD_NAV;
+
+  const pageTitle =
+    ALL_PAGES.find(n => pathname === n.to || pathname.startsWith(n.to + '/'))?.label
+    ?? (activeProduct === 'epc' ? 'Solar EPC' : 'BESS Portal');
 
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : 'KB';
 
-  // Cmd+K handler
+  // Cmd+K
   useEffect(() => {
     const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setCmdOpen(o => !o);
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(o => !o); }
       if (e.key === 'Escape') setCmdOpen(false);
     };
     window.addEventListener('keydown', handler);
@@ -87,7 +120,12 @@ export default function Layout({ children }) {
 
   const filteredPages = cmdQuery
     ? ALL_PAGES.filter(p => p.label.toLowerCase().includes(cmdQuery.toLowerCase()))
-    : ALL_PAGES;
+    : [...coreNav, ...bdNav];
+
+  function handleProductSwitch(product) {
+    if (product === activeProduct) return;
+    navigate(product === 'epc' ? '/epc/dashboard' : '/bess/dashboard');
+  }
 
   function handleLogout() {
     logout();
@@ -158,6 +196,7 @@ export default function Layout({ children }) {
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
         }}>
+
           {/* Logo */}
           <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/[0.06]">
             <div style={{
@@ -166,18 +205,53 @@ export default function Layout({ children }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               boxShadow: '0 2px 12px rgba(242,107,78,0.45)',
             }}>
-              <Battery size={17} color="white" />
+              {activeProduct === 'epc'
+                ? <Sun size={17} color="white" />
+                : <Battery size={17} color="white" />
+              }
             </div>
             <div>
-              <div className="text-[13px] font-black text-white tracking-tight">UnityESS</div>
-              <div className="text-[10px] text-white/35 font-medium mt-0.5">BESS Sizing Portal</div>
+              <div className="text-[13px] font-black text-white tracking-tight">
+                {activeProduct === 'epc' ? 'Solar EPC' : 'UnityESS'}
+              </div>
+              <div className="text-[10px] text-white/35 font-medium mt-0.5">
+                {activeProduct === 'epc' ? 'EPC Portal' : 'BESS Sizing Portal'}
+              </div>
             </div>
           </div>
 
-          {/* Search shortcut */}
+          {/* Product Switcher */}
+          <div className="mx-3 my-2.5 flex rounded-lg bg-white/[0.06] border border-white/[0.08] p-0.5 gap-0.5">
+            <button
+              onClick={() => handleProductSwitch('bess')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-bold transition-all duration-200',
+                activeProduct === 'bess'
+                  ? 'bg-[#F26B4E] text-white shadow-sm'
+                  : 'text-white/40 hover:text-white/70'
+              )}
+            >
+              <Battery size={11} />
+              BESS
+            </button>
+            <button
+              onClick={() => handleProductSwitch('epc')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-bold transition-all duration-200',
+                activeProduct === 'epc'
+                  ? 'bg-[#F26B4E] text-white shadow-sm'
+                  : 'text-white/40 hover:text-white/70'
+              )}
+            >
+              <Sun size={11} />
+              Solar EPC
+            </button>
+          </div>
+
+          {/* Quick nav */}
           <button
             onClick={() => setCmdOpen(true)}
-            className="mx-3 my-2.5 flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/40 hover:text-white/70 hover:bg-white/[0.07] transition-all text-[12px]"
+            className="mx-3 mb-1.5 flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/40 hover:text-white/70 hover:bg-white/[0.07] transition-all text-[12px]"
           >
             <Search size={12} />
             <span className="flex-1 text-left">Quick nav…</span>
@@ -186,21 +260,21 @@ export default function Layout({ children }) {
 
           {/* Nav */}
           <nav className="flex-1 overflow-y-auto pb-2">
-            <div className="px-4 pt-3 pb-1 text-[9px] text-white/25 font-bold tracking-[1.2px] uppercase">
-              BESS Sizing
+            <div className="px-4 pt-2 pb-1 text-[9px] text-white/25 font-bold tracking-[1.2px] uppercase">
+              {activeProduct === 'epc' ? 'Solar EPC' : 'BESS Sizing'}
             </div>
-            {BESS_NAV.map(item => <NavItem key={item.to} {...item} />)}
+            {coreNav.map(item => <NavItem key={item.to} {...item} />)}
 
             <div className="px-4 pt-4 pb-1 text-[9px] text-white/25 font-bold tracking-[1.2px] uppercase border-t border-white/[0.05] mt-2">
-              Solar EPC BD
+              Business Development
             </div>
-            {BD_NAV.map(item => <NavItem key={item.to} {...item} />)}
+            {bdNav.map(item => <NavItem key={item.to} {...item} />)}
           </nav>
 
           {/* Footer */}
           <div className="px-4 py-3 border-t border-white/[0.06]">
             <div className="text-[10px] font-bold text-white/35">Ornate Solar</div>
-            <div className="text-[10px] text-white/20 mt-0.5">v1.0.0 · {new Date().getFullYear()}</div>
+            <div className="text-[10px] text-white/20 mt-0.5">v1.1.0 · {new Date().getFullYear()}</div>
           </div>
         </aside>
 
@@ -214,7 +288,9 @@ export default function Layout({ children }) {
             WebkitBackdropFilter: 'blur(20px)',
           }} className="flex items-center justify-between px-6 h-[52px] shrink-0 shadow-sm">
             <div className="flex items-center gap-2 text-[13px]">
-              <span className="text-muted-foreground text-[12px]">Portal</span>
+              <span className="text-muted-foreground text-[12px]">
+                {activeProduct === 'epc' ? 'Solar EPC' : 'BESS Sizing'}
+              </span>
               <ChevronRight size={11} className="text-muted-foreground/60" />
               <span className="text-foreground font-bold text-[13px]">{pageTitle}</span>
             </div>

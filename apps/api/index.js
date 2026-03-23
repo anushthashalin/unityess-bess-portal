@@ -90,6 +90,12 @@ async function runMigrations() {
     `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS alternate_contact  TEXT`,
     `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS alternate_phone    TEXT`,
     `ALTER TABLE bess.clients ADD COLUMN IF NOT EXISTS website            TEXT`,
+    // product_type — tag records as 'bess' or 'epc' for dual-product portal
+    `ALTER TABLE bd.accounts      ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'bess'`,
+    `ALTER TABLE bd.opportunities ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'bess'`,
+    `ALTER TABLE bd.follow_ups    ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'bess'`,
+    `ALTER TABLE bd.approvals     ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'bess'`,
+    `ALTER TABLE bd.proposals     ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'bess'`,
     // Unique indexes for import upserts (CREATE INDEX IF NOT EXISTS is safe to repeat)
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_company_name
        ON bd.accounts (LOWER(company_name))`,
@@ -196,6 +202,9 @@ app.get('/api/bd/users', async (req, res) => {
 // Accounts
 app.get('/api/bd/accounts', async (req, res) => {
   try {
+    const { product_type } = req.query;
+    const params = [];
+    const wc = product_type ? `WHERE a.product_type=$${params.push(product_type)}` : '';
     const { rows } = await pool.query(
       `SELECT a.*, u.name AS owner_name,
          COUNT(DISTINCT o.id)::int                              AS opp_count,
@@ -207,24 +216,25 @@ app.get('/api/bd/accounts', async (req, res) => {
        LEFT JOIN bd.users u    ON u.id = a.owner_id
        LEFT JOIN bd.opportunities o ON o.account_id = a.id
        LEFT JOIN bd.contacts c ON c.account_id = a.id
+       ${wc}
        GROUP BY a.id, u.name
-       ORDER BY MAX(COALESCE(o.last_activity_at, a.updated_at)) DESC NULLS LAST`
+       ORDER BY MAX(COALESCE(o.last_activity_at, a.updated_at)) DESC NULLS LAST`, params
     );
     res.json({ data: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/bd/accounts', async (req, res) => {
-  const { company_name, industry, city, state, website, gstin, source, owner_id } = req.body;
+  const { company_name, industry, city, state, website, gstin, source, owner_id, product_type } = req.body;
   const { rows: [c] } = await pool.query(
     "SELECT COUNT(*) FROM bd.accounts WHERE account_id LIKE $1",
     [`ACC-${new Date().getFullYear()}%`]
   );
   const account_id = `ACC-${new Date().getFullYear()}-${String(parseInt(c.count) + 1).padStart(3,'0')}`;
   const { rows } = await pool.query(
-    `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [account_id, company_name, industry, city, state, website, gstin, source, owner_id]
+    `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id,product_type)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [account_id, company_name, industry, city, state, website, gstin, source, owner_id, product_type ?? 'bess']
   );
   res.status(201).json({ data: rows[0] });
 });
@@ -250,11 +260,12 @@ app.post('/api/bd/contacts', async (req, res) => {
 
 // Opportunities
 app.get('/api/bd/opportunities', async (req, res) => {
-  const { stage, stale } = req.query;
+  const { stage, stale, product_type } = req.query;
   const where = [];
   const params = [];
-  if (stage) { params.push(stage); where.push(`o.stage=$${params.length}`); }
+  if (stage)        { params.push(stage);        where.push(`o.stage=$${params.length}`); }
   if (stale === 'true') where.push('o.stale=true');
+  if (product_type) { params.push(product_type); where.push(`o.product_type=$${params.length}`); }
   const wc = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
   const { rows } = await pool.query(
@@ -272,7 +283,7 @@ app.get('/api/bd/opportunities', async (req, res) => {
 });
 
 app.post('/api/bd/opportunities', async (req, res) => {
-  const { account_id, contact_id, owner_id, title, scope_type, estimated_value } = req.body;
+  const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type } = req.body;
   const { rows: [c] } = await pool.query(
     "SELECT COUNT(*) FROM bd.opportunities WHERE opp_id LIKE $1",
     [`OPP-${new Date().getFullYear()}%`]
@@ -280,9 +291,9 @@ app.post('/api/bd/opportunities', async (req, res) => {
   const opp_id = `OPP-${new Date().getFullYear()}-${String(parseInt(c.count)+1).padStart(3,'0')}`;
   const next_d = new Date(); next_d.setDate(next_d.getDate()+3);
   const { rows } = await pool.query(
-    `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d]
+    `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date,product_type)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d, product_type ?? 'bess']
   );
   res.status(201).json({ data: rows[0] });
 });
@@ -360,11 +371,12 @@ app.post('/api/bd/activities', async (req, res) => {
 // Follow-ups
 app.get('/api/bd/follow-ups', async (req, res) => {
   try {
-    const { status, opp_id } = req.query;
+    const { status, opp_id, product_type } = req.query;
     const where = [];
     const params = [];
 
-    if (opp_id) { params.push(opp_id); where.push(`f.opp_id=$${params.length}`); }
+    if (opp_id)       { params.push(opp_id);       where.push(`f.opp_id=$${params.length}`); }
+    if (product_type) { params.push(product_type); where.push(`o.product_type=$${params.length}`); }
 
     if (status === 'all') {
       // no status filter
@@ -436,13 +448,16 @@ const APPROVAL_WITH_JOINS = `
 
 app.get('/api/bd/approvals', async (req, res) => {
   try {
-    const { status } = req.query;
-    const where = status === 'all' ? '' :
-                  status ? `WHERE ap.status=$1` :
-                  `WHERE ap.status='pending'`;
-    const params = status && status !== 'all' ? [status] : [];
+    const { status, product_type } = req.query;
+    const where = [];
+    const params = [];
+    if (product_type) { params.push(product_type); where.push(`o.product_type=$${params.length}`); }
+    if (status === 'all') { /* no filter */ }
+    else if (status)    { params.push(status); where.push(`ap.status=$${params.length}`); }
+    else                { where.push(`ap.status='pending'`); }
+    const wc = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const { rows } = await pool.query(
-      `${APPROVAL_WITH_JOINS} ${where} ORDER BY ap.requested_at DESC`, params
+      `${APPROVAL_WITH_JOINS} ${wc} ORDER BY ap.requested_at DESC`, params
     );
     res.json({ data: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }

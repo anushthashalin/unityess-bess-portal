@@ -62,7 +62,7 @@ export const bessApi = {
 export const bdApi = {
   dashboard:      () => api.get('/api/bd/dashboard'),
   users:          () => api.get('/api/bd/users'),
-  accounts:       () => api.get('/api/bd/accounts'),
+  accounts:       (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bd/accounts${q ? '?' + q : ''}`); },
   createAccount:  (body) => api.post('/api/bd/accounts', body),
   contacts:       (account_id) => api.get(account_id ? `/api/bd/contacts?account_id=${account_id}` : '/api/bd/contacts'),
   createContact:  (body) => api.post('/api/bd/contacts', body),

@@ -238,17 +238,17 @@ function Section({ title, color, items, onDone, onSnooze, onLog, emptyMsg }) {
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
-export default function BDFollowUps() {
+export default function BDFollowUps({ product = 'bess' }) {
   const [showAdd, setShowAdd]       = useState(false);
   const [logOpp,  setLogOpp]        = useState(null); // opp object for QuickLogModal
   const [showDone, setShowDone]     = useState(false);
 
   const { followUps: fuRes, done: doneRes, opps: oppsRes, users: usersRes, loading, error, refetch } = useApiMulti({
-    followUps: () => bdApi.followUps(),
-    done:      () => bdApi.followUps({ status: 'done' }),
-    opps:      bdApi.opps,
+    followUps: () => bdApi.followUps({ product_type: product }),
+    done:      () => bdApi.followUps({ status: 'done', product_type: product }),
+    opps:      () => bdApi.opps({ product_type: product }),
     users:     bdApi.users,
-  });
+  }, [product]);
 
   const handleDone = useCallback(async (id) => {
     await bdApi.patchFollowUp(id, { status: 'done' });

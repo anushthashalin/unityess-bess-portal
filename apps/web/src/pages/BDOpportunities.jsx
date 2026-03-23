@@ -115,7 +115,7 @@ function OppCard({ opp, onStageChange }) {
 }
 
 // ── Add Opportunity Modal ────────────────────────────────────────────────────
-function AddOppModal({ accounts, contacts, users, onClose, onSaved }) {
+function AddOppModal({ accounts, contacts, users, onClose, onSaved, product = 'bess' }) {
   const [form, setForm] = useState({
     account_id: '', contact_id: '', owner_id: '',
     title: '', scope_type: '', estimated_value: '',
@@ -139,6 +139,7 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved }) {
         contact_id:      form.contact_id ? parseInt(form.contact_id) : null,
         owner_id:        form.owner_id   ? parseInt(form.owner_id)   : null,
         estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
+        product_type:    product,
       });
       onSaved();
     } catch (err) {
@@ -253,18 +254,18 @@ function AddOppModal({ accounts, contacts, users, onClose, onSaved }) {
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
-export default function BDOpportunities() {
+export default function BDOpportunities({ product = 'bess' }) {
   const [view,    setView]    = useState('kanban'); // 'kanban' | 'table'
   const [search,  setSearch]  = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [stageFilter, setStageFilter] = useState('');
 
   const { opps: oppsRes, accounts: accountsRes, contacts: contactsRes, users: usersRes, loading, error, refetch } = useApiMulti({
-    opps:     bdApi.opps,
-    accounts: bdApi.accounts,
+    opps:     () => bdApi.opps({ product_type: product }),
+    accounts: () => bdApi.accounts({ product_type: product }),
     contacts: bdApi.contacts,
     users:    bdApi.users,
-  });
+  }, [product]);
 
   const handleStageChange = useCallback(async (oppId, newStage) => {
     try {
@@ -305,6 +306,7 @@ export default function BDOpportunities() {
           users={users}
           onClose={() => setShowAdd(false)}
           onSaved={() => { setShowAdd(false); refetch(); }}
+          product={product}
         />
       )}
 
