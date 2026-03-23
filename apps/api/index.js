@@ -312,7 +312,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Users
-app.get('/api/bd/users', requireAuth, requireRole('admin'), async (req, res) => {
+app.get('/api/bd/users', async (req, res) => {
   const { rows } = await pool.query('SELECT id, name, email, role, is_active, created_at FROM bd.users WHERE is_active = true ORDER BY name');
   res.json({ data: rows });
 });
