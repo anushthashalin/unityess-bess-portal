@@ -44,14 +44,14 @@ export default function Modal({ open, onClose, title, children, width = 520 }) {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '18px 22px', borderBottom: '1px solid #F3F4F6',
-          background: '#FAFAFA',
+          background: 'hsl(var(--muted))',
         }}>
-          <span style={{ fontSize: 15, fontWeight: 800, color: '#2D2D2D' }}>{title}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: 'hsl(var(--foreground))' }}>{title}</span>
           <button
             onClick={onClose}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              color: '#9CA3AF', display: 'flex', alignItems: 'center',
+              color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center',
               padding: 4, borderRadius: 6,
               transition: 'color 0.15s, background 0.15s',
             }}
@@ -76,11 +76,11 @@ export default function Modal({ open, onClose, title, children, width = 520 }) {
 export function Field({ label, required, children, hint }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}{required && <span style={{ color: '#F26B4E', marginLeft: 3 }}>*</span>}
       </label>
       {children}
-      {hint && <span style={{ fontSize: 11, color: '#9CA3AF' }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>{hint}</span>}
     </div>
   );
 }
@@ -90,9 +90,9 @@ export function Input({ ...props }) {
     <input
       {...props}
       style={{
-        border: '1px solid #E5E7EB', borderRadius: 8,
+        border: '1px solid hsl(var(--border))', borderRadius: 8,
         padding: '9px 12px', fontSize: 13, fontFamily: 'Chivo, sans-serif',
-        color: '#2D2D2D', outline: 'none', width: '100%',
+        color: 'hsl(var(--foreground))', outline: 'none', width: '100%',
         background: 'white', boxSizing: 'border-box',
         transition: 'border-color 0.15s, box-shadow 0.15s',
         ...props.style,
@@ -108,9 +108,9 @@ export function Select({ children, ...props }) {
     <select
       {...props}
       style={{
-        border: '1px solid #E5E7EB', borderRadius: 8,
+        border: '1px solid hsl(var(--border))', borderRadius: 8,
         padding: '9px 12px', fontSize: 13, fontFamily: 'Chivo, sans-serif',
-        color: '#2D2D2D', outline: 'none', width: '100%',
+        color: 'hsl(var(--foreground))', outline: 'none', width: '100%',
         background: 'white', boxSizing: 'border-box', cursor: 'pointer',
         transition: 'border-color 0.15s, box-shadow 0.15s',
         ...props.style,
@@ -133,7 +133,7 @@ export function FormGrid({ cols = 2, children }) {
 
 export function SubmitRow({ onClose, loading, label = 'Save' }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid #F3F4F6', marginTop: 8 }}>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid hsl(var(--border))', marginTop: 8 }}>
       <button
         type="button" onClick={onClose}
         className="btn-secondary" style={{ minWidth: 88 }}

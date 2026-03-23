@@ -40,7 +40,7 @@ const APPROVAL_LABELS = {
 function KpiCard({ label, value, sub, color = '#F26B4E', icon: Icon }) {
   return (
     <div style={{
-      background: '#fff', borderRadius: 10, padding: '18px 20px',
+      background: 'hsl(var(--card))', borderRadius: 10, padding: '18px 20px',
       borderLeft: `4px solid ${color}`,
       boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       display: 'flex', alignItems: 'center', gap: 14,
@@ -55,8 +55,8 @@ function KpiCard({ label, value, sub, color = '#F26B4E', icon: Icon }) {
         </div>
       )}
       <div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#2D2D2D', lineHeight: 1.1 }}>{value}</div>
-        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{label}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: 'hsl(var(--foreground))', lineHeight: 1.1 }}>{value}</div>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{label}</div>
         {sub && <div style={{ fontSize: 11, color: color, marginTop: 2, fontWeight: 600 }}>{sub}</div>}
       </div>
     </div>
@@ -117,7 +117,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
   const totalOpenDeals     = pipeline.reduce((s, r) => s + (r.count || 0), 0);
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
 
       {/* ── Hero banner with Spline 3D ── */}
       <div className="relative w-full h-[320px] rounded-2xl overflow-hidden bg-[#0d0d0d] mb-7 border border-white/10">
@@ -221,7 +221,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
 
       {/* ── Pipeline funnel ── */}
       <div style={{
-        background: '#fff', borderRadius: 10, padding: '20px 24px',
+        background: 'hsl(var(--card))', borderRadius: 10, padding: '20px 24px',
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 24,
       }}>
         <SectionHeader title="Pipeline by Stage" />
@@ -237,9 +237,9 @@ export default function BDCommandCenter({ product = 'bess' }) {
                   borderRadius: 10, padding: '14px 8px',
                 }}>
                   <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>{count}</div>
-                  <div style={{ fontSize: 10, color: '#888', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
+                  <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
                 </div>
-                <div style={{ fontSize: 10, color: '#666', marginTop: 6, fontWeight: 600, lineHeight: 1.3 }}>
+                <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginTop: 6, fontWeight: 600, lineHeight: 1.3 }}>
                   {s.label}
                 </div>
               </div>
@@ -250,7 +250,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
 
       {/* ── Automation status panel ── */}
       <div style={{
-        background: '#fff', borderRadius: 10, padding: '16px 24px',
+        background: 'hsl(var(--card))', borderRadius: 10, padding: '16px 24px',
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 24,
         display: 'flex', alignItems: 'flex-start', gap: 20,
         borderLeft: '4px solid #a78bfa',
@@ -267,7 +267,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
         {/* Body */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#2D2D2D', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--foreground))', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
               Automation Engine
             </span>
             <span style={{
@@ -279,14 +279,14 @@ export default function BDCommandCenter({ product = 'bess' }) {
             </span>
           </div>
 
-          <div style={{ fontSize: 12, color: '#888' }}>
+          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
             {autoStatus?.last_run
-              ? <>Last run: <strong style={{ color: '#2D2D2D' }}>{new Date(autoStatus.last_run).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong></>
+              ? <>Last run: <strong style={{ color: 'hsl(var(--foreground))' }}>{new Date(autoStatus.last_run).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong></>
               : 'Not yet run this session'
             }
             {autoStatus?.next_run && (
               <span style={{ marginLeft: 12 }}>
-                · Next: <strong style={{ color: '#2D2D2D' }}>{new Date(autoStatus.next_run).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong>
+                · Next: <strong style={{ color: 'hsl(var(--foreground))' }}>{new Date(autoStatus.next_run).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong>
               </span>
             )}
           </div>
@@ -295,7 +295,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
           {autoLog && autoLog.length > 0 && (
             <div style={{
               marginTop: 10, background: '#f8f8f8', borderRadius: 6,
-              padding: '8px 12px', fontSize: 11, color: '#666',
+              padding: '8px 12px', fontSize: 11, color: 'hsl(var(--muted-foreground))',
               fontFamily: 'monospace', lineHeight: 1.7,
               maxHeight: 100, overflowY: 'auto',
             }}>
@@ -331,7 +331,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
 
         {/* Follow-ups due */}
-        <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'hsl(var(--card))', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <SectionHeader title="Follow-ups Due" count={dueFollowUps.length} color="#ef4444" />
           {dueFollowUps.length === 0
             ? <Empty message="No overdue follow-ups" />
@@ -347,9 +347,9 @@ export default function BDCommandCenter({ product = 'bess' }) {
                       display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
                     }}>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2D2D' }}>{f.company_name}</div>
-                        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{f.opp_title}</div>
-                        {f.notes && <div style={{ fontSize: 11, color: '#666', marginTop: 3, fontStyle: 'italic' }}>"{f.notes}"</div>}
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{f.company_name}</div>
+                        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{f.opp_title}</div>
+                        {f.notes && <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 3, fontStyle: 'italic' }}>"{f.notes}"</div>}
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         <div style={{
@@ -377,7 +377,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
         </div>
 
         {/* Hot deals */}
-        <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'hsl(var(--card))', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <SectionHeader title="Hot Deals" count={hotDeals.length} color="#F26B4E" />
           {hotDeals.length === 0
             ? <Empty message="No deals in negotiation or technical closure" />
@@ -392,7 +392,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
                   }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{d.company_name}</div>
-                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{d.title}</div>
+                      <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{d.title}</div>
                       {d.contact_name && <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>Contact: {d.contact_name}</div>}
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
@@ -423,7 +423,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
         {/* Pending approvals */}
-        <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'hsl(var(--card))', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <SectionHeader title="Pending Approvals" count={pendingApprovals.length} color="#f59e0b" />
           {pendingApprovals.length === 0
             ? <Empty message="No approvals pending" />
@@ -437,7 +437,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
                   }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{a.company_name}</div>
-                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{APPROVAL_LABELS[a.approval_type] ?? a.approval_type}</div>
+                      <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{APPROVAL_LABELS[a.approval_type] ?? a.approval_type}</div>
                       {a.notes && <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>"{a.notes}"</div>}
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
@@ -458,7 +458,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
         </div>
 
         {/* Recent activity */}
-        <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'hsl(var(--card))', borderRadius: 10, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <SectionHeader title="Recent Activity" color="#60a5fa" />
           {recentActivities.length === 0
             ? <Empty message="No activities logged yet" />
@@ -474,7 +474,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
                       {ACTIVITY_ICONS[a.type] ?? '📋'}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2D2D' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))' }}>
                         {a.company_name}
                         <span style={{ fontWeight: 400, color: '#aaa', marginLeft: 6 }}>
                           via {a.type?.replace('_', ' ')}
@@ -482,7 +482,7 @@ export default function BDCommandCenter({ product = 'bess' }) {
                       </div>
                       {a.summary && (
                         <div style={{
-                          fontSize: 11, color: '#666', marginTop: 2,
+                          fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2,
                           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         }}>
                           {a.summary}

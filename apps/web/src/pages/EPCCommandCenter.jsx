@@ -35,9 +35,9 @@ function KpiCard({ label, value, sub, color = '#F26B4E', icon: Icon }) {
         <Icon size={16} style={{ color }} />
       </div>
       <div>
-        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888', marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 24, fontWeight: 900, color: '#1a1a1a', lineHeight: 1.1 }}>{value}</div>
-        {sub && <div style={{ fontSize: 11, color: '#999', marginTop: 3 }}>{sub}</div>}
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: 'hsl(var(--foreground))', lineHeight: 1.1 }}>{value}</div>
+        {sub && <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 3 }}>{sub}</div>}
       </div>
     </div>
   );
@@ -57,8 +57,8 @@ function StageBubbles({ opps }) {
             borderRadius: 12, padding: '14px 10px', textAlign: 'center',
           }}>
             <div style={{ fontSize: 26, fontWeight: 900, color: count > 0 ? s.color : '#ccc' }}>{count}</div>
-            <div style={{ fontSize: 10, color: '#666', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
-            <div style={{ fontSize: 9, color: '#999', marginTop: 3, lineHeight: 1.3 }}>{s.label}</div>
+            <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginTop: 2, fontWeight: 600 }}>{inr(val)}</div>
+            <div style={{ fontSize: 9, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.3 }}>{s.label}</div>
           </div>
         );
       })}
@@ -88,15 +88,15 @@ function DealRow({ opp, navigate }) {
         {(opp.company_name ?? opp.account_name ?? '?')[0].toUpperCase()}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {opp.company_name ?? opp.account_name ?? '—'}
         </div>
-        <div style={{ fontSize: 11, color: '#888', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {opp.title}
         </div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{inr(opp.estimated_value)}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{inr(opp.estimated_value)}</div>
         <div style={{ fontSize: 10, color: stage?.color ?? '#888', fontWeight: 600 }}>{stage?.label ?? opp.stage}</div>
       </div>
       {days !== null && (
@@ -131,10 +131,10 @@ function FuRow({ fu, navigate }) {
         <Clock size={13} style={{ color: overdue ? '#ef4444' : '#f97316' }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {fu.company_name ?? '—'}
         </div>
-        <div style={{ fontSize: 11, color: '#888' }}>{fu.opp_title ?? '—'}</div>
+        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>{fu.opp_title ?? '—'}</div>
       </div>
       <div style={{ fontSize: 11, fontWeight: 700, color: overdue ? '#ef4444' : '#6b7280', flexShrink: 0 }}>
         {due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
@@ -176,7 +176,7 @@ export default function EPCCommandCenter({ product = 'epc' }) {
   const staleDeals       = opps.filter(o => o.stale);
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
 
       {/* ── Hero banner with Spline 3D robot ── */}
       <div className="relative w-full h-[320px] rounded-2xl overflow-hidden bg-[#0d0d0d] mb-7 border border-white/10">
@@ -256,7 +256,7 @@ export default function EPCCommandCenter({ product = 'epc' }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 800 }}>Pipeline by Stage</div>
           <button onClick={refetch} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-            <RefreshCw size={13} style={{ color: '#999' }} />
+            <RefreshCw size={13} style={{ color: 'hsl(var(--muted-foreground))' }} />
           </button>
         </div>
         <StageBubbles opps={opps} />

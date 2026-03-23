@@ -78,7 +78,7 @@ function ResultCard({ label, value, sub, color = '#F26B4E' }) {
       background: 'white', borderRadius: 12, padding: '14px 16px',
       border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
     }}>
-      <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#999', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'hsl(var(--muted-foreground))', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1.1 }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: '#aaa', marginTop: 3 }}>{sub}</div>}
     </div>
@@ -98,8 +98,8 @@ function CompRow({ label, value, perWp, highlight }) {
     }}>
       <span style={{ fontSize: 12, fontWeight: highlight ? 700 : 500, color: highlight ? '#F26B4E' : '#555' }}>{label}</span>
       <div style={{ textAlign: 'right' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{fmtINR(value)}</span>
-        {perWp && <span style={{ fontSize: 10, color: '#999', marginLeft: 6 }}>₹{fmt(perWp, 1)}/Wp</span>}
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{fmtINR(value)}</span>
+        {perWp && <span style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginLeft: 6 }}>₹{fmt(perWp, 1)}/Wp</span>}
       </div>
     </div>
   );
@@ -300,7 +300,7 @@ export default function EPCConfig() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ fontFamily: "'Chivo', sans-serif", color: '#2D2D2D' }}>
+    <div style={{ fontFamily: "'Chivo', sans-serif", color: 'hsl(var(--foreground))' }}>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">

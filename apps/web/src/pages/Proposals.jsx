@@ -9,11 +9,11 @@ import Modal, { Field, Input, FormGrid, SubmitRow } from '../components/Modal.js
 const PROPOSAL_STATUSES = ['draft','sent','negotiation','won','lost'];
 
 const STATUS_COLORS = {
-  draft:       { bg:'#F3F4F6', color:'#6B7280' },
-  sent:        { bg:'#DBEAFE', color:'#1D4ED8' },
-  negotiation: { bg:'#FEF3C7', color:'#B45309' },
-  won:         { bg:'#DCFCE7', color:'#16A34A' },
-  lost:        { bg:'#FEE2E2', color:'#DC2626' },
+  draft:       { bg:'rgba(107,114,128,0.14)', color:'hsl(var(--muted-foreground))' },
+  sent:        { bg:'rgba(59,130,246,0.15)',  color:'#60A5FA' },
+  negotiation: { bg:'rgba(217,119,6,0.15)',   color:'#F59E0B' },
+  won:         { bg:'rgba(22,163,74,0.15)',   color:'#4ADE80' },
+  lost:        { bg:'rgba(220,38,38,0.15)',   color:'#F87171' },
 };
 
 const EMPTY = {
@@ -25,7 +25,7 @@ const EMPTY = {
 function generateProposalHTML(p) {
   const fmt = (n) => n ? `\u20b9${Number(n).toLocaleString('en-IN')}` : '\u2014';
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '\u2014';
-  const sc = STATUS_COLORS[p.status] ?? { bg:'#F3F4F6', color:'#6B7280' };
+  const sc = STATUS_COLORS[p.status] ?? { bg:'#F3F4F6', color:'hsl(var(--muted-foreground))' };
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -176,8 +176,8 @@ export default function Proposals() {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:900, color:'#2D2D2D', margin:0 }}>Proposals</h1>
-          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>{rows.length} proposals · Ex-GST</p>
+          <h1 style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))', margin:0 }}>Proposals</h1>
+          <p style={{ fontSize:13, color:'hsl(var(--muted-foreground))', margin:'4px 0 0' }}>{rows.length} proposals · Ex-GST</p>
         </div>
         <button className="btn-primary" onClick={() => { setForm(EMPTY); setSaveErr(''); setOpen(true); }}>
           <Plus size={14} style={{ marginRight:6, display:'inline' }} />New Proposal
@@ -193,9 +193,9 @@ export default function Proposals() {
           { label:'Average Payback',        value: avgPayback === '—' ? '—' : `${avgPayback} yrs`, sub:'Simple payback' },
         ].map(({ label, value, sub }) => (
           <div key={label} className="kpi-card">
-            <div style={{ fontSize:11, color:'#9CA3AF', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>{label}</div>
-            <div style={{ fontSize:22, fontWeight:900, color:'#2D2D2D' }}>{value}</div>
-            <div style={{ fontSize:11, color:'#9CA3AF', marginTop:2 }}>{sub}</div>
+            <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>{label}</div>
+            <div style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))' }}>{value}</div>
+            <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', marginTop:2 }}>{sub}</div>
           </div>
         ))}
       </div>
@@ -203,7 +203,7 @@ export default function Proposals() {
       {/* Table */}
       <div className="section-card">
         {rows.length === 0
-          ? <div style={{ padding:48, textAlign:'center', color:'#9CA3AF', fontSize:14 }}>No proposals yet.</div>
+          ? <div style={{ padding:48, textAlign:'center', color:'hsl(var(--muted-foreground))', fontSize:14 }}>No proposals yet.</div>
           : <div style={{ overflowX:'auto' }}>
               <table className="bess-table">
                 <thead>
@@ -215,7 +215,7 @@ export default function Proposals() {
                 </thead>
                 <tbody>
                   {rows.map(p => {
-                    const sc = STATUS_COLORS[p.status] ?? { bg:'#F3F4F6', color:'#6B7280' };
+                    const sc = STATUS_COLORS[p.status] ?? { bg:'#F3F4F6', color:'hsl(var(--muted-foreground))' };
                     const isPatching = patchingId === p.id;
                     return (
                       <tr key={p.id}>
@@ -226,14 +226,14 @@ export default function Proposals() {
                           </div>
                         </td>
                         <td style={{ fontWeight:700 }}>{p.company_name}</td>
-                        <td style={{ color:'#6B7280' }}>{date(p.proposal_date ?? p.created_at)}</td>
+                        <td style={{ color:'hsl(var(--muted-foreground))' }}>{date(p.proposal_date ?? p.created_at)}</td>
                         <td style={{ fontWeight:800 }}>{inr(p.capex_ex_gst)}</td>
                         <td style={{ color:'#16A34A', fontWeight:700 }}>{inr(p.annual_savings)}{p.annual_savings ? '/yr' : ''}</td>
                         <td>{p.payback_years ? `${p.payback_years} yrs` : '—'}</td>
                         <td style={{ fontWeight:800, color:'#F26B4E' }}>{p.irr_percent ? `${p.irr_percent}%` : '—'}</td>
                         <td>
                           {isPatching
-                            ? <span style={{ fontSize:12, color:'#9CA3AF' }}>Saving…</span>
+                            ? <span style={{ fontSize:12, color:'hsl(var(--muted-foreground))' }}>Saving…</span>
                             : <select
                                 value={p.status}
                                 onChange={e => handleStatusChange(p.id, e.target.value)}
@@ -318,8 +318,8 @@ export default function Proposals() {
             </Field>
           </FormGrid>
 
-          <div style={{ borderTop:'1px solid #F3F4F6', paddingTop:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Financial Parameters</div>
+          <div style={{ borderTop:'1px solid hsl(var(--border))', paddingTop:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Financial Parameters</div>
             <FormGrid cols={2}>
               <Field label="CAPEX Ex-GST (₹)" required>
                 <Input type="number" min="0" step="1000" placeholder="e.g. 85,00,000"
@@ -361,7 +361,7 @@ export default function Proposals() {
               rows={3}
               style={{
                 border:'1px solid #E5E7EB', borderRadius:8, padding:'9px 12px',
-                fontSize:13, fontFamily:'Chivo, sans-serif', color:'#2D2D2D',
+                fontSize:13, fontFamily:'Chivo, sans-serif', color:'hsl(var(--foreground))',
                 outline:'none', width:'100%', resize:'vertical', boxSizing:'border-box',
                 transition:'border-color 0.15s, box-shadow 0.15s',
               }}
