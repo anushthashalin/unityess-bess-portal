@@ -63,7 +63,7 @@ function KpiCard({ label, value, sub, color = '#F26B4E', icon: Icon }) {
   );
 }
 
-function SectionHeader({ title, count, color = '#2D2D2D' }) {
+function SectionHeader({ title, count, color = 'hsl(var(--foreground))' }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       <span style={{ fontSize: 13, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
@@ -399,14 +399,14 @@ export default function BDCommandCenter({ product = 'bess' }) {
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#F26B4E' }}>{inr(d.estimated_value)}</div>
                       <div style={{
                         fontSize: 10, marginTop: 3, fontWeight: 600,
-                        color: (d.days_silent ?? 0) > 7 ? '#ef4444' : '#888',
+                        color: (d.days_silent ?? 0) > 7 ? '#ef4444' : 'hsl(var(--muted-foreground))',
                       }}>
                         {d.days_silent != null ? `${d.days_silent}d silent` : '—'}
                       </div>
                       <div style={{
                         fontSize: 9, marginTop: 3, textTransform: 'uppercase',
                         letterSpacing: '0.4px', fontWeight: 700,
-                        color: STAGES.find(s => s.key === d.stage)?.color ?? '#888',
+                        color: STAGES.find(s => s.key === d.stage)?.color ?? 'hsl(var(--muted-foreground))',
                       }}>
                         {STAGES.find(s => s.key === d.stage)?.label ?? d.stage}
                       </div>

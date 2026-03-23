@@ -170,7 +170,7 @@ export default function Projects() {
                           <div style={{
                             fontSize:10, marginTop:5, textAlign:'center',
                             fontWeight: current ? 700 : 400,
-                            color: current ? '#F26B4E' : done ? '#2D2D2D' : '#9CA3AF',
+                            color: current ? '#F26B4E' : done ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
                             maxWidth:64, lineHeight:1.3,
                           }}>
                             {stage.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}

@@ -243,7 +243,7 @@ function CreateProposalModal({ opps, onClose, onSave }) {
                 ].map(([label, val]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</span>
-                    <span style={{ fontWeight: 600, color: val < 0 ? '#ef4444' : '#2D2D2D' }}>
+                    <span style={{ fontWeight: 600, color: val < 0 ? '#ef4444' : 'hsl(var(--foreground))' }}>
                       {val < 0 ? `(${inr(-val)})` : inr(val)}
                     </span>
                   </div>
@@ -810,8 +810,8 @@ export default function BDProposals({ product = 'bess' }) {
               onClick={() => setFilterStatus(s)}
               style={{
                 padding: '7px 14px', border: '1px solid hsl(var(--border))', borderRadius: 7,
-                background: filterStatus === s ? '#2D2D2D' : '#fff',
-                color: filterStatus === s ? '#fff' : '#666',
+                background: filterStatus === s ? 'hsl(var(--foreground))' : 'hsl(var(--card))',
+                color: filterStatus === s ? 'hsl(var(--card))' : 'hsl(var(--muted-foreground))',
                 cursor: 'pointer', fontSize: 11, fontWeight: 700,
                 textTransform: 'capitalize', fontFamily: "'Chivo', sans-serif",
               }}

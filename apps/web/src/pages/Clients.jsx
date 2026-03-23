@@ -250,7 +250,7 @@ export default function Clients() {
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
           <div style={{ display:'flex', background:'hsl(var(--muted))', borderRadius:8, padding:3 }}>
             {['grid','map'].map(v => (
-              <button key={v} onClick={() => setView(v)} style={{ padding:'5px 10px', borderRadius:6, border:'none', cursor:'pointer', background: view===v ? 'white' : 'transparent', color: view===v ? '#2D2D2D' : '#9CA3AF', fontWeight:700, fontSize:12, boxShadow: view===v ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+              <button key={v} onClick={() => setView(v)} style={{ padding:'5px 10px', borderRadius:6, border:'none', cursor:'pointer', background: view===v ? 'hsl(var(--card))' : 'transparent', color: view===v ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight:700, fontSize:12, boxShadow: view===v ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
                 {v === 'grid' ? '⊞ Grid' : '⊕ Map'}
               </button>
             ))}

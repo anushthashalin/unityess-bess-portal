@@ -326,8 +326,8 @@ export default function BDOpportunities({ product = 'bess' }) {
               <button key={v} onClick={() => setView(v)}
                 style={{
                   padding: '7px 12px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                  background: view === v ? '#F26B4E' : '#fff',
-                  color: view === v ? '#fff' : '#888',
+                  background: view === v ? '#F26B4E' : 'hsl(var(--card))',
+                  color: view === v ? '#fff' : 'hsl(var(--muted-foreground))',
                   display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600,
                 }}>
                 <Icon size={13} />

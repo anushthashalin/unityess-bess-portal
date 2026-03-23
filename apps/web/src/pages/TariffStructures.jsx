@@ -159,10 +159,10 @@ export default function TariffStructures() {
                   ].map(([k, v], i, arr) => (
                     <div key={k} style={{
                       display: 'flex', justifyContent: 'space-between', padding: '7px 0',
-                      borderBottom: i < arr.length - 1 ? '1px solid #F3F4F6' : 'none',
+                      borderBottom: i < arr.length - 1 ? '1px solid hsl(var(--border))' : 'none',
                     }}>
                       <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{k}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: k === 'ToD Spread' ? '#F26B4E' : '#2D2D2D' }}>{v}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: k === 'ToD Spread' ? '#F26B4E' : 'hsl(var(--foreground))' }}>{v}</span>
                     </div>
                   ))}
                 </div>
@@ -217,10 +217,10 @@ export default function TariffStructures() {
 
         {/* Regulatory References panel */}
         <div style={{
-          background: 'rgba(255,255,255,0.95)',
+          background: 'hsl(var(--card))',
           borderRadius: 16,
           overflow: 'hidden',
-          border: '1px solid rgba(0,0,0,0.07)',
+          border: '1px solid hsl(var(--border))',
           boxShadow: '0 2px 16px rgba(0,0,0,0.07)',
         }}>
           {/* Panel header */}
@@ -249,7 +249,7 @@ export default function TariffStructures() {
                   style={{
                     padding: '10px 14px',
                     display: 'flex', alignItems: 'flex-start', gap: 10,
-                    borderBottom: i < REFS.length - 1 ? '1px solid #F5F5F5' : 'none',
+                    borderBottom: i < REFS.length - 1 ? '1px solid hsl(var(--border))' : 'none',
                     transition: 'background 0.12s',
                     cursor: 'pointer',
                   }}
@@ -286,8 +286,8 @@ export default function TariffStructures() {
           <div style={{
             padding: '10px 14px',
             background: 'hsl(var(--muted))',
-            borderTop: '1px solid #F0F0F0',
-            fontSize: 10, color: '#BBBBBB', lineHeight: 1.5,
+            borderTop: '1px solid hsl(var(--border))',
+            fontSize: 10, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5,
             fontStyle: 'italic',
           }}>
             Always verify tariff data against the latest DISCOM order before finalising proposals.

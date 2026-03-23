@@ -236,7 +236,7 @@ function PreviewTable({ rows, mapping, importType, maxRows = 50 }) {
                   return (
                     <td key={col} style={{
                       padding: '7px 12px',
-                      color: missing ? '#ef4444' : '#2D2D2D',
+                      color: missing ? '#ef4444' : 'hsl(var(--foreground))',
                       fontWeight: missing ? 700 : 400,
                       maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
@@ -427,7 +427,7 @@ export default function BDImport() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <FileSpreadsheet size={16} color={importType === key ? c.color : '#aaa'} />
-              <span style={{ fontSize: 14, fontWeight: 800, color: importType === key ? c.color : '#2D2D2D' }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: importType === key ? c.color : 'hsl(var(--foreground))' }}>
                 {c.label}
               </span>
             </div>
@@ -445,7 +445,7 @@ export default function BDImport() {
           {['paste','map','preview','done'].map((s, i, arr) => (
             <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{
-                color: step === s ? '#2D2D2D' : arr.indexOf(step) > i ? '#16a34a' : '#aaa',
+                color: step === s ? 'hsl(var(--foreground))' : arr.indexOf(step) > i ? '#16a34a' : 'hsl(var(--muted-foreground))',
                 fontWeight: step === s ? 700 : 400, textTransform: 'capitalize',
               }}>
                 {s === 'paste' ? '1. Paste' : s === 'map' ? '2. Map Columns' : s === 'preview' ? '3. Preview' : '4. Done'}

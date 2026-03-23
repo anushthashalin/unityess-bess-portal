@@ -186,7 +186,7 @@ function DealRow({ opp, navigate }) {
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700 }}>{inr(opp.estimated_value)}</div>
-        <div style={{ fontSize: 10, color: stage?.color ?? '#888', fontWeight: 600 }}>{stage?.label ?? opp.stage}</div>
+        <div style={{ fontSize: 10, color: stage?.color ?? 'hsl(var(--muted-foreground))', fontWeight: 600 }}>{stage?.label ?? opp.stage}</div>
       </div>
       {days !== null && (
         <div style={{
