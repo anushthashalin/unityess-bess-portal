@@ -15,7 +15,6 @@ import { cn } from '../lib/utils.js';
 
 const BESS_CORE_NAV = [
   { label: 'Dashboard',         to: '/bess/dashboard',     icon: LayoutDashboard },
-  { label: 'Command Centre',    to: '/bess/command',       icon: Activity },
   { label: 'BESS Configurator', to: '/bess/config',        icon: Zap },
   { label: 'Proposals',         to: '/bess/proposals',     icon: FileText },
   { label: 'Projects',          to: '/bess/projects',      icon: FolderOpen },
@@ -39,7 +38,6 @@ const BESS_BD_NAV = [
 
 const EPC_CORE_NAV = [
   { label: 'Dashboard',         to: '/epc/dashboard',     icon: LayoutDashboard },
-  { label: 'Command Centre',    to: '/epc/command',       icon: Activity },
   { label: 'EPC Configurator',  to: '/epc/config',        icon: Zap },
   { label: 'Proposals',         to: '/epc/proposals',     icon: FileText },
   { label: 'Projects',          to: '/epc/projects',      icon: FolderOpen },

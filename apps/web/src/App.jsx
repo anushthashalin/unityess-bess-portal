@@ -8,7 +8,6 @@ import Dashboard from './pages/Dashboard.jsx';
 import Clients from './pages/Clients.jsx';
 import Sites from './pages/Sites.jsx';
 import BESSConfig from './pages/BESSConfig.jsx';
-import BESSCommandCenter from './pages/BESSCommandCenter.jsx';
 import Proposals from './pages/Proposals.jsx';
 import Projects from './pages/Projects.jsx';
 import LoadProfiles from './pages/LoadProfiles.jsx';
@@ -27,7 +26,6 @@ import BDImport from './pages/BDImport.jsx';
 
 // EPC pages
 import EPCDashboard from './pages/EPCDashboard.jsx';
-import EPCCommandCenter from './pages/EPCCommandCenter.jsx';
 import EPCConfig from './pages/EPCConfig.jsx';
 
 function RequireAuth({ children }) {
@@ -57,7 +55,7 @@ export default function App() {
 
               {/* Legacy redirects — keep old URLs working */}
               <Route path="/dashboard"    element={<Navigate to="/bess/dashboard" replace />} />
-              <Route path="/bess-command" element={<Navigate to="/bess/command"   replace />} />
+              <Route path="/bess-command" element={<Navigate to="/bess/dashboard" replace />} />
               <Route path="/bess-config"  element={<Navigate to="/bess/config"    replace />} />
               <Route path="/proposals"    element={<Navigate to="/bess/proposals" replace />} />
               <Route path="/projects"     element={<Navigate to="/bess/projects"  replace />} />
@@ -70,7 +68,7 @@ export default function App() {
 
               {/* ── BESS Sizing ── */}
               <Route path="/bess/dashboard"     element={<Dashboard />} />
-              <Route path="/bess/command"       element={<BESSCommandCenter />} />
+              <Route path="/bess/command"       element={<Navigate to="/bess/dashboard" replace />} />
               <Route path="/bess/config"        element={<BESSConfig />} />
               <Route path="/bess/proposals"     element={<Proposals />} />
               <Route path="/bess/projects"      element={<Projects />} />
@@ -92,7 +90,7 @@ export default function App() {
 
               {/* ── Solar EPC ── */}
               <Route path="/epc/dashboard"     element={<EPCDashboard />} />
-              <Route path="/epc/command"       element={<EPCCommandCenter />} />
+              <Route path="/epc/command"       element={<Navigate to="/epc/dashboard" replace />} />
               <Route path="/epc/config"        element={<EPCConfig />} />
               <Route path="/epc/proposals"     element={<Proposals product="epc" />} />
               <Route path="/epc/projects"      element={<Projects product="epc" />} />
