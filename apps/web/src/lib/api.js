@@ -96,4 +96,5 @@ export const bdApi = {
   importAccounts:      (rows) => api.post('/api/bd/import/accounts',      { rows }),
   importContacts:      (rows) => api.post('/api/bd/import/contacts',      { rows }),
   importOpportunities: (rows) => api.post('/api/bd/import/opportunities', { rows }),
+  auditLog: (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/api/bd/audit-log${q ? '?' + q : ''}`); },
 };

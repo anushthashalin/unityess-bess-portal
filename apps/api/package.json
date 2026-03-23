@@ -1,7 +1,7 @@
 {
   "name": "@bess/api",
   "version": "1.0.0",
-  "description": "BESS Sizing Portal — Express API",
+  "description": "BESS Sizing Portal \u2014 Express API",
   "main": "index.js",
   "scripts": {
     "dev": "node --watch index.js",
@@ -14,6 +14,7 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.2",
-    "pg": "^8.11.3"
+    "pg": "^8.11.3",
+    "express-rate-limit": "^7.1.5"
   }
 }

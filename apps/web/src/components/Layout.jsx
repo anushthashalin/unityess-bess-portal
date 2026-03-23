@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, MapPin, BarChart2, Zap,
   FileText, FolderOpen, Receipt, Battery, LogOut, ChevronRight,
   Briefcase, Target, Activity, TrendingUp, ClipboardList, Bell,
-  ShieldCheck, Upload, Search, X, Sun,
+  ShieldCheck, Upload, Search, X, Sun, History,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -33,7 +33,8 @@ const BESS_BD_NAV = [
   { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
   { label: 'Proposals',       to: '/bess/bd/proposals',     icon: FileText },
-  { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload },
+  { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload,    perm: 'import' },
+  { label: 'Audit Log',       to: '/bess/bd/audit-log',     icon: History,   perm: 'audit'  },
 ];
 
 const EPC_CORE_NAV = [
@@ -54,7 +55,8 @@ const EPC_BD_NAV = [
   { label: 'Follow-up Queue', to: '/epc/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },
   { label: 'Proposals',       to: '/epc/bd/proposals',     icon: FileText },
-  { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload },
+  { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload,    perm: 'import' },
+  { label: 'Audit Log',       to: '/epc/bd/audit-log',     icon: History,   perm: 'audit'  },
 ];
 
 const ALL_PAGES = [...BESS_CORE_NAV, ...BESS_BD_NAV, ...EPC_CORE_NAV, ...EPC_BD_NAV];
@@ -89,7 +91,7 @@ function NavItem({ label, to, icon: Icon }) {
 export default function Layout({ children }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const { theme } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
@@ -98,7 +100,7 @@ export default function Layout({ children }) {
   const activeProduct = pathname.startsWith('/epc') ? 'epc' : 'bess';
 
   const coreNav = activeProduct === 'epc' ? EPC_CORE_NAV : BESS_CORE_NAV;
-  const bdNav   = activeProduct === 'epc' ? EPC_BD_NAV   : BESS_BD_NAV;
+  const bdNav   = (activeProduct === 'epc' ? EPC_BD_NAV : BESS_BD_NAV).filter(item => !item.perm || can(item.perm));
 
   const pageTitle =
     ALL_PAGES.find(n => pathname === n.to || pathname.startsWith(n.to + '/'))?.label

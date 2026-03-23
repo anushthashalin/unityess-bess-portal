@@ -44,6 +44,28 @@ function requireAuth(req, res, next) {
   }
 }
 
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: `Forbidden — requires role: ${roles.join(' or ')}` });
+    }
+    next();
+  };
+}
+
+// ── Audit log helper ─────────────────────────────────────────────────────────
+async function logAudit(req, action, resource, resource_id, details = {}) {
+  try {
+    const user_id   = req.user?.id   ?? null;
+    const user_name = req.user?.name ?? null;
+    await pool.query(
+      `INSERT INTO bd.audit_log (user_id, user_name, action, resource, resource_id, details)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [user_id, user_name, action, resource, String(resource_id ?? ''), details]
+    );
+  } catch (_) { /* non-fatal */ }
+}
+
 // ── DB error helper — returns 400 for constraint violations, 500 otherwise ──
 function handleDbError(res, e) {
   if (e.code === '23502') {
@@ -117,6 +139,17 @@ async function runMigrations() {
        ON bd.accounts (LOWER(company_name))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_account_email
        ON bd.contacts (account_id, LOWER(email)) WHERE email IS NOT NULL`,
+    // Audit log
+    `CREATE TABLE IF NOT EXISTS bd.audit_log (
+       id          SERIAL PRIMARY KEY,
+       user_id     INTEGER,
+       user_name   TEXT,
+       action      TEXT NOT NULL,
+       resource    TEXT NOT NULL,
+       resource_id TEXT,
+       details     JSONB DEFAULT '{}',
+       created_at  TIMESTAMPTZ DEFAULT NOW()
+     )`,
   ];
   for (const sql of migrations) {
     try {
@@ -242,7 +275,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Users
-app.get('/api/bd/users', async (req, res) => {
+app.get('/api/bd/users', requireAuth, requireRole('admin'), async (req, res) => {
   const { rows } = await pool.query('SELECT id, name, email, role, is_active, created_at FROM bd.users WHERE is_active = true ORDER BY name');
   res.json({ data: rows });
 });
@@ -272,7 +305,7 @@ app.get('/api/bd/accounts', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/accounts', requireAuth, async (req, res) => {
+app.post('/api/bd/accounts', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { company_name, industry, city, state, website, gstin, source, owner_id, product_type } = req.body;
     if (!company_name) return res.status(400).json({ error: 'company_name is required' });
@@ -286,6 +319,7 @@ app.post('/api/bd/accounts', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [account_id, company_name, industry, city, state, website, gstin, source, owner_id, product_type ?? 'bess']
     );
+    await logAudit(req, 'create', 'accounts', rows[0].id, { company_name });
     res.status(201).json({ data: rows[0] });
   } catch (e) { handleDbError(res, e); }
 });
@@ -299,7 +333,7 @@ app.get('/api/bd/contacts', async (req, res) => {
   res.json({ data: rows });
 });
 
-app.post('/api/bd/contacts', requireAuth, async (req, res) => {
+app.post('/api/bd/contacts', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { account_id, name, designation, email, phone, is_primary, linkedin, notes } = req.body;
     if (!account_id || !name) return res.status(400).json({ error: 'account_id and name are required' });
@@ -308,6 +342,7 @@ app.post('/api/bd/contacts', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [account_id, name, designation, email, phone, is_primary ?? false, linkedin, notes]
     );
+    await logAudit(req, 'create', 'contacts', rows[0].id, { name, account_id });
     res.status(201).json({ data: rows[0] });
   } catch (e) { handleDbError(res, e); }
 });
@@ -336,7 +371,7 @@ app.get('/api/bd/opportunities', async (req, res) => {
   res.json({ data: rows });
 });
 
-app.post('/api/bd/opportunities', requireAuth, async (req, res) => {
+app.post('/api/bd/opportunities', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type } = req.body;
     if (!account_id || !title) return res.status(400).json({ error: 'account_id and title are required' });
@@ -351,11 +386,12 @@ app.post('/api/bd/opportunities', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d, product_type ?? 'bess']
     );
+    await logAudit(req, 'create', 'opportunities', rows[0].id, { opp_id, title, account_id });
     res.status(201).json({ data: rows[0] });
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/opportunities/:id', requireAuth, async (req, res) => {
+app.patch('/api/bd/opportunities/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { id } = req.params;
     const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
@@ -401,7 +437,7 @@ app.get('/api/bd/activities', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/activities', requireAuth, async (req, res) => {
+app.post('/api/bd/activities', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { opp_id, type, direction, summary, outcome, next_action, next_action_date, logged_by, duration_min } = req.body;
     if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type are required' });
@@ -463,7 +499,7 @@ app.get('/api/bd/follow-ups', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/follow-ups', requireAuth, async (req, res) => {
+app.post('/api/bd/follow-ups', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { opp_id, due_date, type, assigned_to } = req.body;
     if (!opp_id || !due_date) return res.status(400).json({ error: 'opp_id and due_date required' });
@@ -479,7 +515,7 @@ app.post('/api/bd/follow-ups', requireAuth, async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/follow-ups/:id', requireAuth, async (req, res) => {
+app.patch('/api/bd/follow-ups/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, snooze_until } = req.body;
@@ -522,7 +558,7 @@ app.get('/api/bd/approvals', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/approvals', requireAuth, async (req, res) => {
+app.post('/api/bd/approvals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { opp_id, type, deviation_value, justification, requested_by, proposal_id } = req.body;
     if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type required' });
@@ -531,11 +567,12 @@ app.post('/api/bd/approvals', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,'pending') RETURNING *`,
       [opp_id, proposal_id ?? null, type, deviation_value ?? null, justification ?? null, requested_by ?? null]
     );
+    await logAudit(req, 'create', 'approvals', rows[0].id, { opp_id });
     res.status(201).json({ data: rows[0] });
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/approvals/:id', requireAuth, async (req, res) => {
+app.patch('/api/bd/approvals/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, approver_notes, approver_id } = req.body;
@@ -579,7 +616,7 @@ app.get('/api/bd/proposals', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/proposals', requireAuth, async (req, res) => {
+app.post('/api/bd/proposals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { opp_id, content, created_by } = req.body;
     if (!opp_id) return res.status(400).json({ error: 'opp_id required' });
@@ -605,7 +642,7 @@ app.post('/api/bd/proposals', requireAuth, async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/proposals/:id', requireAuth, async (req, res) => {
+app.patch('/api/bd/proposals/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, content } = req.body;
@@ -633,6 +670,7 @@ app.patch('/api/bd/proposals/:id', requireAuth, async (req, res) => {
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
     await pool.query(`UPDATE bd.proposals SET ${updates.join(',')} WHERE id=$1`, vals);
     const { rows } = await pool.query(`${PROPOSAL_WITH_JOINS} WHERE p.id=$1`, [id]);
+    await logAudit(req, 'update', 'proposals', id, { ...(status !== undefined ? { status } : { content_updated: true }) });
     res.json({ data: rows[0] });
   } catch (e) { handleDbError(res, e); }
 });
@@ -649,7 +687,7 @@ app.get('/api/bd/email/status', (req, res) => {
 
 // POST /api/bd/email/send
 // body: { proposal_id, to, cc, subject, body, sent_by }
-app.post('/api/bd/email/send', requireAuth, async (req, res) => {
+app.post('/api/bd/email/send', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { proposal_id, to, cc, subject, body: emailBody, sent_by } = req.body;
     if (!to || !subject || !emailBody) {
@@ -717,7 +755,7 @@ app.post('/api/bd/email/send', requireAuth, async (req, res) => {
 
 // POST /api/bd/import/accounts
 // body: { rows: [{ company_name, industry, city, state, website, gstin, source, owner_email }] }
-app.post('/api/bd/import/accounts', requireAuth, async (req, res) => {
+app.post('/api/bd/import/accounts', requireAuth, requireRole('admin'), async (req, res) => {
   const { rows = [] } = req.body;
   if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
 
@@ -788,7 +826,7 @@ app.post('/api/bd/import/accounts', requireAuth, async (req, res) => {
 
 // POST /api/bd/import/contacts
 // body: { rows: [{ company_name, name, designation, email, phone, is_primary, linkedin }] }
-app.post('/api/bd/import/contacts', requireAuth, async (req, res) => {
+app.post('/api/bd/import/contacts', requireAuth, requireRole('admin'), async (req, res) => {
   const { rows = [] } = req.body;
   if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
 
@@ -862,7 +900,7 @@ app.post('/api/bd/import/contacts', requireAuth, async (req, res) => {
 
 // POST /api/bd/import/opportunities
 // body: { rows: [{ company_name, contact_email, owner_name, title, scope_type, estimated_value, stage, next_action_date }] }
-app.post('/api/bd/import/opportunities', requireAuth, async (req, res) => {
+app.post('/api/bd/import/opportunities', requireAuth, requireRole('admin'), async (req, res) => {
   const { rows = [] } = req.body;
   if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
 
@@ -936,6 +974,22 @@ app.post('/api/bd/import/opportunities', requireAuth, async (req, res) => {
 });
 
 // Dashboard
+// ── Audit Log ────────────────────────────────────────────────────────────────
+app.get('/api/bd/audit-log', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+  try {
+    const { resource, user_id: uid } = req.query;
+    let sql = 'SELECT * FROM bd.audit_log';
+    const params = [];
+    const conds  = [];
+    if (resource) { params.push(resource); conds.push(`resource=$${params.length}`); }
+    if (uid)      { params.push(uid);      conds.push(`user_id=$${params.length}`); }
+    if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+    sql += ' ORDER BY created_at DESC LIMIT 500';
+    const { rows } = await pool.query(sql, params);
+    res.json({ data: rows });
+  } catch (e) { handleDbError(res, e); }
+});
+
 app.get('/api/bd/dashboard', async (req, res) => {
   try {
     const [pipeline, followUpCount, approvalCount, staleCount, hotDeals, dueFollowUps, pendingApprovals, recentActivities] = await Promise.all([
@@ -1035,7 +1089,7 @@ app.get('/api/bess/bess-configurations', async (req, res) => {
     res.json({ data: rows });
   } catch (e) { handleDbError(res, e); }
 });
-app.post('/api/bess/bess-configurations', requireAuth, async (req, res) => {
+app.post('/api/bess/bess-configurations', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { site_id, config_name, num_units, total_power_kw, total_energy_kwh, coupling_type, application, soc_min, soc_max, charge_hours, discharge_hours } = req.body;
     if (!site_id || !config_name || !num_units) return res.status(400).json({ error: 'site_id, config_name and num_units are required' });
@@ -1136,7 +1190,7 @@ async function autoCreateFollowUp(opp_id, assigned_to, baseDateMs) {
 }
 
 // ── Manual trigger endpoint ───────────────────────────────────────────────
-app.post('/api/bd/automation/run', requireAuth, async (req, res) => {
+app.post('/api/bd/automation/run', requireAuth, requireRole('admin'), async (req, res) => {
   await runAutomation();
   res.json({ ran_at: lastAutomationRun, log: lastAutomationLog });
 });
@@ -1150,7 +1204,7 @@ app.get('/api/bd/automation/status', (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Clients ──────────────────────────────────────────────────────────────
-app.post('/api/bess/clients', requireAuth, async (req, res) => {
+app.post('/api/bess/clients', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const {
       company_name, contact_person, email, phone, city, state, gstin,
@@ -1179,7 +1233,7 @@ app.post('/api/bess/clients', requireAuth, async (req, res) => {
 });
 
 // ── PATCH client ──────────────────────────────────────────────────────────
-app.patch('/api/bess/clients/:id', requireAuth, async (req, res) => {
+app.patch('/api/bess/clients/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -1241,7 +1295,7 @@ async function geocode(address, state) {
 }
 
 // ── Sites ─────────────────────────────────────────────────────────────────
-app.post('/api/bess/sites', requireAuth, async (req, res) => {
+app.post('/api/bess/sites', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { client_id, site_name, address, state, discom, tariff_category,
             sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number,
@@ -1267,7 +1321,7 @@ app.post('/api/bess/sites', requireAuth, async (req, res) => {
 });
 
 // ── PATCH site (update coords or details) ────────────────────────────────
-app.patch('/api/bess/sites/:id', requireAuth, async (req, res) => {
+app.patch('/api/bess/sites/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { id } = req.params;
     const { lat, lng } = req.body;
@@ -1338,7 +1392,7 @@ app.get('/api/bess/cycle-datasets', (req, res) => {
 });
 
 // ── Gemini Bill Parser ────────────────────────────────────────────────────
-app.post('/api/bess/parse-bill', requireAuth, async (req, res) => {
+app.post('/api/bess/parse-bill', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { fileData, mimeType } = req.body;
     if (!fileData || !mimeType) return res.status(400).json({ error: 'fileData and mimeType required' });
@@ -1383,7 +1437,7 @@ app.post('/api/bess/parse-bill', requireAuth, async (req, res) => {
 });
 
 // ── Gemini BESS Recommendation ────────────────────────────────────────────
-app.post('/api/bess/recommend', requireAuth, async (req, res) => {
+app.post('/api/bess/recommend', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { load_data, available_units } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
@@ -1449,7 +1503,7 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
 });
 
 // ── EPC Configurator — AI narrative ────────────────────────────────────────
-app.post('/api/epc/size-narrative', requireAuth, async (req, res) => {
+app.post('/api/epc/size-narrative', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const {
       systemKwpDC, annualGenKwh, capexTotal, year1Savings,
@@ -1502,7 +1556,7 @@ Return plain text only — no JSON, no markdown, no headers. Just the narrative 
 });
 
 // ── Proposals ─────────────────────────────────────────────────────────────
-app.post('/api/bess/proposals', requireAuth, async (req, res) => {
+app.post('/api/bess/proposals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
   try {
     const { client_id, site_id, bess_config_id, project_id, proposal_date, status,
             capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes } = req.body;

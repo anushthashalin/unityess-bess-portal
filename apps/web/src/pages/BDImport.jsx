@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { bdApi } from '../lib/api.js';
 import { inr } from '../lib/fmt.js';
 import {
@@ -317,6 +318,17 @@ function ResultBanner({ result, onReset }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function BDImport() {
+  const { can } = useAuth();
+
+  if (!can('import')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-32 text-center gap-3">
+        <div className="text-4xl">🔒</div>
+        <p className="text-lg font-bold text-foreground">Access Restricted</p>
+        <p className="text-sm text-muted-foreground">Sheets Import is only available to admins.</p>
+      </div>
+    );
+  }
   const [importType, setImportType] = useState('accounts');
   const [pasteText,  setPasteText]  = useState('');
   const [parsed,     setParsed]     = useState(null);   // { headers, rows }

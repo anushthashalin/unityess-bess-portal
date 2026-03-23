@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useApiMulti } from '../hooks/useApi.js';
 import { bdApi } from '../lib/api.js';
 import { inr, date } from '../lib/fmt.js';
@@ -162,6 +163,7 @@ function AddAccountDialog({ open, onOpenChange, users, onSaved, product = 'bess'
 }
 
 export default function BDAccounts({ product = 'bess' }) {
+  const { can } = useAuth();
   const [search, setSearch]         = useState('');
   const [showAdd, setShowAdd]       = useState(false);
   const [sortField, setSortField]   = useState('company_name');
@@ -245,12 +247,12 @@ export default function BDAccounts({ product = 'bess' }) {
             {accounts.length} accounts · {inr(totalPipeline)} pipeline · {totalOpps} opportunities
           </p>
         </div>
-        <Button
+        {can('write') && <Button
           onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-10 px-4 gap-2 shadow-sm"
         >
           <Plus size={15} /> Add Account
-        </Button>
+        </Button>}
       </div>
 
       {/* KPI mini cards */}

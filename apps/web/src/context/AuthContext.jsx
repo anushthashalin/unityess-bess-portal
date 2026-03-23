@@ -5,6 +5,13 @@ const TOKEN_KEY = 'bess_portal_token';
 
 const AuthContext = createContext(null);
 
+// Permissions per role
+const ROLE_PERMISSIONS = {
+  admin:   ['read', 'write', 'import', 'audit', 'manage_users'],
+  bd_exec: ['read', 'write', 'audit'],
+  viewer:  ['read'],
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true); // checking stored token on mount
@@ -54,8 +61,14 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  // can('write') — true if user's role permits the given action
+  const can = useCallback((action) => {
+    if (!user) return false;
+    return ROLE_PERMISSIONS[user.role]?.includes(action) ?? false;
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, authFetch }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, authFetch, can }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useApiMulti } from '../hooks/useApi.js';
 import { bdApi } from '../lib/api.js';
 import { inr, date, daysSince } from '../lib/fmt.js';
@@ -90,7 +91,8 @@ function KpiChip({ label, value, icon: Icon, color }) {
 }
 
 // ── ACCOUNTS TAB ─────────────────────────────────────────────────────────────
-function AccountsTab({ product, accounts, users, refetch }) {
+function AccountsTab({
+  const { can } = useAuth(); product, accounts, users, refetch }) {
   const [search,    setSearch]    = useState('');
   const [industry,  setIndustry]  = useState('');
   const [sortField, setSortField] = useState('company_name');
@@ -173,10 +175,10 @@ function AccountsTab({ product, accounts, users, refetch }) {
           ))}
         </div>
         <span className="text-[11px] text-muted-foreground ml-auto">{filtered.length} of {accounts.length}</span>
-        <Button onClick={() => setShowAdd(true)}
+        {can('write') && {can('write') && {can('write') && <Button onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm text-[13px]">
           <Plus size={14}/> Add Account
-        </Button>
+        </Button>}
       </div>
 
       {/* Table */}
@@ -316,7 +318,8 @@ function AccountsTab({ product, accounts, users, refetch }) {
 }
 
 // ── CONTACTS TAB ──────────────────────────────────────────────────────────────
-function ContactsTab({ accounts, contacts, refetch }) {
+function ContactsTab({
+  const { can } = useAuth(); accounts, contacts, refetch }) {
   const [search,    setSearch]    = useState('');
   const [filterAcc, setFilterAcc] = useState('');
   const [showAdd,   setShowAdd]   = useState(false);
@@ -377,7 +380,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
         <Button onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm text-[13px]">
           <Plus size={14}/> Add Contact
-        </Button>
+        </Button>}
       </div>
 
       {/* Table */}
@@ -481,7 +484,8 @@ function ContactsTab({ accounts, contacts, refetch }) {
 }
 
 // ── OPPORTUNITIES TAB ─────────────────────────────────────────────────────────
-function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch }) {
+function OpportunitiesTab({
+  const { can } = useAuth(); product, opps, accounts, contacts, users, refetch }) {
   const [view,        setView]        = useState('kanban');
   const [search,      setSearch]      = useState('');
   const [stageFilter, setStageFilter] = useState('');
@@ -568,7 +572,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
         <Button onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm text-[13px]">
           <Plus size={14}/> Add Opportunity
-        </Button>
+        </Button>}
       </div>
 
       {filtered.length === 0 ? (
