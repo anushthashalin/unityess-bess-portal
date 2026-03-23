@@ -75,7 +75,7 @@ function calcIRR(capex, annualCashflow, years = 25) {
 function ResultCard({ label, value, sub, color = '#F26B4E' }) {
   return (
     <div style={{
-      background: 'white', borderRadius: 12, padding: '14px 16px',
+      background: 'hsl(var(--card))', borderRadius: 12, padding: '14px 16px',
       border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
     }}>
       <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'hsl(var(--muted-foreground))', marginBottom: 4 }}>{label}</div>
@@ -313,7 +313,7 @@ export default function EPCConfig() {
             Solar system sizing · financial model · AI-assisted narration
           </p>
         </div>
-        <div className="flex items-center gap-1.5 bg-white/90 border border-border/50 rounded-xl px-3 py-1.5 shadow-sm">
+        <div className="flex items-center gap-1.5 bg-card/90 border border-border/50 rounded-xl px-3 py-1.5 shadow-sm">
           <Sparkles size={11} className="text-orange-400" />
           <span className="text-[11px] font-bold text-orange-500">Gemini AI · Live</span>
         </div>
@@ -325,7 +325,7 @@ export default function EPCConfig() {
         <div className="col-span-2 flex flex-col gap-4">
 
           {/* System type selector */}
-          <Card className="border border-border/50 shadow-sm bg-white/95">
+          <Card className="border border-border/50 shadow-sm bg-card">
             <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-[13px] font-bold">System Type</CardTitle></CardHeader>
             <Separator />
             <CardContent className="p-4 flex gap-2">
@@ -334,7 +334,7 @@ export default function EPCConfig() {
                   className={`flex-1 rounded-xl px-3 py-3 text-left border transition-all duration-150 ${
                     systemType === t.key
                       ? 'bg-[#F26B4E]/10 border-[#F26B4E]/40 text-[#F26B4E]'
-                      : 'bg-white border-border text-muted-foreground hover:border-[#F26B4E]/30'
+                      : 'bg-card border-border text-muted-foreground hover:border-[#F26B4E]/30'
                   }`}
                 >
                   <div className="text-[12px] font-black">{t.label}</div>
@@ -345,7 +345,7 @@ export default function EPCConfig() {
           </Card>
 
           {/* Sizing mode */}
-          <Card className="border border-border/50 shadow-sm bg-white/95">
+          <Card className="border border-border/50 shadow-sm bg-card">
             <CardHeader className="pb-2 pt-4 px-5">
               <CardTitle className="text-[13px] font-bold">Sizing Basis</CardTitle>
             </CardHeader>
@@ -417,7 +417,7 @@ export default function EPCConfig() {
           </Card>
 
           {/* Financial inputs */}
-          <Card className="border border-border/50 shadow-sm bg-white/95">
+          <Card className="border border-border/50 shadow-sm bg-card">
             <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-[13px] font-bold">Financial Inputs</CardTitle></CardHeader>
             <Separator />
             <CardContent className="p-4 space-y-3">
@@ -508,7 +508,7 @@ export default function EPCConfig() {
         <div className="col-span-3 flex flex-col gap-4">
 
           {!result && (
-            <Card className="border border-border/50 shadow-sm bg-white/95 flex-1 flex items-center justify-center min-h-[400px]">
+            <Card className="border border-border/50 shadow-sm bg-card flex-1 flex items-center justify-center min-h-[400px]">
               <div className="text-center text-muted-foreground py-16">
                 <Sun size={48} className="mx-auto opacity-10 mb-4" />
                 <p className="text-sm font-medium">Configure inputs and click <strong>Size Solar System</strong></p>
@@ -520,7 +520,7 @@ export default function EPCConfig() {
           {result && (
             <>
               {/* System specs */}
-              <Card className="border border-border/50 shadow-sm bg-white/95">
+              <Card className="border border-border/50 shadow-sm bg-card">
                 <CardHeader className="pb-2 pt-4 px-5 flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-[13px] font-bold">System Specification</CardTitle>
                   <Badge className="bg-[#F26B4E]/10 text-[#F26B4E] border-[#F26B4E]/20 text-[10px] font-bold">
@@ -547,7 +547,7 @@ export default function EPCConfig() {
               </Card>
 
               {/* Financial model */}
-              <Card className="border border-border/50 shadow-sm bg-white/95">
+              <Card className="border border-border/50 shadow-sm bg-card">
                 <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-[13px] font-bold">Financial Model · 25 Years</CardTitle></CardHeader>
                 <Separator />
                 <CardContent className="p-4">
@@ -567,7 +567,7 @@ export default function EPCConfig() {
 
               {/* Component breakup (if applicable) */}
               {result.compBreakup && (
-                <Card className="border border-border/50 shadow-sm bg-white/95">
+                <Card className="border border-border/50 shadow-sm bg-card">
                   <CardHeader className="pb-2 pt-4 px-5">
                     <button className="flex items-center justify-between w-full" onClick={() => setShowComp(s => !s)}>
                       <CardTitle className="text-[13px] font-bold">Component Breakup</CardTitle>
@@ -589,7 +589,7 @@ export default function EPCConfig() {
               )}
 
               {/* AI Narration */}
-              <Card className={`border shadow-sm bg-white/95 transition-all ${
+              <Card className={`border shadow-sm bg-card transition-all ${
                 aiLoading ? 'border-orange-200' : aiNote ? 'border-blue-200 bg-blue-50/30' : 'border-border/50'
               }`}>
                 <CardHeader className="pb-2 pt-4 px-5 flex-row items-center gap-2 space-y-0">

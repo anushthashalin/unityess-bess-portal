@@ -187,15 +187,20 @@ export default function Proposals() {
       {/* KPI cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
         {[
-          { label:'Total CAPEX Pipeline',   value: inr(totalCapex),   sub:'Ex-GST' },
-          { label:'Annual Savings (Total)', value: inr(totalSavings) + '/yr', sub:'Across all proposals' },
-          { label:'Average IRR',            value: avgIRR === '—' ? '—' : `${avgIRR}%`, sub:'Post-tax' },
-          { label:'Average Payback',        value: avgPayback === '—' ? '—' : `${avgPayback} yrs`, sub:'Simple payback' },
-        ].map(({ label, value, sub }) => (
-          <div key={label} className="kpi-card">
-            <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>{label}</div>
-            <div style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))' }}>{value}</div>
-            <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', marginTop:2 }}>{sub}</div>
+          { label:'Total CAPEX Pipeline',   value: inr(totalCapex),              sub:'Ex-GST',              accent:'#F26B4E' },
+          { label:'Annual Savings (Total)', value: inr(totalSavings) + '/yr',    sub:'Across all proposals', accent:'#22C55E' },
+          { label:'Average IRR',            value: avgIRR === '—' ? '—' : `${avgIRR}%`,         sub:'Post-tax',         accent:'#3B82F6' },
+          { label:'Average Payback',        value: avgPayback === '—' ? '—' : `${avgPayback} yrs`, sub:'Simple payback',  accent:'#A855F7' },
+        ].map(({ label, value, sub, accent }) => (
+          <div key={label} className="kpi-card" style={{ position:'relative', overflow:'hidden' }}>
+            {/* accent top bar */}
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg, ${accent}, ${accent}88)`, borderRadius:'14px 14px 0 0' }} />
+            <div style={{ fontSize:10, color:'hsl(var(--muted-foreground))', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:6 }}>{label}</div>
+            <div style={{ fontSize:24, fontWeight:900, color: accent, lineHeight:1, letterSpacing:'-0.5px' }}>{value}</div>
+            <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', marginTop:6, paddingTop:6, borderTop:'1px solid hsl(var(--border))' }}>
+              <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:'#22C55E', marginRight:5, verticalAlign:'middle', animation:'pulse 2s infinite' }} />
+              {sub}
+            </div>
           </div>
         ))}
       </div>
