@@ -9,6 +9,7 @@ const { Pool }     = require('pg');
 const bcrypt       = require('bcryptjs');
 const jwt          = require('jsonwebtoken');
 const nodemailer   = require('nodemailer');
+const rateLimit    = require('express-rate-limit');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
@@ -136,7 +137,39 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// General: 100 requests / 1 min per IP
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please wait a moment and try again.' },
+});
+
+// Auth: 10 login attempts / 15 min per IP (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts — try again in 15 minutes.' },
+});
+
+// Bulk import: 5 import jobs / 10 min per IP
+const importLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many import requests — wait 10 minutes before retrying.' },
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/bd/import', importLimiter);
 
 // ── Root & DevTools probes ──────────────────────────────────────────────────
 app.get('/', (req, res) => {
