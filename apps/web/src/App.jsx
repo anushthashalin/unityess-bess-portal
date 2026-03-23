@@ -15,6 +15,7 @@ import TariffStructures from './pages/TariffStructures.jsx';
 
 // BD pages (shared component, used under both /bess/bd/* and /epc/bd/*)
 import BDCommandCenter from './pages/BDCommandCenter.jsx';
+import BDPipeline from './pages/BDPipeline.jsx';
 import BDAccounts from './pages/BDAccounts.jsx';
 import BDContacts from './pages/BDContacts.jsx';
 import BDOpportunities from './pages/BDOpportunities.jsx';
@@ -79,9 +80,10 @@ export default function App() {
 
               {/* BESS BD */}
               <Route path="/bess/bd"                    element={<BDCommandCenter product="bess" />} />
-              <Route path="/bess/bd/accounts"           element={<BDAccounts      product="bess" />} />
-              <Route path="/bess/bd/contacts"           element={<BDContacts      product="bess" />} />
-              <Route path="/bess/bd/opportunities"      element={<BDOpportunities product="bess" />} />
+              <Route path="/bess/bd/pipeline"           element={<BDPipeline      product="bess" />} />
+              <Route path="/bess/bd/accounts"           element={<Navigate to="/bess/bd/pipeline" replace />} />
+              <Route path="/bess/bd/contacts"           element={<Navigate to="/bess/bd/pipeline" replace />} />
+              <Route path="/bess/bd/opportunities"      element={<Navigate to="/bess/bd/pipeline" replace />} />
               <Route path="/bess/bd/activities"         element={<BDActivities    product="bess" />} />
               <Route path="/bess/bd/follow-ups"         element={<BDFollowUps     product="bess" />} />
               <Route path="/bess/bd/approvals"          element={<BDApprovals     product="bess" />} />
@@ -101,9 +103,10 @@ export default function App() {
 
               {/* EPC BD */}
               <Route path="/epc/bd"                    element={<BDCommandCenter product="epc" />} />
-              <Route path="/epc/bd/accounts"           element={<BDAccounts      product="epc" />} />
-              <Route path="/epc/bd/contacts"           element={<BDContacts      product="epc" />} />
-              <Route path="/epc/bd/opportunities"      element={<BDOpportunities product="epc" />} />
+              <Route path="/epc/bd/pipeline"           element={<BDPipeline      product="epc" />} />
+              <Route path="/epc/bd/accounts"           element={<Navigate to="/epc/bd/pipeline" replace />} />
+              <Route path="/epc/bd/contacts"           element={<Navigate to="/epc/bd/pipeline" replace />} />
+              <Route path="/epc/bd/opportunities"      element={<Navigate to="/epc/bd/pipeline" replace />} />
               <Route path="/epc/bd/activities"         element={<BDActivities    product="epc" />} />
               <Route path="/epc/bd/follow-ups"         element={<BDFollowUps     product="epc" />} />
               <Route path="/epc/bd/approvals"          element={<BDApprovals     product="epc" />} />

@@ -7,9 +7,11 @@ import {
   ShieldCheck, Upload, Search, X, Sun,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { WavyBackground } from './ui/wavy-background.jsx';
 import { Avatar, AvatarFallback } from './ui/avatar.jsx';
 import { cn } from '../lib/utils.js';
+import ThemeToggle from './ThemeToggle.jsx';
 
 // ── Nav definitions ──────────────────────────────────────────────────────────
 
@@ -26,9 +28,7 @@ const BESS_CORE_NAV = [
 
 const BESS_BD_NAV = [
   { label: 'Command Centre',  to: '/bess/bd',               icon: Target },
-  { label: 'Accounts',        to: '/bess/bd/accounts',      icon: Briefcase },
-  { label: 'Contacts',        to: '/bess/bd/contacts',      icon: Users },
-  { label: 'Opportunities',   to: '/bess/bd/opportunities', icon: TrendingUp },
+  { label: 'Pipeline',        to: '/bess/bd/pipeline',      icon: Briefcase },
   { label: 'Activity Log',    to: '/bess/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
@@ -49,9 +49,7 @@ const EPC_CORE_NAV = [
 
 const EPC_BD_NAV = [
   { label: 'Command Centre',  to: '/epc/bd',               icon: Target },
-  { label: 'Accounts',        to: '/epc/bd/accounts',      icon: Briefcase },
-  { label: 'Contacts',        to: '/epc/bd/contacts',      icon: Users },
-  { label: 'Opportunities',   to: '/epc/bd/opportunities', icon: TrendingUp },
+  { label: 'Pipeline',        to: '/epc/bd/pipeline',      icon: Briefcase },
   { label: 'Activity Log',    to: '/epc/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/epc/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },
@@ -92,6 +90,7 @@ export default function Layout({ children }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
 
@@ -135,7 +134,7 @@ export default function Layout({ children }) {
 
   return (
     <>
-      <WavyBackground fixed={true} backgroundFill="#1a1a1a" waveOpacity={0.45} blur={14} speed="slow" />
+      <WavyBackground fixed={true} backgroundFill={theme === 'dark' ? '#080808' : theme === 'solar' ? '#3d2b1a' : '#1a1a1a'} waveOpacity={0.45} blur={14} speed="slow" />
 
       {/* Command Palette */}
       {cmdOpen && (
@@ -283,8 +282,8 @@ export default function Layout({ children }) {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Topbar */}
           <header style={{
-            background: 'rgba(255,255,255,0.72)',
-            borderBottom: '1px solid rgba(0,0,0,0.05)',
+            background: 'var(--topbar-bg)',
+            borderBottom: '1px solid var(--topbar-border)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
           }} className="flex items-center justify-between px-6 h-[52px] shrink-0 shadow-sm">
@@ -296,6 +295,7 @@ export default function Layout({ children }) {
               <span className="text-foreground font-bold text-[13px]">{pageTitle}</span>
             </div>
             <div className="flex items-center gap-2.5">
+              <ThemeToggle />
               <span className="text-[10px] font-bold tracking-wide bg-[#F26B4E]/10 text-[#F26B4E] border border-[#F26B4E]/20 rounded-full px-3 py-1">
                 INTERNAL
               </span>
@@ -324,7 +324,7 @@ export default function Layout({ children }) {
           <main style={{
             flex: 1, overflowY: 'auto',
             padding: '24px',
-            background: 'rgba(238,238,238,0.68)',
+            background: 'var(--main-bg)',
             backdropFilter: 'blur(6px)',
             WebkitBackdropFilter: 'blur(6px)',
           }}>
