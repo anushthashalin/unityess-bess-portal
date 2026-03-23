@@ -31,6 +31,8 @@ const BESS_BD_NAV = [
   { label: 'Activity Log',    to: '/bess/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
+  { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload,   perm: 'import' },
+  { label: 'Audit Log',       to: '/bess/bd/audit-log',     icon: History,  perm: 'audit'  },
 ];
 
 const EPC_CORE_NAV = [
@@ -49,6 +51,8 @@ const EPC_BD_NAV = [
   { label: 'Activity Log',    to: '/epc/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/epc/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },
+  { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload,   perm: 'import' },
+  { label: 'Audit Log',       to: '/epc/bd/audit-log',     icon: History,  perm: 'audit'  },
 ];
 
 const ALL_PAGES = [...BESS_CORE_NAV, ...BESS_BD_NAV, ...EPC_CORE_NAV, ...EPC_BD_NAV];
