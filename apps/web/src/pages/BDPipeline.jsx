@@ -318,8 +318,8 @@ function AccountsTab({ product, accounts, users, refetch }) {
 }
 
 // ── CONTACTS TAB ──────────────────────────────────────────────────────────────
-function ContactsTab({
-  const { can } = useAuth(); accounts, contacts, refetch }) {
+function ContactsTab({ accounts, contacts, refetch }) {
+  const { can } = useAuth();
   const [search,    setSearch]    = useState('');
   const [filterAcc, setFilterAcc] = useState('');
   const [showAdd,   setShowAdd]   = useState(false);
@@ -484,8 +484,8 @@ function ContactsTab({
 }
 
 // ── OPPORTUNITIES TAB ─────────────────────────────────────────────────────────
-function OpportunitiesTab({
-  const { can } = useAuth(); product, opps, accounts, contacts, users, refetch }) {
+function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch }) {
+  const { can } = useAuth();
   const [view,        setView]        = useState('kanban');
   const [search,      setSearch]      = useState('');
   const [stageFilter, setStageFilter] = useState('');
