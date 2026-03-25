@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApiMulti } from '../hooks/useApi.js';
-import { bessApi } from '../lib/api.js';
+import { bessApi, bdApi } from '../lib/api.js';
 import { inr, date } from '../lib/fmt.js';
 import { Spinner } from '../components/Spinner.jsx';
 import { SplineScene } from '@/components/ui/spline-scene';
@@ -346,6 +346,94 @@ function QuickSizer() {
   );
 }
 
+// ── Today's Schedule widget ───────────────────────────────────────────────────
+const TYPE_STYLE = {
+  call:       { bg: 'bg-purple-100', bar: 'bg-purple-600', text: 'text-purple-900', sub: 'text-purple-500' },
+  meeting:    { bg: 'bg-blue-100',   bar: 'bg-blue-600',   text: 'text-blue-900',   sub: 'text-blue-500'   },
+  site_visit: { bg: 'bg-orange-100', bar: 'bg-[#F26B4E]',  text: 'text-orange-900', sub: 'text-orange-500' },
+  whatsapp:   { bg: 'bg-green-100',  bar: 'bg-green-600',  text: 'text-green-900',  sub: 'text-green-500'  },
+  email:      { bg: 'bg-cyan-100',   bar: 'bg-cyan-600',   text: 'text-cyan-900',   sub: 'text-cyan-500'   },
+};
+const TYPE_LABEL = { call: 'Call', meeting: 'Meeting', site_visit: 'Site Visit', whatsapp: 'WhatsApp', email: 'Email' };
+
+function TodaySchedule() {
+  const { followUps } = useApiMulti({ followUps: bdApi.followUps }, []);
+  const navigate = useNavigate();
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const items = (followUps?.data ?? [])
+    .filter(f => f.status === 'pending' && f.due_date && f.due_date.slice(0, 10) <= todayStr)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .map(f => ({
+      id:      f.id,
+      title:   f.company_name ?? `OPP-${f.opp_id}`,
+      sub:     TYPE_LABEL[f.type] ?? f.type,
+      overdue: f.due_date.slice(0, 10) < todayStr,
+      style:   TYPE_STYLE[f.type] ?? TYPE_STYLE.call,
+    }));
+
+  const shown    = items.slice(0, 2);
+  const overflow = items.slice(2, 5);
+  const extra    = items.length - 2;
+
+  return (
+    <Card className="border border-border/50 shadow-sm bg-card backdrop-blur-sm flex flex-col cursor-pointer hover:shadow-md transition-shadow"
+      onClick={() => navigate('/bess/bd/follow-ups')}>
+      <CardHeader className="pb-3 px-5 pt-5 space-y-0 flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-[14px] font-bold">Today's Schedule</CardTitle>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-black text-[#F26B4E]">{new Date().getDate()}</p>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+            {new Date().toLocaleString('en-IN', { weekday: 'short' })}
+          </p>
+        </div>
+      </CardHeader>
+      <Separator />
+      <CardContent className="flex-1 flex flex-col gap-2 px-4 py-3">
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-6 text-muted-foreground gap-1.5">
+            <CheckCircle2 className="w-7 h-7 text-green-400 opacity-60" />
+            <p className="text-xs font-semibold">All clear for today</p>
+          </div>
+        ) : (
+          <>
+            {shown.map(item => (
+              <div key={item.id}
+                className={`relative flex h-12 w-full items-center gap-2.5 overflow-hidden rounded-lg pl-2 ${item.style.bg}`}>
+                <div className={`h-8 w-1.5 rounded-sm flex-shrink-0 ${item.style.bar}${item.overdue ? ' ring-2 ring-red-400' : ''}`} />
+                <div className="min-w-0">
+                  <p className={`text-sm font-bold truncate leading-tight ${item.style.text}`}>{item.title}</p>
+                  <p className={`text-[11px] font-semibold ${item.style.sub}`}>
+                    {item.sub}{item.overdue ? ' · Overdue' : ''}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            {extra > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 mt-0.5">
+                <p className="text-xs font-bold text-neutral-700">+{extra} more follow-up{extra > 1 ? 's' : ''}</p>
+                <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+              </div>
+            )}
+            {overflow.map((_, i) => (
+              <div key={i} style={{ paddingInline: `${(i + 1) * 6}px` }}>
+                <div className="mt-[1px] h-[2px] w-full rounded-full bg-gray-100" />
+              </div>
+            ))}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -502,9 +590,9 @@ export default function Dashboard() {
           accentColor="#16A34A" iconBg="bg-emerald-100 text-emerald-600" />
       </div>
 
-      {/* ── Charts ── */}
-      <div className="grid grid-cols-5 gap-5">
-        <Card className="col-span-3 border border-border/50 shadow-sm bg-card backdrop-blur-sm">
+      {/* ── Charts + Today's Schedule ── */}
+      <div className="grid grid-cols-3 gap-5">
+        <Card className="border border-border/50 shadow-sm bg-card backdrop-blur-sm">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 px-5 pt-5">
             <CardTitle className="text-[14px] font-bold">Projects by Stage</CardTitle>
             <Badge variant="outline" className="text-[10px] font-semibold">{pj.length} total</Badge>
@@ -529,7 +617,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 border border-border/50 shadow-sm bg-card backdrop-blur-sm">
+        <Card className="border border-border/50 shadow-sm bg-card backdrop-blur-sm">
           <CardHeader className="pb-3 px-5 pt-5 space-y-0">
             <CardTitle className="text-[14px] font-bold">Weekly Proposals</CardTitle>
           </CardHeader>
@@ -555,6 +643,8 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        <TodaySchedule />
       </div>
 
       {/* ── Action items row ── */}

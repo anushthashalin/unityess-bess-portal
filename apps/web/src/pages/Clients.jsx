@@ -127,11 +127,22 @@ function LeafletMap({ clients }) {
 
     Object.entries(byState).forEach(([state, sc]) => {
       const [lat, lng] = STATE_LATLNG[state];
-      const r = Math.min(12 + sc.length * 4, 28);
+      const totalKwh = sc.reduce((s, c) => s + parseFloat(c.requirement_kwh || 0), 0);
+      const label = totalKwh >= 1000
+        ? `${(totalKwh / 1000).toFixed(1)}MWh`
+        : totalKwh > 0 ? `${Math.round(totalKwh)}kWh` : `${sc.length}`;
+      // Scale radius by capacity: base 12, +1px per 100 kWh, max 36
+      const r = totalKwh > 0 ? Math.min(12 + Math.floor(totalKwh / 100), 36) : Math.min(12 + sc.length * 4, 28);
       const circle = L.circleMarker([lat,lng], { radius:r, fillColor:'#F26B4E', color:'white', weight:2, fillOpacity:0.9 }).addTo(map);
-      const names = sc.map(c => `<div style="padding:2px 0;font-size:12px;color:#2D2D2D">${c.company_name}</div>`).join('');
-      circle.bindPopup(`<div style="font-family:-apple-system,sans-serif;min-width:160px"><div style="font-weight:800;font-size:13px;color:#F26B4E;margin-bottom:6px">${state}</div>${names}</div>`, { maxWidth:240 });
-      L.marker([lat,lng], { icon: L.divIcon({ className:'', html:`<div style="width:${r*2}px;height:${r*2}px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:${r<16?11:13}px;pointer-events:none">${sc.length}</div>`, iconSize:[r*2,r*2], iconAnchor:[r,r] }) }).addTo(map);
+      const names = sc.map(c => {
+        const kwh = parseFloat(c.requirement_kwh || 0);
+        const cap = kwh >= 1000 ? `${(kwh/1000).toFixed(1)} MWh` : kwh > 0 ? `${Math.round(kwh)} kWh` : '—';
+        return `<div style="padding:2px 0;font-size:12px;color:#2D2D2D">${c.company_name} <span style="color:#F26B4E;font-weight:700">${cap}</span></div>`;
+      }).join('');
+      const totalLabel = totalKwh >= 1000 ? `${(totalKwh/1000).toFixed(1)} MWh` : totalKwh > 0 ? `${Math.round(totalKwh)} kWh` : '';
+      circle.bindPopup(`<div style="font-family:-apple-system,sans-serif;min-width:180px"><div style="font-weight:800;font-size:13px;color:#F26B4E;margin-bottom:2px">${state}</div>${totalLabel ? `<div style="font-size:11px;color:#888;margin-bottom:6px">Total: ${totalLabel}</div>` : ''}${names}</div>`, { maxWidth:260 });
+      const fs = r < 18 ? 10 : r < 24 ? 11 : 12;
+      L.marker([lat,lng], { icon: L.divIcon({ className:'', html:`<div style="width:${r*2}px;height:${r*2}px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:${fs}px;pointer-events:none;text-align:center;line-height:1.1">${label}</div>`, iconSize:[r*2,r*2], iconAnchor:[r,r] }) }).addTo(map);
     });
   }, [ready, clients]);
 

@@ -45,7 +45,7 @@ function requireAuth(req, res, next) {
 }
 
 // ── Role-based access control ─────────────────────────────────────────────────
-// Usage: app.post('/path', requireAuth, requireRole('admin','bd_exec'), handler)
+// Usage: app.post('/path', requireAuth, handler)
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -241,7 +241,7 @@ app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
 
 // ── Health ─────────────────────────────────────────────────────────────────
 // ── Audit Log ────────────────────────────────────────────────────────────────
-app.get('/api/bd/audit-log', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.get('/api/bd/audit-log', async (req, res) => {
   try {
     const { limit = 200, resource, user_id } = req.query;
     const where = []; const params = [];
@@ -342,7 +342,7 @@ app.get('/api/bd/accounts', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/accounts', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/accounts', requireAuth, async (req, res) => {
   try {
     const { company_name, industry, city, state, website, gstin, source, owner_id, product_type } = req.body;
     if (!company_name) return res.status(400).json({ error: 'company_name is required' });
@@ -370,7 +370,7 @@ app.get('/api/bd/contacts', async (req, res) => {
   res.json({ data: rows });
 });
 
-app.post('/api/bd/contacts', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/contacts', requireAuth, async (req, res) => {
   try {
     const { account_id, name, designation, email, phone, is_primary, linkedin, notes } = req.body;
     if (!account_id || !name) return res.status(400).json({ error: 'account_id and name are required' });
@@ -408,7 +408,7 @@ app.get('/api/bd/opportunities', async (req, res) => {
   res.json({ data: rows });
 });
 
-app.post('/api/bd/opportunities', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/opportunities', requireAuth, async (req, res) => {
   try {
     const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type } = req.body;
     if (!account_id || !title) return res.status(400).json({ error: 'account_id and title are required' });
@@ -428,7 +428,7 @@ app.post('/api/bd/opportunities', requireAuth, requireRole('admin','bd_exec'), a
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/opportunities/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bd/opportunities/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
@@ -475,7 +475,7 @@ app.get('/api/bd/activities', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/activities', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/activities', requireAuth, async (req, res) => {
   try {
     const { opp_id, type, direction, summary, outcome, next_action, next_action_date, logged_by, duration_min } = req.body;
     if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type are required' });
@@ -537,7 +537,7 @@ app.get('/api/bd/follow-ups', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/follow-ups', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/follow-ups', requireAuth, async (req, res) => {
   try {
     const { opp_id, due_date, type, assigned_to } = req.body;
     if (!opp_id || !due_date) return res.status(400).json({ error: 'opp_id and due_date required' });
@@ -553,7 +553,7 @@ app.post('/api/bd/follow-ups', requireAuth, requireRole('admin','bd_exec'), asyn
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/follow-ups/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bd/follow-ups/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, snooze_until } = req.body;
@@ -596,7 +596,7 @@ app.get('/api/bd/approvals', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/approvals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/approvals', requireAuth, async (req, res) => {
   try {
     const { opp_id, type, deviation_value, justification, requested_by, proposal_id } = req.body;
     if (!opp_id || !type) return res.status(400).json({ error: 'opp_id and type required' });
@@ -610,7 +610,7 @@ app.post('/api/bd/approvals', requireAuth, requireRole('admin','bd_exec'), async
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/approvals/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bd/approvals/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, approver_notes, approver_id } = req.body;
@@ -655,7 +655,7 @@ app.get('/api/bd/proposals', async (req, res) => {
   } catch (e) { handleDbError(res, e); }
 });
 
-app.post('/api/bd/proposals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/proposals', requireAuth, async (req, res) => {
   try {
     const { opp_id, content, created_by } = req.body;
     if (!opp_id) return res.status(400).json({ error: 'opp_id required' });
@@ -682,7 +682,7 @@ app.post('/api/bd/proposals', requireAuth, requireRole('admin','bd_exec'), async
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bd/proposals/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bd/proposals/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, content } = req.body;
@@ -727,7 +727,7 @@ app.get('/api/bd/email/status', (req, res) => {
 
 // POST /api/bd/email/send
 // body: { proposal_id, to, cc, subject, body, sent_by }
-app.post('/api/bd/email/send', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bd/email/send', requireAuth, async (req, res) => {
   try {
     const { proposal_id, to, cc, subject, body: emailBody, sent_by } = req.body;
     if (!to || !subject || !emailBody) {
@@ -1113,7 +1113,7 @@ app.get('/api/bess/bess-configurations', async (req, res) => {
     res.json({ data: rows });
   } catch (e) { handleDbError(res, e); }
 });
-app.post('/api/bess/bess-configurations', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/bess-configurations', requireAuth, async (req, res) => {
   try {
     const { site_id, config_name, num_units, total_power_kw, total_energy_kwh, coupling_type, application, soc_min, soc_max, charge_hours, discharge_hours } = req.body;
     if (!site_id || !config_name || !num_units) return res.status(400).json({ error: 'site_id, config_name and num_units are required' });
@@ -1228,7 +1228,7 @@ app.get('/api/bd/automation/status', (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Clients ──────────────────────────────────────────────────────────────
-app.post('/api/bess/clients', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/clients', requireAuth, async (req, res) => {
   try {
     const {
       company_name, contact_person, email, phone, city, state, gstin,
@@ -1252,41 +1252,31 @@ app.post('/api/bess/clients', requireAuth, requireRole('admin','bd_exec'), async
        meeting_date||null, timeline||null, qualified||false, budgetary_quote||false,
        tech_discussion||false, tc_offer||false, final_quote||false, remarks||null]
     );
-    res.json({ data: c });
+    res.status(201).json({ data: c });
   } catch (e) { handleDbError(res, e); }
 });
 
 // ── PATCH client ──────────────────────────────────────────────────────────
-app.patch('/api/bess/clients/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bess/clients/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      company_name, contact_person, email, phone, city, state, gstin,
-      alternate_contact, alternate_phone, website, industry_type,
-      lead_status, bd_name, requirement_kwh, project_type, meeting_date,
-      timeline, qualified, budgetary_quote, tech_discussion, tc_offer,
-      final_quote, remarks
-    } = req.body;
-
-    if (!company_name) return res.status(400).json({ error: 'company_name required' });
-
+    const ALLOWED = [
+      'company_name','contact_person','email','phone','city','state','gstin',
+      'alternate_contact','alternate_phone','website','industry_type',
+      'lead_status','bd_name','requirement_kwh','project_type','meeting_date',
+      'timeline','qualified','budgetary_quote','tech_discussion','tc_offer',
+      'final_quote','remarks',
+    ];
+    const fields = [];
+    const vals   = [];
+    for (const key of ALLOWED) {
+      if (key in req.body) { fields.push(`${key}=$${fields.length + 1}`); vals.push(req.body[key] ?? null); }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+    vals.push(id);
     const { rows: [c] } = await pool.query(
-      `UPDATE bess.clients
-       SET company_name=$1, contact_person=$2, email=$3, phone=$4,
-           city=$5, state=$6, gstin=$7,
-           alternate_contact=$8, alternate_phone=$9, website=$10, industry_type=$11,
-           lead_status=$12, bd_name=$13, requirement_kwh=$14, project_type=$15,
-           meeting_date=$16, timeline=$17, qualified=$18, budgetary_quote=$19,
-           tech_discussion=$20, tc_offer=$21, final_quote=$22, remarks=$23,
-           updated_at=NOW()
-       WHERE id=$24 RETURNING *`,
-      [company_name, contact_person||null, email||null, phone||null,
-       city||null, state||null, gstin||null,
-       alternate_contact||null, alternate_phone||null, website||null, industry_type||null,
-       lead_status||'new', bd_name||null, requirement_kwh||null, project_type||null,
-       meeting_date||null, timeline||null, qualified||false, budgetary_quote||false,
-       tech_discussion||false, tc_offer||false, final_quote||false, remarks||null,
-       id]
+      `UPDATE bess.clients SET ${fields.join(', ')}, updated_at=NOW() WHERE id=$${vals.length} RETURNING *`,
+      vals
     );
     if (!c) return res.status(404).json({ error: 'Client not found' });
 
@@ -1319,7 +1309,7 @@ async function geocode(address, state) {
 }
 
 // ── Sites ─────────────────────────────────────────────────────────────────
-app.post('/api/bess/sites', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/sites', requireAuth, async (req, res) => {
   try {
     const { client_id, site_name, address, state, discom, tariff_category,
             sanctioned_load_kva, contract_demand_kva, connection_voltage_kv, meter_number,
@@ -1345,7 +1335,7 @@ app.post('/api/bess/sites', requireAuth, requireRole('admin','bd_exec'), async (
 });
 
 // ── PATCH site (update coords or details) ────────────────────────────────
-app.patch('/api/bess/sites/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bess/sites/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { lat, lng } = req.body;
@@ -1416,7 +1406,7 @@ app.get('/api/bess/cycle-datasets', (req, res) => {
 });
 
 // ── Gemini Bill Parser ────────────────────────────────────────────────────
-app.post('/api/bess/parse-bill', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/parse-bill', requireAuth, async (req, res) => {
   try {
     const { fileData, mimeType } = req.body;
     if (!fileData || !mimeType) return res.status(400).json({ error: 'fileData and mimeType required' });
@@ -1461,7 +1451,7 @@ app.post('/api/bess/parse-bill', requireAuth, requireRole('admin','bd_exec'), as
 });
 
 // ── Gemini BESS Recommendation ────────────────────────────────────────────
-app.post('/api/bess/recommend', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/recommend', requireAuth, async (req, res) => {
   try {
     const { load_data, available_units } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
@@ -1527,7 +1517,7 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
 });
 
 // ── EPC Configurator — AI narrative ────────────────────────────────────────
-app.post('/api/epc/size-narrative', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/epc/size-narrative', requireAuth, async (req, res) => {
   try {
     const {
       systemKwpDC, annualGenKwh, capexTotal, year1Savings,
@@ -1580,7 +1570,7 @@ Return plain text only — no JSON, no markdown, no headers. Just the narrative 
 });
 
 // ── Proposals ─────────────────────────────────────────────────────────────
-app.post('/api/bess/proposals', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/proposals', requireAuth, async (req, res) => {
   try {
     const { client_id, site_id, bess_config_id, project_id, proposal_date, status,
             capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days, notes,
@@ -1604,7 +1594,7 @@ app.post('/api/bess/proposals', requireAuth, requireRole('admin','bd_exec'), asy
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bess/proposals/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bess/proposals/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, notes, capex_ex_gst, annual_savings, payback_years, irr_percent, validity_days } = req.body;
@@ -1626,7 +1616,7 @@ app.patch('/api/bess/proposals/:id', requireAuth, requireRole('admin','bd_exec')
 });
 
 // ── Projects ──────────────────────────────────────────────────────────────
-app.post('/api/bess/projects', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/projects', requireAuth, async (req, res) => {
   try {
     const { client_id, site_id, proposal_id, status, po_number, po_value_inr,
             installation_date, commissioning_date, warranty_expiry } = req.body;
@@ -1645,7 +1635,7 @@ app.post('/api/bess/projects', requireAuth, requireRole('admin','bd_exec'), asyn
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bess/projects/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bess/projects/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, po_number, po_value_inr, installation_date, commissioning_date, warranty_expiry } = req.body;
@@ -1667,7 +1657,7 @@ app.patch('/api/bess/projects/:id', requireAuth, requireRole('admin','bd_exec'),
 });
 
 // ── Load Profiles ─────────────────────────────────────────────────────────
-app.post('/api/bess/load-profiles', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/load-profiles', requireAuth, async (req, res) => {
   try {
     const { site_id, month, year, total_units_kwh, max_demand_kw,
             peak_demand_kw, tod_peak_kwh, tod_offpeak_kwh, tod_night_kwh } = req.body;
@@ -1690,7 +1680,7 @@ app.post('/api/bess/load-profiles', requireAuth, requireRole('admin','bd_exec'),
 });
 
 // ── Tariff Structures ─────────────────────────────────────────────────────
-app.post('/api/bess/tariff-structures', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/tariff-structures', requireAuth, async (req, res) => {
   try {
     const { state, discom, tariff_category, effective_date,
             energy_charge_peak, energy_charge_offpeak, demand_charge, fixed_charge } = req.body;
@@ -1759,7 +1749,7 @@ app.get('/api/bess/coverage-table', async (req, res) => {
 });
 
 // ── Save Sizing Analysis ───────────────────────────────────────────────────
-app.post('/api/bess/sizing-analyses', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/sizing-analyses', requireAuth, async (req, res) => {
   try {
     const {
       client_id, site_id, use_case, site_state, sku_category,
@@ -1807,7 +1797,7 @@ app.get('/api/bess/sizing-analyses', async (req, res) => {
 });
 
 // ── Save Recommendation Record ─────────────────────────────────────────────
-app.post('/api/bess/recommendation-records', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/recommendation-records', requireAuth, async (req, res) => {
   try {
     const {
       sizing_analysis_id, client_id,
@@ -1840,7 +1830,7 @@ app.post('/api/bess/recommendation-records', requireAuth, requireRole('admin','b
   } catch (e) { handleDbError(res, e); }
 });
 
-app.patch('/api/bess/recommendation-records/:id', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.patch('/api/bess/recommendation-records/:id', requireAuth, async (req, res) => {
   try {
     const { selected_config, gemini_commentary } = req.body;
     const { rows: [row] } = await pool.query(
@@ -1874,7 +1864,7 @@ app.get('/api/bess/recommendation-records', async (req, res) => {
 });
 
 // ── Save Finance Record ────────────────────────────────────────────────────
-app.post('/api/bess/finance-records', requireAuth, requireRole('admin','bd_exec'), async (req, res) => {
+app.post('/api/bess/finance-records', requireAuth, async (req, res) => {
   try {
     const {
       recommendation_id, client_id, selected_config, capex_ex_gst,
