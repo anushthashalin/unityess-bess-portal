@@ -91,8 +91,8 @@ function KpiChip({ label, value, icon: Icon, color }) {
 }
 
 // ── ACCOUNTS TAB ─────────────────────────────────────────────────────────────
-function AccountsTab({
-  const { can } = useAuth(); product, accounts, users, refetch }) {
+function AccountsTab({ product, accounts, users, refetch }) {
+  const { can } = useAuth();
   const [search,    setSearch]    = useState('');
   const [industry,  setIndustry]  = useState('');
   const [sortField, setSortField] = useState('company_name');
