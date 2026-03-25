@@ -39,12 +39,23 @@ import {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const APPLICATIONS = [
-  { value: 'tod_arbitrage',  label: 'ToD Arbitrage',              color: '#F26B4E' },
-  { value: 'peak_shaving',   label: 'Peak Demand Shaving',         color: '#6366F1' },
-  { value: 'backup',         label: 'Emergency Backup',            color: '#10B981' },
-  { value: 'grid_support',   label: 'Grid Support / Utility',      color: '#F59E0B' },
-  { value: 'hybrid',         label: 'Hybrid (Solar + BESS)',       color: '#3B82F6' },
+  { value: 'tod_arbitrage',         label: 'ToD Arbitrage',                  color: '#F26B4E' },
+  { value: 'peak_shaving',          label: 'Peak Demand Shaving',             color: '#6366F1' },
+  { value: 'dg_replacement',        label: 'DG Replacement',                  color: '#EF4444' },
+  { value: 'demand_charge_mgmt',    label: 'Demand Charge Management',        color: '#8B5CF6' },
+  { value: 'backup',                label: 'Emergency Backup / UPS',          color: '#10B981' },
+  { value: 'solar_self_consumption',label: 'Solar Self-Consumption',          color: '#F59E0B' },
+  { value: 'load_shifting',         label: 'Load Shifting',                   color: '#0EA5E9' },
+  { value: 'hybrid',                label: 'Hybrid (Solar + BESS)',           color: '#3B82F6' },
+  { value: 'power_quality',         label: 'Power Quality / Voltage Support', color: '#14B8A6' },
+  { value: 'microgrid',             label: 'Microgrid / Off-grid',            color: '#84CC16' },
+  { value: 'grid_support',          label: 'Grid Support / Utility-Scale',    color: '#A16207' },
+  { value: 'captive_optimisation',  label: 'Captive Power Optimisation',      color: '#D946EF' },
 ];
+
+// Application groupings — maps the 12 use cases to the two sizing engine branches
+const TOD_LIKE = ['tod_arbitrage', 'load_shifting', 'solar_self_consumption', 'hybrid', 'captive_optimisation'];
+const DG_LIKE  = ['dg_replacement', 'backup', 'microgrid', 'peak_shaving', 'demand_charge_mgmt', 'grid_support', 'power_quality'];
 
 const COUPLING = ['AC', 'DC'];
 
@@ -262,7 +273,7 @@ export default function BESSConfig() {
   }, [activeTab]);
 
   // ── Sizing Tool state ──────────────────────────────────────────────────────
-  const [szUseCase,       setSzUseCase]       = useState(null); // 'dg'|'tod'
+  const [szUseCase,       setSzUseCase]       = useState('tod_arbitrage'); // full application key
   const [szCategory,      setSzCategory]      = useState('cabinet'); // 'cabinet'|'container'
   const [szState,         setSzState]         = useState('');         // Indian state for ToD tariff lookup
   const [szClientId,      setSzClientId]      = useState('');
@@ -271,8 +282,7 @@ export default function BESSConfig() {
   const [szFuelCost,      setSzFuelCost]      = useState('90');
   const [szDgEff,         setSzDgEff]         = useState('0.31');
   const [szDgDays,        setSzDgDays]        = useState('300');
-  const [szCapacityMwh,   setSzCapacityMwh]   = useState('');   // MWh of BESS deployed for ToD
-  const [szDod,           setSzDod]           = useState('85');  // Depth of Discharge %
+  const [szDailyDispatchKwh, setSzDailyDispatchKwh] = useState(''); // kWh to dispatch per day (ToD)
   const [szPeakTariff,    setSzPeakTariff]    = useState('');
   const [szOffpeakTariff, setSzOffpeakTariff] = useState('');
   const [szPeakWindow,    setSzPeakWindow]    = useState('4');
@@ -282,6 +292,7 @@ export default function BESSConfig() {
   const [szAiLoading,     setSzAiLoading]     = useState(false);
   const [szSaving,        setSzSaving]        = useState(false);
   const [szSaved,         setSzSaved]         = useState(null); // { sizing_id, rec_id, finance_id }
+  const [showAdvanced,    setShowAdvanced]    = useState(false);
   // Quote panel: offer type + price overrides (in ₹ Lakhs as strings)
   const [offerType,       setOfferType]       = useState('budgetary');
   const [qSupplyL,        setQSupplyL]        = useState(''); // '' = pre-fill from SKU
@@ -328,7 +339,7 @@ export default function BESSConfig() {
     setOfferType('budgetary'); setQSupplyL(''); setQInstallL('');
     let nominal_kwh = 0, nominal_kw = 0, annual_savings_inr = 0, dispatch_kwh_per_year = 0;
     const todExtra = {};  // populated in the ToD branch, spread into setSzResult
-    if (szUseCase === 'dg') {
+    if (DG_LIKE.includes(szUseCase)) {
       const load = parseFloat(szLoadKw) || 0;
       const hrs  = parseFloat(szBackupHrs) || 0;
       const days = parseFloat(szDgDays) || 300;
@@ -342,19 +353,18 @@ export default function BESSConfig() {
       dispatch_kwh_per_year = load * hrs * days;
       annual_savings_inr    = dispatch_kwh_per_year * Math.max(0, net_benefit_kwh);
     } else {
-      const capacity_mwh = parseFloat(szCapacityMwh) || 0;
-      const dod          = (parseFloat(szDod) || 85) / 100;
-      const peak         = parseFloat(szPeakTariff) || 0;
-      const offpeak      = parseFloat(szOffpeakTariff) || 0;
-      const window       = parseFloat(szPeakWindow) || 4;
-      const days         = parseFloat(szTodDays) || 300;
-      const usable_kwh   = capacity_mwh * 1000 * dod;     // kWh dischargeable per cycle
-      nominal_kwh           = capacity_mwh * 1000;          // installed nominal kWh
-      nominal_kw            = usable_kwh / window;          // minimum PCS power rating
-      dispatch_kwh_per_year = usable_kwh * days;
-      annual_savings_inr    = usable_kwh * (peak - offpeak) * days;
-      // Attach ToD-specific fields to result object below
-      Object.assign(todExtra, { capacity_mwh, usable_kwh_per_day: usable_kwh, dod_pct: parseFloat(szDod) || 85 });
+      const daily_dispatch = parseFloat(szDailyDispatchKwh) || 0;
+      const peak           = parseFloat(szPeakTariff) || 0;
+      const offpeak        = parseFloat(szOffpeakTariff) || 0;
+      const window         = parseFloat(szPeakWindow) || 4;
+      const days           = parseFloat(szTodDays) || 300;
+      // Derive required BESS size from desired daily dispatch (per workflow spec)
+      // raw_energy = dispatch / 0.85 (5% AC/DC loss built into derating factor)
+      nominal_kwh           = daily_dispatch / 0.85;
+      nominal_kw            = daily_dispatch / window;
+      dispatch_kwh_per_year = daily_dispatch * days;
+      annual_savings_inr    = daily_dispatch * (peak - offpeak) * days;
+      Object.assign(todExtra, { daily_dispatch_kwh: daily_dispatch, capacity_mwh: nominal_kwh / 1000, usable_kwh_per_day: daily_dispatch });
     }
     const mkSlot = (count, kwh, kw, capex) => {
       const om1    = capex * 0.015;
@@ -374,25 +384,35 @@ export default function BESSConfig() {
         benefit_kwh: dispatch_kwh_per_year > 0 ? annual_savings_inr / dispatch_kwh_per_year : null,
       };
     };
-    // Filter by selected category (cabinet / container)
-    const categoryUnits = unitList.filter(u => (u.energy_kwh ?? 0) > 0 && (u.category === szCategory || !u.category));
+    // Compute validated requirement and dispatch factor (Fix 2 + Fix 3)
+    const derate_factor        = 0.05 + (1 - 0.90);                              // 15%: 5% AC/DC loss + 10% SOC reserve
+    const validated_energy_kwh = nominal_kwh / (1 - derate_factor);
+    const dispatch_factor      = yr1.soh * yr1.rte * ((socMax - socMin) / 100);  // ≈ 0.81 for q25c_365 at 80% SoC window
+
+    // Auto-suggest form factor from validated energy (Fix 3): ≥200 kWh → container, else cabinet
+    const suggestedCategory = validated_energy_kwh >= 200 ? 'container' : 'cabinet';
+    setSzCategory(suggestedCategory);
+
+    // Filter SKUs by auto-suggested category
+    const categoryUnits = unitList.filter(u => (u.energy_kwh ?? 0) > 0 && (u.category === suggestedCategory || !u.category));
     const allConfigs = categoryUnits.map(unit => {
-        const ecoCount = Math.max(1, Math.ceil(nominal_kwh / unit.energy_kwh));
-        const recCount = Math.max(1, Math.ceil((nominal_kwh * 1.15) / unit.energy_kwh));
+        // Eco: minimum units to meet validated requirement (nameplate-based)
+        const ecoCount = Math.max(1, Math.ceil(validated_energy_kwh / unit.energy_kwh));
+        // Rec: accounts for real-world dispatch factor (SOH × RTE × SoC window) + 15% buffer (Fix 2)
+        const recCount = Math.max(1, Math.ceil((validated_energy_kwh * 1.15) / (unit.energy_kwh * dispatch_factor)));
         return {
           unit,
           eco: mkSlot(ecoCount, ecoCount * unit.energy_kwh, ecoCount * unit.power_kw, ecoCount * (unit.price_ex_gst || 0)),
           rec: mkSlot(recCount, recCount * unit.energy_kwh, recCount * unit.power_kw, recCount * (unit.price_ex_gst || 0)),
         };
       });
-    const derate_factor = 0.05 + (1 - 0.90); // ac_dc_loss + soc_reserve
     setSzSaved(null); // reset save state for fresh result
     setSzResult({
       nominal_kwh, nominal_kw, annual_savings_inr,
       dispatch_kwh_per_year, allConfigs,
-      use_case: szUseCase, category: szCategory, site_state: szState,
+      use_case: szUseCase, category: suggestedCategory, site_state: szState,
       derate_factor,
-      validated_energy_kwh: nominal_kwh / (1 - derate_factor),
+      validated_energy_kwh,
       ...todExtra,
     });
     // Async AI narrative — non-blocking
@@ -400,7 +420,7 @@ export default function BESSConfig() {
     try {
       const aiRes = await bessApi.recommendBess({
         load_data: {
-          source: szUseCase === 'dg' ? 'DG Replacement' : 'ToD Arbitrage',
+          source: DG_LIKE.includes(szUseCase) ? 'DG Replacement' : 'ToD Arbitrage',
           nominal_kwh: Math.round(nominal_kwh), nominal_kw: Math.round(nominal_kw),
           annual_savings_inr: Math.round(annual_savings_inr), use_case: szUseCase,
         },
@@ -424,17 +444,17 @@ export default function BESSConfig() {
         use_case:             szResult.use_case,
         site_state:           szResult.site_state || null,
         sku_category:         szResult.category,
-        load_kwh_per_day:     szUseCase === 'tod' ? (szResult.usable_kwh_per_day || null) : null,
+        load_kwh_per_day:     TOD_LIKE.includes(szUseCase) ? (szResult.usable_kwh_per_day || null) : null,
         peak_demand_kw:       parseFloat(szLoadKw) || null,
-        dg_runtime_hours:     szUseCase === 'dg'  ? parseFloat(szBackupHrs) || null : null,
-        diesel_price_rs_l:    szUseCase === 'dg'  ? parseFloat(szFuelCost)  || null : null,
+        dg_runtime_hours:     DG_LIKE.includes(szUseCase)  ? parseFloat(szBackupHrs) || null : null,
+        diesel_price_rs_l:    DG_LIKE.includes(szUseCase)  ? parseFloat(szFuelCost)  || null : null,
         raw_energy_kwh:       Math.round(szResult.nominal_kwh),
         derate_factor:        szResult.derate_factor,
         validated_energy_kwh: Math.round(szResult.validated_energy_kwh),
         required_power_kw:    Math.round(szResult.nominal_kw),
-        sizing_basis:         szUseCase === 'dg'
+        sizing_basis:         DG_LIKE.includes(szUseCase)
           ? `DG: ${szLoadKw}kW × ${szBackupHrs}h, derated 15%`
-          : `ToD: ${szCapacityMwh}MWh × ${szDod}% DoD / ${szPeakWindow}h peak window`,
+          : `ToD: ${szDailyDispatchKwh}kWh/day dispatch / ${szPeakWindow}h peak window`,
       });
 
       // 2 — recommendation record
@@ -736,6 +756,47 @@ export default function BESSConfig() {
     }
   }
 
+  // ── Unified "Analyse & Size" handler ─────────────────────────────────────
+  const isTodLike = TOD_LIKE.includes(szUseCase);
+  const isDgLike  = DG_LIKE.includes(szUseCase);
+  const hasRuleInputs = isTodLike
+    ? !!(szDailyDispatchKwh && szPeakTariff && szOffpeakTariff)
+    : isDgLike ? !!(szLoadKw && szBackupHrs) : false;
+  const hasLoadData   = lpParsed || lpManualKwh.some(v => v && parseFloat(v) > 0);
+  const canAnalyse    = hasRuleInputs || !!hasLoadData;
+
+  const handleAnalyseSize = async () => {
+    setSzResult(null); setSzAiNote(null); setLpRec(null); setLpRecError(null); setLpVerified(false);
+    if (hasRuleInputs) {
+      await runSizing();
+    }
+    if (lpParsed) {
+      await runRecommendation({
+        source:             'EB Bill',
+        total_monthly_kwh:  lpParsed.total_units_kwh,
+        max_demand_kw:      lpParsed.max_demand_kw,
+        peak_kwh:           lpParsed.tod_peak_kwh,
+        offpeak_kwh:        lpParsed.tod_offpeak_kwh,
+        night_kwh:          lpParsed.tod_night_kwh,
+        contract_demand_kva: lpParsed.contract_demand_kva,
+        tariff_category:    lpParsed.tariff_category,
+        discom:             lpParsed.discom,
+        consumer_name:      lpParsed.consumer_name,
+      });
+    } else if (lpManualKwh.some(v => v && parseFloat(v) > 0)) {
+      const vals   = lpManualKwh.map(v => parseFloat(v) || 0);
+      const filled = vals.filter(v => v > 0);
+      await runRecommendation({
+        source:           'Manual Input',
+        monthly_kwh:      vals,
+        total_annual_kwh: vals.reduce((a, b) => a + b, 0),
+        avg_monthly_kwh:  filled.length ? vals.reduce((a, b) => a + b, 0) / filled.length : 0,
+        max_monthly_kwh:  Math.max(...vals),
+        months_with_data: filled.length,
+      });
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="flex flex-col gap-6 pb-8">
@@ -753,1780 +814,1265 @@ export default function BESSConfig() {
           </Badge>
         </div>
 
-        {/* ── KPI strip ─────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <SparkKpi label="Total Power"    value={`${totalPower.toLocaleString('en-IN')} kW`}    icon={Zap}      accent />
-          <SparkKpi label="Total Energy"   value={`${totalEnergy.toLocaleString('en-IN')} kWh`}  icon={Battery} />
-          <SparkKpi label="Usable Energy"  value={`${usableEnergy.toFixed(0)} kWh`}              icon={TrendingUp} />
-          <SparkKpi label="CAPEX (Ex-GST)" value={inrCr(totalPrice)}  sub="+ 18% GST"            icon={BarChart3} />
-        </div>
+        {/* ══════════════════════════════════════════════════════════════════
+            STEP 1 — CUSTOMER REQUIREMENT INPUT (always visible)
+        ══════════════════════════════════════════════════════════════════ */}
+        <Card className="border-2 border-orange-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-orange-500" /> Step 1 — Customer Requirement
+            </CardTitle>
+            <CardDescription className="text-xs leading-relaxed">
+              Select the application and enter parameters. Upload an EB bill or enter monthly data manually — Gemini AI will size the BESS for you.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
 
-        {/* ── Main layout ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-6">
-
-          {/* ── LEFT PANEL: configurator ─────────────────────────────── */}
-          <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
-
-            {/* Unit selector */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-orange-500" /> Select Unit Model
-                </CardTitle>
-                <CardDescription>Live catalogue from database</CardDescription>
-              </CardHeader>
-              <CardContent className="p-2">
-                {unitList.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No active units in database.</p>
-                ) : (
-                  <div className="max-h-[260px] overflow-y-auto flex flex-col gap-1 pr-1">
-                    {unitList.map((unit) => {
-                      const active = activeUnit?.id === unit.id;
-                      return (
-                        <button
-                          key={unit.id}
-                          onClick={() => setSelectedUnit(unit)}
-                          className={`w-full text-left rounded-md border px-3 py-2 transition-all ${
-                            active
-                              ? 'border-orange-500 bg-orange-50'
-                              : 'border-border hover:border-orange-300 bg-background'
-                          }`}
-                        >
-                          <div className="flex justify-between items-center gap-2">
-                            <div className="min-w-0">
-                              <p className={`font-black text-xs truncate ${active ? 'text-orange-500' : 'text-foreground'}`}>
-                                {unit.model}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {unit.power_kw} kW · {unit.energy_kwh} kWh
-                              </p>
-                            </div>
-                            <p className={`font-black text-xs shrink-0 ${active ? 'text-orange-500' : 'text-muted-foreground'}`}>
-                              {Number(unit.price_ex_gst) > 0 ? inrL(unit.price_ex_gst) : 'On request'}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+            {/* ── Row 1: Use Case + State + Client ── */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Application / Use Case</Label>
+                <select
+                  className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                  value={szUseCase}
+                  onChange={e => { setSzUseCase(e.target.value); setSzResult(null); setSzAiNote(null); }}
+                >
+                  {APPLICATIONS.map(a => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </select>
+                {szUseCase && (
+                  <p className="text-[10px] text-muted-foreground px-0.5">
+                    Engine: <span className="font-bold text-foreground">{isTodLike ? 'ToD / Energy Shifting' : 'DG / Backup'}</span>
+                  </p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">State</Label>
+                <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                  value={szState} onChange={e => handleSzStateChange(e.target.value)}>
+                  <option value="">— Select state —</option>
+                  {stateList.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Client (optional)</Label>
+                <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                  value={szClientId} onChange={e => setSzClientId(e.target.value)}>
+                  <option value="">— None —</option>
+                  {clientList.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                </select>
+              </div>
+            </div>
 
-            {/* System parameters */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-orange-500" /> System Parameters
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-5">
-
-                {/* Number of units */}
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Number of Units</Label>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline" size="icon"
-                      onClick={() => setNumUnits(Math.max(1, numUnits - 1))}
-                      className="h-9 w-9 text-lg font-black"
-                    >−</Button>
-                    <span className="text-3xl font-black w-12 text-center">{numUnits}</span>
-                    <Button
-                      variant="outline" size="icon"
-                      onClick={() => setNumUnits(numUnits + 1)}
-                      className="h-9 w-9 text-lg font-black"
-                    >+</Button>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      = {totalPower} kW / {totalEnergy} kWh
-                    </span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Coupling */}
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Coupling Type</Label>
-                  <div className="flex gap-2">
-                    {COUPLING.map((c) => (
-                      <Button
-                        key={c}
-                        variant={coupling === c ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setCoupling(c)}
-                        className={coupling === c ? 'bg-orange-500 hover:bg-orange-600' : ''}
-                      >
-                        {c}-Coupled
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Application */}
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Application</Label>
-                  <Select value={application} onValueChange={setApplication}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {APPLICATIONS.map((a) => (
-                        <SelectItem key={a.value} value={a.value}>
-                          <span className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full inline-block" style={{ background: a.color }} />
-                            {a.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Separator />
-
-                {/* SoC range */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                      State of Charge Window
+            {/* ── Row 2: Dynamic parameters ── */}
+            {isTodLike && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">ToD / Energy Shifting Parameters</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5 md:col-span-1">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      Daily Dispatch (kWh)
+                      <Tooltip>
+                        <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Energy to shift from off-peak to peak each day. The engine derives required BESS size from this target.</TooltipContent>
+                      </Tooltip>
                     </Label>
-                    <Badge variant="secondary" className="text-xs font-bold">
-                      {socMin}% – {socMax}%
-                    </Badge>
+                    <Input type="number" min="0" step="10" placeholder="e.g. 500"
+                      className="h-9 text-xs" value={szDailyDispatchKwh} onChange={e => setSzDailyDispatchKwh(e.target.value)} />
                   </div>
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>SoC Min</span><span className="font-bold text-foreground">{socMin}%</span>
-                      </div>
-                      <Slider
-                        min={5} max={30} step={1}
-                        value={[socMin]}
-                        onValueChange={([v]) => setSocMin(v)}
-                        className="[&_[role=slider]]:bg-orange-500 [&_.bg-primary]:bg-orange-500"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>SoC Max</span><span className="font-bold text-foreground">{socMax}%</span>
-                      </div>
-                      <Slider
-                        min={70} max={100} step={1}
-                        value={[socMax]}
-                        onValueChange={([v]) => setSocMax(v)}
-                        className="[&_[role=slider]]:bg-orange-500 [&_.bg-primary]:bg-orange-500"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Tariff (₹/kWh)</Label>
+                    <Input type="number" min="0" step="0.1" placeholder="e.g. 10.5"
+                      className="h-9 text-xs" value={szPeakTariff} onChange={e => setSzPeakTariff(e.target.value)} />
                   </div>
-                  <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                    Usable window: <span className="font-bold text-foreground">{socMax - socMin}%</span>
-                    {' '}→{' '}
-                    <span className="font-bold text-orange-500">{usableEnergy.toFixed(0)} kWh</span> effective
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Off-Peak Tariff (₹/kWh)</Label>
+                    <Input type="number" min="0" step="0.1" placeholder="e.g. 5.5"
+                      className="h-9 text-xs" value={szOffpeakTariff} onChange={e => setSzOffpeakTariff(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Window (hrs)</Label>
+                    <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4"
+                      className="h-9 text-xs" value={szPeakWindow} onChange={e => setSzPeakWindow(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
+                    <Input type="number" min="1" max="365" placeholder="e.g. 300"
+                      className="h-9 text-xs" value={szTodDays} onChange={e => setSzTodDays(e.target.value)} />
                   </div>
                 </div>
+              </div>
+            )}
 
-                <Separator />
-
-                {/* Financial inputs */}
-                <div className="space-y-3">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Financial Assumptions
-                  </Label>
-                  <div className="space-y-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Peak Load (kW)</Label>
-                      <Input
-                        type="number" placeholder="e.g. 500"
-                        value={peakKw}
-                        onChange={(e) => setPeakKw(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Tariff — state-linked, first-class input */}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs flex items-center gap-1">
-                        State
-                        <Tooltip>
-                          <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
-                          <TooltipContent>Selects tariff structure from master. Updates Tariff Δ automatically.</TooltipContent>
-                        </Tooltip>
-                      </Label>
-                      <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
-                        value={selectedState} onChange={e => handleStateChange(e.target.value)}>
-                        <option value="">— Select state —</option>
-                        {stateList.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-
-                    {discomList.length > 1 && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">DISCOM</Label>
-                        <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
-                          value={selectedDiscom} onChange={e => handleDiscomChange(e.target.value)}>
-                          {discomList.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                      </div>
-                    )}
-
-                    {activeTariffRow && (
-                      <div className="rounded-md bg-orange-50 border border-orange-200 px-3 py-2 text-xs space-y-0.5">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Peak tariff</span>
-                          <span className="font-bold">₹{activeTariffRow.energy_charge_peak}/kWh</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Off-peak tariff</span>
-                          <span className="font-bold">₹{activeTariffRow.energy_charge_offpeak}/kWh</span>
-                        </div>
-                        <div className="flex justify-between border-t border-orange-200 pt-1 mt-1">
-                          <span className="text-orange-700 font-semibold">ToD Spread</span>
-                          <span className="text-orange-700 font-black">₹{tariffDiff}/kWh</span>
-                        </div>
-                        {activeTariffRow.tariff_category && (
-                          <div className="text-[10px] text-muted-foreground pt-0.5">{activeTariffRow.tariff_category}</div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs flex items-center gap-1">
-                        Tariff Δ (₹/kWh)
-                        <Tooltip>
-                          <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
-                          <TooltipContent>Auto-filled from state tariff master. Override manually if needed.</TooltipContent>
-                        </Tooltip>
-                      </Label>
-                      <Input
-                        type="number" step="0.1"
-                        value={tariffDiff}
-                        onChange={(e) => setTariffDiff(+e.target.value)}
-                      />
-                    </div>
+            {isDgLike && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">DG / Backup Parameters</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Critical Load (kW)</Label>
+                    <Input type="number" min="0" placeholder="e.g. 250" className="h-9 text-xs"
+                      value={szLoadKw} onChange={e => setSzLoadKw(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Backup Duration (hrs)</Label>
+                    <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4" className="h-9 text-xs"
+                      value={szBackupHrs} onChange={e => setSzBackupHrs(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fuel Cost (₹/litre)</Label>
+                    <Input type="number" min="0" placeholder="e.g. 90" className="h-9 text-xs"
+                      value={szFuelCost} onChange={e => setSzFuelCost(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">DG Efficiency (L/kWh)</Label>
+                    <Input type="number" min="0.1" step="0.01" placeholder="e.g. 0.31" className="h-9 text-xs"
+                      value={szDgEff} onChange={e => setSzDgEff(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
+                    <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
+                      value={szDgDays} onChange={e => setSzDgDays(e.target.value)} />
                   </div>
                 </div>
+              </div>
+            )}
 
-                <Separator />
+            <Separator />
 
-                {/* Cycle / Degradation Dataset */}
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" /> Degradation Profile
-                  </Label>
-                  <div className="flex flex-col gap-1">
-                    {Object.entries(CYCLE_DATASETS).map(([key, ds]) => (
-                      <button
-                        key={key}
-                        onClick={() => setCycleDatasetKey(key)}
-                        className={`w-full text-left rounded-md border px-3 py-2 transition-all text-xs ${
-                          cycleDatasetKey === key
-                            ? 'border-orange-500 bg-orange-50 text-orange-700'
-                            : 'border-border hover:border-orange-300 bg-background text-muted-foreground'
-                        }`}
-                      >
-                        <span className="font-bold block">{ds.label}</span>
-                        <span className="text-[10px] opacity-70">{ds.description}</span>
+            {/* ── Row 3: PRIMARY input — Upload Bill + Manual kWh side by side ── */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                Load Data (Priority Input — fuels AI recommendation)
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* ── Upload Bill / Document card ── */}
+                <div className="flex flex-col gap-3 rounded-xl border-2 border-dashed border-orange-300 bg-orange-50/30 p-4 hover:border-orange-500 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                      <Upload className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Upload EB Bill / Document</p>
+                      <p className="text-[10px] text-muted-foreground">PDF, image, or Excel — Gemini AI reads it</p>
+                    </div>
+                  </div>
+
+                  {/* File input trigger */}
+                  {!lpParsed && !lpParsing && (
+                    <button
+                      onClick={() => lpFileRef.current?.click()}
+                      className="w-full text-center py-3 text-xs text-orange-600 font-bold bg-orange-100 hover:bg-orange-200 rounded-lg transition-colors"
+                    >
+                      {lpFile ? lpFile.name : 'Click to select file'}
+                    </button>
+                  )}
+                  <input
+                    ref={lpFileRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setLpFile(file); setLpParsed(null); setLpParseErr(null); setLpParsing(true);
+                      (async () => {
+                        try {
+                          const base64 = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                            reader.onerror = () => reject(new Error('File read error.'));
+                            reader.readAsDataURL(file);
+                          });
+                          const result = await bessApi.parseBill({ fileData: base64, mimeType: file.type });
+                          setLpParsed(result);
+                        } catch (err) {
+                          setLpParseErr(err.message ?? 'Gemini parsing failed.');
+                        } finally { setLpParsing(false); }
+                      })();
+                    }}
+                  />
+
+                  {lpParsing && (
+                    <div className="flex items-center gap-2 text-xs text-orange-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reading document with Gemini…
+                    </div>
+                  )}
+                  {lpParseErr && (
+                    <div className="text-xs text-red-500 bg-red-50 rounded-lg px-2 py-1.5">{lpParseErr}</div>
+                  )}
+                  {lpParsed && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-1.5 text-xs text-green-600 font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Bill extracted
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        {[
+                          ['Consumer', lpParsed.consumer_name],
+                          ['DISCOM',   lpParsed.discom],
+                          ['Total kWh', lpParsed.total_units_kwh ? `${lpParsed.total_units_kwh} kWh` : '—'],
+                          ['Max Demand', lpParsed.max_demand_kw ? `${lpParsed.max_demand_kw} kW` : '—'],
+                        ].map(([l, v]) => (
+                          <div key={l} className="bg-white/70 rounded px-2 py-1">
+                            <span className="text-muted-foreground">{l}: </span>
+                            <span className="font-bold">{v ?? '—'}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => { setLpFile(null); setLpParsed(null); setLpParseErr(null); }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground underline">
+                        Remove — upload different file
                       </button>
+                    </div>
+                  )}
+
+                  {/* Google Form link */}
+                  <a
+                    href="https://docs.google.com/forms/d/e/1FAIpQLSfffMETWxybmqb83ss9qTXdcAkRlXfvpE5HvbzdICXTERRU2w/viewform?usp=sharing"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-[10px] text-orange-500 hover:text-orange-700 font-bold"
+                  >
+                    <Link2 className="w-3 h-3" /> Or send client the UnityESS intake form →
+                  </a>
+                </div>
+
+                {/* ── Manual Monthly kWh card ── */}
+                <div className="flex flex-col gap-3 rounded-xl border-2 border-border bg-muted/20 p-4 hover:border-orange-300 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Enter Monthly kWh Manually</p>
+                      <p className="text-[10px] text-muted-foreground">Enter available months — blank months are skipped</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                      <div key={m} className="space-y-0.5">
+                        <Label className="text-[9px] text-muted-foreground">{m}</Label>
+                        <Input
+                          type="number" min="0" placeholder="—"
+                          className="h-7 text-[11px] px-2"
+                          value={lpManualKwh[i]}
+                          onChange={e => {
+                            const next = [...lpManualKwh];
+                            next[i] = e.target.value;
+                            setLpManualKwh(next);
+                          }}
+                        />
+                      </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-muted-foreground px-1">
-                    Yr-1 RTE: <span className="font-bold text-foreground">{(yr1.rte * 100).toFixed(1)}%</span>
-                    {' '}· Yr-1 SOH: <span className="font-bold text-foreground">{(yr1.soh * 100).toFixed(1)}%</span>
-                    {' '}· {cyclesPerYear} cycles/yr
+                  {lpManualKwh.some(v => v && parseFloat(v) > 0) && (
+                    <div className="text-[10px] text-muted-foreground bg-white/70 rounded px-2 py-1.5">
+                      Total: <span className="font-bold text-foreground">
+                        {lpManualKwh.reduce((a, v) => a + (parseFloat(v) || 0), 0).toLocaleString('en-IN')} kWh
+                      </span> across {lpManualKwh.filter(v => v && parseFloat(v) > 0).length} months
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Analyse & Size button ── */}
+            <Button
+              className={`h-12 text-sm font-black w-full transition-all ${canAnalyse ? 'bg-orange-500 hover:bg-orange-600 shadow-md shadow-orange-200' : ''}`}
+              disabled={!canAnalyse}
+              onClick={handleAnalyseSize}
+            >
+              <TrendingUp className="w-4 h-4 mr-2" />
+              {canAnalyse ? 'Analyse & Size BESS' : 'Enter parameters or load data above to proceed'}
+            </Button>
+
+          </CardContent>
+        </Card>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            STEP 2 — SIZING RESULTS (shown after analysis)
+        ══════════════════════════════════════════════════════════════════ */}
+        {(szResult || lpRec || lpVerified || szAiLoading || lpRecommending) && (
+          <div className="flex flex-col gap-4">
+
+            {/* Section header */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-black text-foreground flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-orange-500" /> Step 2 — Sizing Results
+              </h2>
+              <button
+                onClick={() => {
+                  setSzResult(null); setSzAiNote(null); setSzSaved(null);
+                  setLpRec(null); setLpRecError(null); setLpVerified(false); setLpData(null);
+                  setOfferType('budgetary'); setQSupplyL(''); setQInstallL('');
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <X className="w-3 h-3" /> Reset & Recalculate
+              </button>
+            </div>
+
+            {/* AI loading state */}
+            {(lpRecommending) && (
+              <div className="flex flex-col items-center gap-3 py-8 bg-orange-50/50 rounded-xl border border-orange-100">
+                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                <p className="text-xs font-bold text-foreground">Gemini is analysing your load data…</p>
+                <p className="text-[11px] text-muted-foreground">Running sizing calculations and financial model</p>
+              </div>
+            )}
+
+            {/* AI recommendation error */}
+            {lpRecError && !lpRecommending && (
+              <div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{lpRecError}</div>
+            )}
+
+            {/* ── Rule-based sizing results ── */}
+            {szResult && (
+              <div className="flex flex-col gap-4">
+
+                {/* TOD summary card */}
+                {TOD_LIKE.includes(szResult.use_case) && (
+                  <>
+                    <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+                        {APPLICATIONS.find(a => a.value === szResult.use_case)?.label ?? 'Sizing'} — Summary
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] text-gray-400">Daily Dispatch Target</p>
+                          <p className="text-xl font-black text-orange-500">{Math.round(szResult.usable_kwh_per_day).toLocaleString('en-IN')} kWh/day</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">→ {szResult.capacity_mwh.toFixed(2)} MWh required (raw, pre-derate)</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400">Minimum PCS Rating</p>
+                          <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">over {szPeakWindow}h peak window</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-green-700 mb-3">Financial Return</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-[10px] text-green-600 font-bold uppercase">Annual Savings</p>
+                          <p className="text-lg font-black text-green-700">{inrL(szResult.annual_savings_inr)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">Annual Dispatch</p>
+                          <p className="text-lg font-black">{(szResult.dispatch_kwh_per_year / 1000).toFixed(1)} MWh</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">₹/kWh Benefit</p>
+                          <p className="text-lg font-black">
+                            {szResult.dispatch_kwh_per_year > 0
+                              ? `₹${(szResult.annual_savings_inr / szResult.dispatch_kwh_per_year).toFixed(2)}`
+                              : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button className="bg-orange-500 hover:bg-orange-600 h-9 text-xs font-bold"
+                      onClick={() => {
+                        if (szPeakTariff && szOffpeakTariff) {
+                          const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
+                          if (diff > 0) setTariffDiff(diff);
+                        }
+                        setShowAdvanced(true);
+                        setActiveTab('summary');
+                      }}>
+                      Apply to Configurator &amp; View Details →
+                    </Button>
+                  </>
+                )}
+
+                {/* DG summary card */}
+                {DG_LIKE.includes(szResult.use_case) && (
+                  <>
+                    <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+                        {APPLICATIONS.find(a => a.value === szResult.use_case)?.label ?? 'DG'} — Nominal Requirement
+                      </p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-[10px] text-gray-400">Energy</p>
+                          <p className="text-xl font-black text-orange-500">{Math.round(szResult.nominal_kwh).toLocaleString('en-IN')} kWh</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400">Power</p>
+                          <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400">Annual Savings</p>
+                          <p className="text-xl font-black text-green-400">{inrL(szResult.annual_savings_inr)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Eco + Rec cards for active unit */}
+                    {(() => {
+                      const ac = szResult.allConfigs.find(c => c.unit.id === activeUnit?.id);
+                      if (!ac) return null;
+                      return (
+                        <div className="grid grid-cols-2 gap-3">
+                          <Card className="border-border">
+                            <CardContent className="p-4 flex flex-col gap-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Economical</p>
+                              <p className="text-sm font-black">{ac.eco.count} × {ac.unit.model}</p>
+                              <p className="text-[11px] text-muted-foreground">{ac.eco.kwh.toLocaleString('en-IN')} kWh · {ac.eco.kw.toLocaleString('en-IN')} kW</p>
+                              <Separator />
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.eco.capex > 0 ? inrCr(ac.eco.capex) : 'On request'}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold">{ac.eco.headroom}%</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.eco.payback ? `${ac.eco.payback.toFixed(1)} yrs` : '—'}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
+                              </div>
+                              <div className="flex gap-2 mt-1">
+                                <Button size="sm" variant="outline" className="h-8 text-xs flex-1"
+                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.eco.count); setShowAdvanced(true); setActiveTab('summary'); }}>
+                                  Apply
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
+                                  disabled={szSaving || !!szSaved}
+                                  onClick={() => saveSizingAnalysis(ac.unit, 'economical')}>
+                                  {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="border-orange-300 bg-orange-50/50">
+                            <CardContent className="p-4 flex flex-col gap-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">★ Recommended</p>
+                              <p className="text-sm font-black">{ac.rec.count} × {ac.unit.model}</p>
+                              <p className="text-[11px] text-muted-foreground">{ac.rec.kwh.toLocaleString('en-IN')} kWh · {ac.rec.kw.toLocaleString('en-IN')} kW</p>
+                              <Separator />
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.rec.capex > 0 ? inrCr(ac.rec.capex) : 'On request'}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold text-orange-500">{ac.rec.headroom}%</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.rec.payback ? `${ac.rec.payback.toFixed(1)} yrs` : '—'}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
+                              </div>
+                              <div className="flex gap-2 mt-1">
+                                <Button size="sm" className="h-8 text-xs flex-1 bg-orange-500 hover:bg-orange-600"
+                                  onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.rec.count); setShowAdvanced(true); setActiveTab('summary'); }}>
+                                  Apply
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
+                                  disabled={szSaving || !!szSaved}
+                                  onClick={() => saveSizingAnalysis(ac.unit, 'recommended')}>
+                                  {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+
+                {/* All configurations comparison table */}
+                <div className="flex flex-col gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">All Configurations</p>
+                  <div className="rounded-xl border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
+                          <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Model</TableHead>
+                          <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-center">Eco (n×kWh)</TableHead>
+                          <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-center">Rec (n×kWh)</TableHead>
+                          <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Eco CAPEX</TableHead>
+                          <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Payback</TableHead>
+                          <TableHead className="text-[10px] uppercase font-bold h-8 py-0"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {szResult.allConfigs.map((cfg) => (
+                          <TableRow key={cfg.unit.id} className={cfg.unit.id === activeUnit?.id ? 'bg-orange-50/60' : ''}>
+                            <TableCell className="py-2 text-xs font-bold">
+                              {cfg.unit.model}{cfg.unit.id === activeUnit?.id && <span className="ml-1 text-orange-500 text-[10px]">◀ active</span>}
+                            </TableCell>
+                            <TableCell className="py-2 text-xs text-center">{cfg.eco.count}× · {cfg.eco.kwh.toLocaleString('en-IN')} kWh</TableCell>
+                            <TableCell className="py-2 text-xs text-center text-orange-600 font-medium">{cfg.rec.count}× · {cfg.rec.kwh.toLocaleString('en-IN')} kWh</TableCell>
+                            <TableCell className="py-2 text-xs text-right font-bold">{cfg.eco.capex > 0 ? inrCr(cfg.eco.capex) : '—'}</TableCell>
+                            <TableCell className="py-2 text-xs text-right">{cfg.eco.payback ? `${cfg.eco.payback.toFixed(1)} yr` : '—'}</TableCell>
+                            <TableCell className="py-2">
+                              <button
+                                onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); setShowAdvanced(true); setActiveTab('summary'); }}
+                                className="text-[10px] text-orange-500 hover:text-orange-700 font-bold whitespace-nowrap"
+                              >Apply ★</button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic px-1">
+                    Eco = minimum units to meet validated requirement. Rec = accounts for dispatch factor (SOH × RTE × SoC window ≈ {(yr1.soh * yr1.rte * ((socMax - socMin) / 100)).toFixed(2)}) + 15% buffer.
                   </p>
                 </div>
 
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ── RIGHT PANEL: analysis tabs ───────────────────────────── */}
-          <div className="flex flex-col gap-4 min-w-0">
-          <div ref={tabsTopRef} style={{ scrollMarginTop: '8px' }} />
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
-            <TabsList className="w-full flex overflow-x-auto gap-0.5 h-auto p-1">
-              <TabsTrigger value="summary"     className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Summary</TabsTrigger>
-              <TabsTrigger value="financials"  className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Financials</TabsTrigger>
-              <TabsTrigger value="tod"         className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">ToD</TabsTrigger>
-              <TabsTrigger value="specs"       className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Specs</TabsTrigger>
-              <TabsTrigger value="loadprofile" className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Load Profile</TabsTrigger>
-              <TabsTrigger value="sizing"      className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Sizing</TabsTrigger>
-            </TabsList>
-
-            {/* ── TAB: Summary ─────────────────────────────────────── */}
-            <TabsContent value="summary" className="flex flex-col gap-4 mt-0">
-
-              {/* Dark hero card */}
-              <Card className="bg-[#2D2D2D] text-white border-0">
-                <CardContent className="p-6">
-                  <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">System Summary</p>
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    {[
-                      { label: 'Total Power',    value: `${totalPower.toLocaleString('en-IN')} kW` },
-                      { label: 'Total Energy',   value: `${totalEnergy.toLocaleString('en-IN')} kWh` },
-                      { label: 'Usable Energy',  value: `${usableEnergy.toFixed(0)} kWh` },
-                      { label: 'Configuration',  value: `${numUnits} × ${u.model ?? '—'}` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-white/5 rounded-lg p-4">
-                        <p className="text-[11px] text-gray-400 mb-1">{label}</p>
-                        <p className="text-lg font-black">{value}</p>
-                      </div>
-                    ))}
+                {/* AI narrative */}
+                {szAiLoading && (
+                  <div className="flex items-center gap-2 text-xs text-orange-500 bg-orange-50 rounded-lg px-3 py-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    Gemini generating sizing rationale…
                   </div>
-                  <Separator className="bg-white/10 mb-4" />
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-xs text-gray-400">Indicative CAPEX (Ex-GST)</p>
-                      <p className="text-4xl font-black text-orange-500">{inrCr(totalPrice)}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">+ 18% GST = {inrCr(totalPrice * 1.18)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-400">Simple Payback</p>
-                      <p className="text-3xl font-black text-white">{simplePayback} yrs</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{cyclesPerYear} cycles/yr assumed</p>
-                    </div>
+                )}
+                {szAiNote && !szAiLoading && (
+                  <div className="flex flex-col gap-2 bg-muted/40 rounded-xl p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Cpu className="w-3 h-3" /> AI Rationale
+                    </p>
+                    {(szAiNote.sizing_logic?.rationale || szAiNote.primary?.reasoning) && (
+                      <p className="text-xs text-foreground leading-relaxed">
+                        {szAiNote.sizing_logic?.rationale ?? szAiNote.primary?.reasoning}
+                      </p>
+                    )}
+                    {szAiNote.financial_estimate?.assumptions && (
+                      <p className="text-[11px] text-muted-foreground italic">{szAiNote.financial_estimate.assumptions}</p>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
+                )}
 
-              {/* Energy breakdown + pie */}
-              <div className="grid grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Energy Breakdown</CardTitle>
-                    <CardDescription>Gross vs usable capacity</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {energyBreakdown.map((item) => (
-                        <div key={item.name}>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-muted-foreground">{item.name}</span>
-                            <span className="font-bold">{item.value.toFixed(0)} kWh</span>
-                          </div>
-                          <Progress
-                            value={totalEnergy ? (item.value / totalEnergy) * 100 : 0}
-                            className="h-2"
-                            indicatorClassName=""
-                            style={{ '--tw-bg': item.fill }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <Separator className="my-4" />
-                    <div className="text-xs text-muted-foreground">
-                      SoC window <span className="font-bold text-foreground">{socMin}–{socMax}%</span>
-                      {' '}→ efficiency factor{' '}
-                      <span className="font-bold text-orange-500">{((socMax - socMin)).toFixed(0)}%</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">CAPEX Split</CardTitle>
-                    <CardDescription>Typical cost breakdown</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col items-center">
-                    <ResponsiveContainer width="100%" height={160}>
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%" cy="50%"
-                          innerRadius={45} outerRadius={72}
-                          paddingAngle={3}
-                          dataKey="value"
-                        >
-                          {pieData.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i]} />
-                          ))}
-                        </Pie>
-                        <ReTooltip formatter={(v, n) => [`${v}%`, n]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 w-full">
-                      {pieData.map((d, i) => (
-                        <div key={d.name} className="flex items-center gap-1.5 text-[11px]">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i] }} />
-                          <span className="text-muted-foreground">{d.name}</span>
-                          <span className="font-bold ml-auto">{d.value}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Scale chart */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-orange-500" /> Scalability — {u.model ?? '—'}
-                  </CardTitle>
-                  <CardDescription>Energy (kWh) and CAPEX (₹ L) vs number of units</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={scaleData} barGap={4}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                      <XAxis dataKey="units" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
-                      <ReTooltip content={<ChartTooltip />} />
-                      <Bar yAxisId="left"  dataKey="energy" name="Energy (kWh)" fill="#F26B4E" radius={[4,4,0,0]} />
-                      <Bar yAxisId="right" dataKey="capex"  name="CAPEX (₹L)"  fill="#6366F1" radius={[4,4,0,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* ── Save Configuration ──────────────────────────────── */}
-              <Card className="border-orange-200 bg-orange-50/40">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-orange-500" /> Save Configuration to Database
-                  </CardTitle>
-                  <CardDescription>Link this configuration to a site for future reference and proposals</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {saveSuccess && (
-                    <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                      <CheckCircle2 className="w-4 h-4" /> Configuration saved successfully.
-                    </div>
-                  )}
+                {/* Quote Panel */}
+                <div className="border border-orange-200 rounded-xl p-4 bg-orange-50/30 flex flex-col gap-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 flex items-center gap-1.5">
+                    <FileText className="w-3 h-3" /> Quote Pricing
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setOfferType('budgetary')}
+                      className={`flex-1 text-xs font-bold py-1.5 rounded-lg border transition-colors ${offerType === 'budgetary' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-muted-foreground border-border hover:border-orange-300'}`}
+                    >Budgetary</button>
+                    <button
+                      onClick={() => setOfferType('negotiation')}
+                      className={`flex-1 text-xs font-bold py-1.5 rounded-lg border transition-colors ${offerType === 'negotiation' ? 'bg-[#2D2D2D] text-white border-[#2D2D2D]' : 'bg-white text-muted-foreground border-border hover:border-gray-400'}`}
+                    >Negotiation</button>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-muted-foreground">Site</label>
-                      <select
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        value={saveSiteId}
-                        onChange={e => setSaveSiteId(e.target.value)}
-                      >
-                        <option value="">Select site…</option>
-                        {siteList.map(s => (
-                          <option key={s.id} value={s.id}>{s.site_name}</option>
-                        ))}
-                      </select>
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">Supply Ex-GST ₹L</label>
+                      <Input type="number" placeholder={totalPrice > 0 ? (totalPrice / 1e5).toFixed(2) : '0.00'}
+                        value={qSupplyL} onChange={e => setQSupplyL(e.target.value)}
+                        className="h-8 text-xs" readOnly={offerType === 'budgetary'} />
+                      {offerType === 'budgetary' && <p className="text-[10px] text-muted-foreground italic">Pre-filled · indicative</p>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-muted-foreground">Config Name</label>
-                      <input
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        placeholder={`${numUnits}× ${u.model ?? 'BESS'} – ${appLabel}`}
-                        value={saveConfigName}
-                        onChange={e => setSaveConfigName(e.target.value)}
-                      />
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">Install Ex-GST ₹L</label>
+                      <Input type="number" placeholder={skuInstallOnly > 0 ? (skuInstallOnly / 1e5).toFixed(2) : '0.00'}
+                        value={qInstallL} onChange={e => setQInstallL(e.target.value)}
+                        className="h-8 text-xs" readOnly={offerType === 'budgetary'} />
+                      {offerType === 'budgetary' && <p className="text-[10px] text-muted-foreground italic">Pre-filled · indicative</p>}
                     </div>
                   </div>
-                  <Button
-                    className="bg-orange-500 hover:bg-orange-600 h-9 text-sm font-bold"
-                    onClick={handleSaveConfig}
-                    disabled={saveSaving || !saveSiteId || !saveConfigName.trim()}
-                  >
-                    {saveSaving ? 'Saving…' : 'Save Configuration'}
+                  <div className="bg-white rounded-lg p-3 border border-orange-100 flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-foreground">Total CAPEX (Ex-GST)</span>
+                      <span className="text-sm font-black text-orange-600">{qCapex > 0 ? inrCr(qCapex) : '—'}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Supply {qSupplyRs > 0 ? inrL(qSupplyRs) : '—'}</span>
+                      <span>+ Install {qInstallRs > 0 ? inrL(qInstallRs) : '—'}</span>
+                      <span>+ 18% GST extra</span>
+                    </div>
+                    {quoteFinancials && (
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                        <div className="text-center">
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">Payback</p>
+                          <p className="text-xs font-black">{quoteFinancials.payback ? `${quoteFinancials.payback} yr` : '—'}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">IRR 10yr</p>
+                          <p className={`text-xs font-black ${(quoteFinancials.irrPct ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {quoteFinancials.irrPct != null ? `${quoteFinancials.irrPct}%` : '—'}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">NPV 10yr</p>
+                          <p className="text-xs font-black">{quoteFinancials.npv != null ? inrL(quoteFinancials.npv) : '—'}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <Button className="h-9 text-xs font-bold bg-orange-500 hover:bg-orange-600 w-full"
+                    onClick={() => setShowPropModal(true)}>
+                    <FileText className="w-3.5 h-3.5 mr-1.5" /> Generate Proposal
                   </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* ── TAB: Financials ───────────────────────────────────── */}
-            <TabsContent value="financials" className="flex flex-col gap-4 mt-0">
-
-              <div className="grid grid-cols-3 gap-4">
-                <SparkKpi
-                  label="Annual Savings"
-                  value={inrL(annualSavings)}
-                  sub={`${cyclesPerYear} cycles/yr`}
-                  icon={TrendingUp} accent
-                />
-                <SparkKpi
-                  label="Simple Payback"
-                  value={`${simplePayback} yrs`}
-                  sub="At current tariff Δ"
-                  icon={Clock}
-                />
-                <SparkKpi
-                  label="Break-even Year"
-                  value={breakEvenYear != null ? `Yr ${breakEvenYear}` : '—'}
-                  sub="Degradation-adjusted"
-                  icon={Clock}
-                />
-                <SparkKpi
-                  label="IRR (10-yr NPV)"
-                  value={irrPct != null && irrPct > 0 ? `${irrPct}%` : '—'}
-                  sub="With degradation + O&M"
-                  icon={Award}
-                />
+                </div>
               </div>
+            )}
 
-              {/* Cumulative cash flow */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Cumulative Cash Flow</CardTitle>
-                  <CardDescription>
-                    12-year · ₹ Lakhs · degradation + O&M included · {dataset.label}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <AreaChart data={paybackData}>
-                      <defs>
-                        <linearGradient id="cfGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#F26B4E" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#F26B4E" stopOpacity={0}   />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                      <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} unit=" L" />
-                      <ReTooltip
-                        formatter={(v) => [`₹${v} L`, 'Cumulative P/L']}
-                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      />
-                      {/* Break-even reference line */}
-                      <Area
-                        type="monotone" dataKey="cashflow"
-                        stroke="#F26B4E" strokeWidth={2.5}
-                        fill="url(#cfGrad)"
-                        dot={{ r: 3, fill: '#F26B4E' }}
-                        activeDot={{ r: 5 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="w-3 h-3 rounded-full bg-orange-500 shrink-0" />
-                    Break-even at <span className="font-bold text-foreground mx-1">{simplePayback} years</span>
-                    — cumulative savings thereafter = revenue
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Assumptions table */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Model Assumptions</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Parameter</TableHead>
-                        <TableHead>Value</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {[
-                        ['Application',      appLabel,                                    'User-selected'],
-                        ['Usable Energy',    `${usableEnergy.toFixed(0)} kWh`,            `SoC ${socMin}–${socMax}%`],
-                        ['Yr-1 At Meter',    `${atMeterYr1.toFixed(0)} kWh`,              `After SOH ${(yr1.soh*100).toFixed(1)}% + RTE ${(yr1.rte*100).toFixed(1)}%`],
-                        ['Cycle Profile',    dataset.label,                               `${cyclesPerYear} cycles/yr`],
-                        ['Tariff Δ',         `₹${tariffDiff}/kWh`,                       'Peak − off-peak spread'],
-                        ['Yr-1 Gross Sav.',  inrL(grossSavYr1),                           'Before O&M'],
-                        ['O&M Yr-1',         inrL(omYr1),                                 '1.5% of CAPEX, +3%/yr'],
-                        ['Yr-1 Net Savings', inrL(annualSavings),                         'Post O&M'],
-                        ['IRR (10-yr NPV)',  irrPct != null ? `${irrPct}%` : '—',        'Degradation + O&M included'],
-                        ['CAPEX (Ex-GST)',   inrCr(totalPrice),                           'Indicative ex-works'],
-                        ['GST',              '18%',                                        'Applicable on supply'],
-                      ].map(([p, v, n]) => (
-                        <TableRow key={p}>
-                          <TableCell className="font-medium text-xs">{p}</TableCell>
-                          <TableCell className="font-black text-xs text-orange-500">{v}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{n}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* ── TAB: ToD Analysis ─────────────────────────────────── */}
-            <TabsContent value="tod" className="flex flex-col gap-4 mt-0">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Delhi ToD Tariff Profile (Illustrative)</CardTitle>
-                  <CardDescription>
-                    Charge during off-peak · discharge during peak · spread = ₹{tariffDiff}/kWh
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={TOD_SLOTS} barSize={26}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                      <XAxis dataKey="hour" tickFormatter={(h) => `${h}:00`} tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 11 }} unit=" ₹" />
-                      <ReTooltip
-                        formatter={(v, n) => [`₹${v}/kWh`, n]}
-                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      />
-                      <Legend />
-                      <Bar dataKey="buy" name="Buy (Grid)" radius={[3,3,0,0]}>
-                        {TOD_SLOTS.map((s, i) => (
-                          <Cell key={i} fill={SLOT_COLORS[s.slot]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                  {/* Legend */}
-                  <div className="flex gap-4 mt-3 flex-wrap">
-                    {Object.entries(SLOT_COLORS).map(([slot, color]) => (
-                      <div key={slot} className="flex items-center gap-1.5 text-xs">
-                        <span className="w-3 h-3 rounded-sm" style={{ background: color }} />
-                        <span className="text-muted-foreground">{slot}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Daily arbitrage potential */}
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  {
-                    label: 'Daily Arbitrage Revenue',
-                    value: `₹${(usableEnergy * tariffDiff).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-                    sub: `${usableEnergy.toFixed(0)} kWh × ₹${tariffDiff}`,
-                  },
-                  {
-                    label: 'Monthly Revenue',
-                    value: `₹${((atMeterYr1 * tariffDiff * 25) / 1e3).toFixed(1)} K`,
-                    sub: '25 arbitrage days/month · Yr-1',
-                  },
-                  {
-                    label: 'Annual Net (Yr-1)',
-                    value: inrL(annualSavings),
-                    sub: `Post O&M · ${cyclesPerYear} cycles/yr`,
-                  },
-                ].map((item) => (
-                  <Card key={item.label}>
-                    <CardContent className="p-5">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground font-bold mb-1">{item.label}</p>
-                      <p className="text-xl font-black text-orange-500">{item.value}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{item.sub}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Optimal Dispatch Strategy</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {[
-                      { time: '00:00–06:00', action: 'Charge',    slot: 'Off-peak', rate: '₹5.2/kWh', bg: 'bg-green-50',  text: 'text-green-700' },
-                      { time: '06:00–08:00', action: 'Hold',      slot: 'Shoulder', rate: '₹6.8/kWh', bg: 'bg-amber-50',  text: 'text-amber-700' },
-                      { time: '08:00–12:00', action: 'Discharge', slot: 'Peak',     rate: '₹9.5/kWh', bg: 'bg-red-50',    text: 'text-orange-600' },
-                      { time: '12:00–16:00', action: 'Partial',   slot: 'Shoulder', rate: '₹7.2/kWh', bg: 'bg-amber-50',  text: 'text-amber-700' },
-                      { time: '16:00–22:00', action: 'Discharge', slot: 'Peak',     rate: '₹11.5/kWh', bg: 'bg-red-50',   text: 'text-orange-600' },
-                      { time: '22:00–24:00', action: 'Charge',    slot: 'Off-peak', rate: '₹5.5/kWh', bg: 'bg-green-50',  text: 'text-green-700' },
-                    ].map((row) => (
-                      <div key={row.time} className={`flex items-center justify-between rounded-lg px-4 py-2.5 ${row.bg}`}>
-                        <span className="text-xs font-bold text-muted-foreground w-28">{row.time}</span>
-                        <Badge variant="outline" className={`${row.text} border-current text-xs`}>{row.action}</Badge>
-                        <span className="text-xs text-muted-foreground">{row.slot}</span>
-                        <span className={`text-xs font-black ${row.text}`}>{row.rate}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* ── TAB: Specs ────────────────────────────────────────── */}
-            <TabsContent value="specs" className="flex flex-col gap-4 mt-0">
-
-              {/* Spec cards grid */}
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { icon: Battery,    label: 'Chemistry',     value: `${u.chemistry ?? '—'} (LFP)`,     desc: 'IEC 62619 certified' },
-                  { icon: Layers,     label: 'Form Factor',   value: u.form_factor ?? '—',               desc: 'Containerised, weatherproof' },
-                  { icon: Weight,     label: 'System Weight', value: u.weight_kg ? `${(u.weight_kg * numUnits / 1000).toFixed(1)} t` : '—', desc: `${numUnits} units combined` },
-                  { icon: Thermometer, label: 'Coupling',     value: `${coupling}-Coupled`,              desc: 'IEC 62477 compliant' },
-                  { icon: Wifi,       label: 'Communication', value: 'CAN · RS485 · Modbus TCP',         desc: 'IEC 61850 SCADA ready' },
-                  { icon: Shield,     label: 'Certifications', value: 'IEC · IS · BIS',                  desc: 'IEC 62619 · IS 16270 · BIS' },
-                ].map(({ icon: Icon, label, value, desc }) => (
-                  <Card key={label} className="hover:border-orange-300 transition-colors">
-                    <CardContent className="p-4 flex items-start gap-3">
-                      <div className="rounded-md bg-orange-50 p-2 shrink-0">
-                        <Icon className="w-4 h-4 text-orange-500" />
-                      </div>
+            {/* AI-only recommendation from bill/manual (no rule-based sizing) */}
+            {lpRec && !szResult && !lpRecommending && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-orange-500" /> AI Sizing Analysis
+                  </span>
+                  <Badge className="bg-orange-100 text-orange-700 text-[10px] border-0">{lpData?.source}</Badge>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    ['Total kWh', lpData?.total_monthly_kwh ? `${Number(lpData.total_monthly_kwh).toLocaleString('en-IN')} kWh/mo` : lpData?.avg_monthly_kwh ? `${Math.round(lpData.avg_monthly_kwh).toLocaleString('en-IN')} kWh/mo` : '—'],
+                    ['Max Demand', lpData?.max_demand_kw ? `${lpData.max_demand_kw} kW` : '—'],
+                    ['Key Driver', lpRec.sizing_logic?.key_driver ?? '—'],
+                    ['Application', lpRec.primary?.application?.replace(/_/g,' ') ?? '—'],
+                  ].map(([lbl, val]) => (
+                    <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
+                      <p className="text-xs font-bold text-foreground mt-0.5 capitalize">{val}</p>
+                    </div>
+                  ))}
+                </div>
+                <Card className="border-orange-300 bg-orange-50/50">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-3">
                       <div>
-                        <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">{label}</p>
-                        <p className="text-sm font-black mt-0.5">{value}</p>
-                        <p className="text-[11px] text-muted-foreground">{desc}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500 mb-1">Recommended Configuration</p>
+                        <p className="text-lg font-black text-foreground">{lpRec.primary.unit_count} × {lpRec.primary.unit_model}</p>
+                        <p className="text-xs text-muted-foreground">{lpRec.primary.total_kwh?.toLocaleString('en-IN')} kWh &nbsp;·&nbsp; {lpRec.primary.total_kw?.toLocaleString('en-IN')} kW</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <div className="text-right">
+                        <p className="text-[10px] text-muted-foreground uppercase">CAPEX Ex-GST</p>
+                        <p className="text-base font-black text-foreground">
+                          {inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0))}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed border-t border-orange-200 pt-3">{lpRec.primary.reasoning}</p>
+                  </CardContent>
+                </Card>
+                <div className="flex gap-2">
+                  <Button className="flex-1 bg-[#2D2D2D] hover:bg-black h-10 text-xs font-bold" onClick={applyRecommendation}>
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Verify &amp; Apply to Configurator
+                  </Button>
+                  <Button variant="outline" className="h-10 text-xs px-4" onClick={() => { setLpRec(null); setLpData(null); }}>
+                    Recalculate
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Verified/applied state */}
+            {lpVerified && !szResult && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-xs text-green-700 font-bold">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  Applied — {numUnits}× {activeUnit?.model} ({totalEnergy.toLocaleString('en-IN')} kWh / {totalPower.toLocaleString('en-IN')} kW) is now active.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            STEP 3 — ADVANCED CONFIGURATION (collapsible)
+        ══════════════════════════════════════════════════════════════════ */}
+        <div className="flex flex-col gap-4">
+          <button
+            onClick={() => setShowAdvanced(prev => !prev)}
+            className="flex items-center justify-between w-full px-4 py-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+          >
+            <span className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Settings className="w-4 h-4 text-orange-500" /> Advanced Configuration
+              <span className="text-xs text-muted-foreground font-normal">— unit selector, system params, financial analysis</span>
+            </span>
+            <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
+          </button>
+
+          {showAdvanced && (
+            <div className="flex flex-col gap-6">
+
+              {/* KPI strip */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <SparkKpi label="Total Power"    value={`${totalPower.toLocaleString('en-IN')} kW`}    icon={Zap}      accent />
+                <SparkKpi label="Total Energy"   value={`${totalEnergy.toLocaleString('en-IN')} kWh`}  icon={Battery} />
+                <SparkKpi label="Usable Energy"  value={`${usableEnergy.toFixed(0)} kWh`}              icon={TrendingUp} />
+                <SparkKpi label="CAPEX (Ex-GST)" value={inrCr(totalPrice)}  sub="+ 18% GST"            icon={BarChart3} />
               </div>
 
-              {/* Full spec table */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Complete Specifications — {u.model ?? '—'}</CardTitle>
-                  <CardDescription>× {numUnits} units</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableBody>
-                      {[
-                        ['Model',              u.model ?? '—'],
-                        ['Rated Power',        `${u.power_kw ?? '—'} kW (per unit)`],
-                        ['Rated Energy',       `${u.energy_kwh ?? '—'} kWh (per unit)`],
-                        ['System Power',       `${totalPower} kW`],
-                        ['System Energy',      `${totalEnergy} kWh`],
-                        ['Usable Energy',      `${usableEnergy.toFixed(0)} kWh (SoC ${socMin}–${socMax}%)`],
-                        ['Chemistry',          `${u.chemistry ?? '—'} (Lithium Iron Phosphate)`],
-                        ['Form Factor',        u.form_factor ?? '—'],
-                        ['Coupling',           `${coupling}-Coupled`],
-                        ['Application',        appLabel],
-                        ['Communication',      'CAN / RS485 / Modbus TCP / IEC 61850'],
-                        ['Safety Standards',   'IEC 62619, IEC 62477, IS 16270'],
-                        ['Pricing (Ex-GST)',   `${inrCr(totalPrice)} for ${numUnits} units`],
-                        ['GST (18%)',          inrCr(totalPrice * 0.18)],
-                        ['Total (Inc. GST)',   inrCr(totalPrice * 1.18)],
-                      ].map(([k, v]) => (
-                        <TableRow key={k}>
-                          <TableCell className="text-xs text-muted-foreground font-semibold w-44">{k}</TableCell>
-                          <TableCell className="text-xs font-bold">{v}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+              {/* 2-col layout */}
+              <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-6">
 
-              <Button
-                className="w-full bg-orange-500 hover:bg-orange-600 h-11 text-sm font-bold"
-                onClick={() => { setPropSuccess(null); setShowPropModal(true); }}
-                disabled={!activeUnit}
-              >
-                Generate Commercial Proposal <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </TabsContent>
+                {/* LEFT PANEL */}
+                <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
 
-            {/* ── TAB: Load Profile ─────────────────────────────────── */}
-            <TabsContent value="loadprofile" className="flex flex-col gap-4 mt-0">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <BarChart2 className="w-4 h-4 text-orange-500" />
-                    Load Profile &amp; AI Sizing
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Provide load data → AI recommends capacity → verify and apply to configurator.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-
-                  {/* ── STATE: Verified ── */}
-                  {lpVerified && (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-xs text-green-700 font-bold">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        Applied — {numUnits}× {activeUnit?.model} ({totalEnergy.toLocaleString('en-IN')} kWh / {totalPower.toLocaleString('en-IN')} kW) is now active.
-                      </div>
-                      <Button variant="outline" className="h-8 text-xs" onClick={resetLp}>
-                        <X className="w-3 h-3 mr-1" /> Reset Load Profile
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* ── STATE: Analysis Sheet ── */}
-                  {!lpVerified && lpRec && (
-                    <div className="flex flex-col gap-4">
-                      {/* Header row */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <Cpu className="w-3.5 h-3.5 text-orange-500" /> AI Sizing Analysis
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-orange-100 text-orange-700 text-[10px] border-0">{lpData?.source}</Badge>
-                          <button onClick={resetLp} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                            <X className="w-3 h-3" /> Reset
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Load summary tiles */}
-                      <div className="grid grid-cols-4 gap-2">
-                        {[
-                          ['Total kWh', lpData?.total_monthly_kwh ? `${Number(lpData.total_monthly_kwh).toLocaleString('en-IN')} kWh/mo` : lpData?.required_kwh ? `${Number(lpData.required_kwh).toFixed(0)} kWh` : lpData?.avg_monthly_kwh ? `${Math.round(lpData.avg_monthly_kwh).toLocaleString('en-IN')} kWh/mo` : '—'],
-                          ['Max Demand', lpData?.max_demand_kw ? `${lpData.max_demand_kw} kW` : lpData?.critical_load_kw ? `${lpData.critical_load_kw} kW` : '—'],
-                          ['Key Driver', lpRec.sizing_logic?.key_driver ?? '—'],
-                          ['Application', lpRec.primary?.application?.replace(/_/g,' ') ?? '—'],
-                        ].map(([lbl, val]) => (
-                          <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
-                            <p className="text-xs font-bold text-foreground mt-0.5 capitalize">{val}</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Primary recommendation */}
-                      <Card className="border-orange-300 bg-orange-50/50">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500 mb-1">Recommended Configuration</p>
-                              <p className="text-lg font-black text-foreground">
-                                {lpRec.primary.unit_count} × {lpRec.primary.unit_model}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {lpRec.primary.total_kwh?.toLocaleString('en-IN')} kWh &nbsp;·&nbsp; {lpRec.primary.total_kw?.toLocaleString('en-IN')} kW
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] text-muted-foreground uppercase">CAPEX Ex-GST</p>
-                              <p className="text-base font-black text-foreground">
-                                {inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0))}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">
-                                + GST = {inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0) * 1.18)}
-                              </p>
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed border-t border-orange-200 pt-3">
-                            {lpRec.primary.reasoning}
-                          </p>
-                        </CardContent>
-                      </Card>
-
-                      {/* Sizing options table */}
-                      <div className="flex flex-col gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">All Sizing Options</p>
-                        <div className="rounded-xl border overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/60 hover:bg-muted/60">
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Option</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Configuration</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">kWh</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">CAPEX</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Savings/yr</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Payback</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {/* Primary */}
-                              <TableRow className="bg-orange-50/60">
-                                <TableCell className="py-2 text-xs font-bold text-orange-600">★ Recommended</TableCell>
-                                <TableCell className="py-2 text-xs font-bold">{lpRec.primary.unit_count}× {lpRec.primary.unit_model}</TableCell>
-                                <TableCell className="py-2 text-xs text-right">{(lpRec.primary.total_kwh ?? 0).toLocaleString('en-IN')}</TableCell>
-                                <TableCell className="py-2 text-xs text-right font-bold">{inrCr(lpRec.primary.unit_count * (unitList.find(u => u.model === lpRec.primary.unit_model)?.price_ex_gst ?? 0))}</TableCell>
-                                <TableCell className="py-2 text-xs text-right text-green-600 font-bold">{inrL(lpRec.financial_estimate?.annual_savings_inr ?? 0)}</TableCell>
-                                <TableCell className="py-2 text-xs text-right font-bold">{lpRec.financial_estimate?.simple_payback_years?.toFixed(1) ?? '—'} yrs</TableCell>
-                              </TableRow>
-                              {/* Alternatives */}
-                              {(lpRec.alternatives ?? []).map((alt, i) => {
-                                const altUnit = unitList.find(u => u.model === alt.unit_model);
-                                const altCapex = alt.unit_count * (altUnit?.price_ex_gst ?? 0);
-                                return (
-                                  <TableRow key={i}>
-                                    <TableCell className="py-2 text-xs text-muted-foreground">{alt.label}</TableCell>
-                                    <TableCell className="py-2 text-xs">{alt.unit_count}× {alt.unit_model}</TableCell>
-                                    <TableCell className="py-2 text-xs text-right">{(alt.total_kwh ?? alt.unit_count * (altUnit?.energy_kwh ?? 0)).toLocaleString('en-IN')}</TableCell>
-                                    <TableCell className="py-2 text-xs text-right">{inrCr(altCapex)}</TableCell>
-                                    <TableCell className="py-2 text-xs text-right text-muted-foreground">—</TableCell>
-                                    <TableCell className="py-2 text-xs text-right text-muted-foreground">—</TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                        {lpRec.sizing_logic?.rationale && (
-                          <p className="text-[10px] text-muted-foreground italic px-1 leading-relaxed">{lpRec.sizing_logic.rationale}</p>
-                        )}
-                        {lpRec.financial_estimate?.assumptions && (
-                          <p className="text-[10px] text-muted-foreground italic px-1">Assumptions: {lpRec.financial_estimate.assumptions}</p>
-                        )}
-                      </div>
-
-                      {/* Verification buttons */}
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1 bg-[#2D2D2D] hover:bg-black h-10 text-xs font-bold"
-                          onClick={applyRecommendation}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Verify &amp; Apply to Configurator
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="h-10 text-xs px-4"
-                          onClick={() => { setLpRec(null); setLpData(null); }}
-                        >
-                          Recalculate
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── STATE: AI Loading ── */}
-                  {!lpVerified && !lpRec && lpRecommending && (
-                    <div className="flex flex-col items-center gap-3 py-8">
-                      <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-                      <p className="text-xs font-bold text-foreground">Gemini is analysing your load data…</p>
-                      <p className="text-[11px] text-muted-foreground">Running sizing calculations and financial model</p>
-                    </div>
-                  )}
-
-                  {/* ── STATE: Error ── */}
-                  {lpRecError && !lpRecommending && (
-                    <div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{lpRecError}</div>
-                  )}
-
-                  {/* ── STATE: Data captured, ready to analyse ── */}
-                  {!lpVerified && !lpRec && !lpRecommending && lpData && (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-                        <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
-                        <div>
-                          <p className="text-xs font-bold text-foreground">Load data captured from {lpData.source}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {lpData.total_monthly_kwh ? `${Number(lpData.total_monthly_kwh).toLocaleString('en-IN')} kWh/month` : ''}
-                            {lpData.max_demand_kw ? ` · ${lpData.max_demand_kw} kW max demand` : ''}
-                            {lpData.critical_load_kw ? `${lpData.critical_load_kw} kW × ${lpData.backup_hours}h backup` : ''}
-                            {lpData.avg_monthly_kwh ? `${Math.round(lpData.avg_monthly_kwh).toLocaleString('en-IN')} kWh/month avg` : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
-                        onClick={() => runRecommendation(lpData)}
-                      >
-                        <Cpu className="w-3.5 h-3.5 mr-1.5" /> Generate AI Sizing Recommendation
-                      </Button>
-                      <button
-                        className="text-xs text-center text-muted-foreground hover:text-foreground underline underline-offset-2"
-                        onClick={() => { setLpData(null); }}
-                      >
-                        Change input data
-                      </button>
-                    </div>
-                  )}
-
-                  {/* ── INPUT MODES (only when no data captured and not showing results) ── */}
-                  {!lpVerified && !lpRec && !lpRecommending && !lpData && (
-                    <>
-                  {/* Mode selector cards */}
-                  {!lpMode && (
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { key: 'bills',  icon: FileText, label: 'Bills / Documents', desc: 'Upload EB bills or PDFs — AI extracts kWh, demand, ToD data automatically.' },
-                        { key: 'client', icon: User,     label: 'Client Data',        desc: 'Pull from an existing client\'s saved load profile in the database.' },
-                        { key: 'backup', icon: Clock,    label: 'Backup Requirement', desc: 'Specify load kW and desired backup hours — system calculates kWh needed.' },
-                        { key: 'manual', icon: Upload,   label: 'Manual Input Sheet', desc: 'Enter hourly/monthly consumption values directly or via the Google Form.' },
-                      ].map(({ key, icon: Icon, label, desc }) => (
-                        <button
-                          key={key}
-                          onClick={() => { setLpMode(key); setLpParsed(null); setLpParseErr(null); setLpFile(null); setLpSaved(false); }}
-                          className="text-left p-4 rounded-xl border-2 border-border hover:border-orange-400 hover:bg-orange-50/50 transition-all group"
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                              <Icon className="w-4 h-4 text-orange-500" />
-                            </div>
-                            <span className="text-xs font-bold text-foreground">{label}</span>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* ── MODE: Bills / Documents ── */}
-                  {lpMode === 'bills' && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setLpMode(null); setLpFile(null); setLpParsed(null); setLpParseErr(null); }} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                          <X className="w-3 h-3" /> Back
-                        </button>
-                        <span className="text-xs font-bold text-foreground">Bills / Documents — AI Extraction</span>
-                      </div>
-
-                      {/* Sub-option: manual entry or document upload */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <a
-                          href="https://docs.google.com/forms/d/e/1FAIpQLSfffMETWxybmqb83ss9qTXdcAkRlXfvpE5HvbzdICXTERRU2w/viewform?usp=sharing"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-border hover:border-orange-400 hover:bg-orange-50/50 transition-all text-center"
-                        >
-                          <Link2 className="w-5 h-5 text-orange-500" />
-                          <span className="text-xs font-bold">Manual Entry Form</span>
-                          <span className="text-[10px] text-muted-foreground">Open Google Form → client fills monthly data</span>
-                        </a>
-                        <button
-                          onClick={() => lpFileRef.current?.click()}
-                          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-orange-300 hover:border-orange-500 hover:bg-orange-50/50 transition-all text-center"
-                        >
-                          <Upload className="w-5 h-5 text-orange-500" />
-                          <span className="text-xs font-bold">Upload Document</span>
-                          <span className="text-[10px] text-muted-foreground">PDF, image, or Excel bill — Gemini AI reads it</span>
-                        </button>
-                      </div>
-
-                      <input
-                        ref={lpFileRef}
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setLpFile(file);
-                          setLpParsed(null);
-                          setLpParseErr(null);
-                          setLpParsing(true);
-                          (async () => {
-                            try {
-                              const base64 = await new Promise((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
-                                reader.onerror = () => reject(new Error('File read error.'));
-                                reader.readAsDataURL(file);
-                              });
-                              const result = await bessApi.parseBill({ fileData: base64, mimeType: file.type });
-                              setLpParsed(result);
-                            } catch (err) {
-                              setLpParseErr(err.message ?? 'Gemini parsing failed.');
-                            } finally {
-                              setLpParsing(false);
-                            }
-                          })();
-                        }}
-                      />
-
-                      {lpFile && !lpParsed && !lpParsing && !lpParseErr && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">
-                          <FileText className="w-4 h-4" /> {lpFile.name}
+                  {/* Unit selector */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-orange-500" /> Select Unit Model
+                      </CardTitle>
+                      <CardDescription>Live catalogue from database</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-2">
+                      {unitList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">No active units in database.</p>
+                      ) : (
+                        <div className="max-h-[260px] overflow-y-auto flex flex-col gap-1 pr-1">
+                          {unitList.map((unit) => {
+                            const active = activeUnit?.id === unit.id;
+                            return (
+                              <button
+                                key={unit.id}
+                                onClick={() => setSelectedUnit(unit)}
+                                className={`w-full text-left rounded-md border px-3 py-2 transition-all ${
+                                  active ? 'border-orange-500 bg-orange-50' : 'border-border hover:border-orange-300 bg-background'
+                                }`}
+                              >
+                                <div className="flex justify-between items-center gap-2">
+                                  <div className="min-w-0">
+                                    <p className={`font-black text-xs truncate ${active ? 'text-orange-500' : 'text-foreground'}`}>{unit.model}</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">{unit.power_kw} kW · {unit.energy_kwh} kWh</p>
+                                  </div>
+                                  <p className={`font-black text-xs shrink-0 ${active ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                                    {Number(unit.price_ex_gst) > 0 ? inrL(unit.price_ex_gst) : 'On request'}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
+                    </CardContent>
+                  </Card>
 
-                      {lpParsing && (
-                        <div className="flex items-center gap-2 text-xs text-orange-500 bg-orange-50 rounded-lg px-3 py-3">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Gemini is reading the document…
+                  {/* System parameters */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Settings className="w-4 h-4 text-orange-500" /> System Parameters
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-5">
+
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Number of Units</Label>
+                        <div className="flex items-center gap-3">
+                          <Button variant="outline" size="icon" onClick={() => setNumUnits(Math.max(1, numUnits - 1))} className="h-9 w-9 text-lg font-black">−</Button>
+                          <span className="text-3xl font-black w-12 text-center">{numUnits}</span>
+                          <Button variant="outline" size="icon" onClick={() => setNumUnits(numUnits + 1)} className="h-9 w-9 text-lg font-black">+</Button>
+                          <span className="text-xs text-muted-foreground ml-2">= {totalPower} kW / {totalEnergy} kWh</span>
                         </div>
-                      )}
-
-                      {lpParseErr && (
-                        <div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{lpParseErr}</div>
-                      )}
-
-                      {lpParsed && (
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 font-bold">
-                            <CheckCircle2 className="w-4 h-4" /> Extraction complete — review below
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {[
-                              ['Consumer',         lpParsed.consumer_name],
-                              ['DISCOM',            lpParsed.discom],
-                              ['Tariff Category',  lpParsed.tariff_category],
-                              ['Month / Year',     lpParsed.month && lpParsed.year ? `${lpParsed.month}/${lpParsed.year}` : '—'],
-                              ['Total Units (kWh)',lpParsed.total_units_kwh ? `${lpParsed.total_units_kwh} kWh` : '—'],
-                              ['Max Demand',       lpParsed.max_demand_kw    ? `${lpParsed.max_demand_kw} kW`  : '—'],
-                              ['Peak kWh',         lpParsed.tod_peak_kwh     ? `${lpParsed.tod_peak_kwh} kWh`  : '—'],
-                              ['Off-Peak kWh',     lpParsed.tod_offpeak_kwh  ? `${lpParsed.tod_offpeak_kwh} kWh` : '—'],
-                              ['Night kWh',        lpParsed.tod_night_kwh    ? `${lpParsed.tod_night_kwh} kWh`  : '—'],
-                              ['Contract Demand',  lpParsed.contract_demand_kva ? `${lpParsed.contract_demand_kva} kVA` : '—'],
-                              ['Sanctioned Load',  lpParsed.sanctioned_load_kva ? `${lpParsed.sanctioned_load_kva} kVA` : '—'],
-                              ['Total Bill',       lpParsed.total_amount_inr ? `₹${Number(lpParsed.total_amount_inr).toLocaleString('en-IN')}` : '—'],
-                            ].map(([lbl, val]) => (
-                              <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
-                                <p className="text-xs font-bold text-foreground mt-0.5">{val ?? '—'}</p>
-                              </div>
-                            ))}
-                          </div>
-                          <Button
-                            className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
-                            onClick={() => runRecommendation({
-                              source: 'EB Bill',
-                              total_monthly_kwh: lpParsed.total_units_kwh,
-                              max_demand_kw:     lpParsed.max_demand_kw,
-                              peak_kwh:          lpParsed.tod_peak_kwh,
-                              offpeak_kwh:       lpParsed.tod_offpeak_kwh,
-                              night_kwh:         lpParsed.tod_night_kwh,
-                              contract_demand_kva: lpParsed.contract_demand_kva,
-                              tariff_category:   lpParsed.tariff_category,
-                              discom:            lpParsed.discom,
-                              consumer_name:     lpParsed.consumer_name,
-                            })}
-                          >
-                            <Cpu className="w-3.5 h-3.5 mr-1.5" /> Use this bill — Get AI Recommendation
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ── MODE: Client Data ── */}
-                  {lpMode === 'client' && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setLpMode(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                          <X className="w-3 h-3" /> Back
-                        </button>
-                        <span className="text-xs font-bold text-foreground">Client Load Profile</span>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Select Client</Label>
-                        <Select value={lpClientId} onValueChange={setLpClientId}>
-                          <SelectTrigger className="h-9 text-xs">
-                            <SelectValue placeholder="Choose client…" />
-                          </SelectTrigger>
+
+                      <Separator />
+
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Coupling Type</Label>
+                        <div className="flex gap-2">
+                          {COUPLING.map((c) => (
+                            <Button key={c} variant={coupling === c ? 'default' : 'outline'} size="sm"
+                              onClick={() => setCoupling(c)}
+                              className={coupling === c ? 'bg-orange-500 hover:bg-orange-600' : ''}>
+                              {c}-Coupled
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Application</Label>
+                        <Select value={application} onValueChange={setApplication}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {(clients?.data ?? []).map((c) => (
-                              <SelectItem key={c.id} value={String(c.id)}>
-                                {c.company_name}
+                            {APPLICATIONS.map((a) => (
+                              <SelectItem key={a.value} value={a.value}>
+                                <span className="flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full inline-block" style={{ background: a.color }} />
+                                  {a.label}
+                                </span>
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
-                      {lpClientId && (
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs text-orange-700">
-                          Load profile data for this client will be pulled from their site's saved records.
-                          Navigate to the <strong>Sites</strong> page to add or review load profiles per site.
-                        </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* ── MODE: Backup Requirement ── */}
-                  {lpMode === 'backup' && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setLpMode(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                          <X className="w-3 h-3" /> Back
-                        </button>
-                        <span className="text-xs font-bold text-foreground">Backup Requirement Calculator</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Critical Load (kW)</Label>
-                          <Input
-                            type="number" min="0" placeholder="e.g. 250"
-                            className="h-9 text-xs"
-                            value={lpLoadKw}
-                            onChange={e => setLpLoadKw(e.target.value)}
-                          />
+                      <Separator />
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">State of Charge Window</Label>
+                          <Badge variant="secondary" className="text-xs font-bold">{socMin}% – {socMax}%</Badge>
                         </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Backup Hours Needed</Label>
-                          <Input
-                            type="number" min="0.5" step="0.5" placeholder="e.g. 4"
-                            className="h-9 text-xs"
-                            value={lpBackupHrs}
-                            onChange={e => setLpBackupHrs(e.target.value)}
-                          />
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>SoC Min</span><span className="font-bold text-foreground">{socMin}%</span>
+                            </div>
+                            <Slider min={5} max={30} step={1} value={[socMin]} onValueChange={([v]) => setSocMin(v)}
+                              className="[&_[role=slider]]:bg-orange-500 [&_.bg-primary]:bg-orange-500" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>SoC Max</span><span className="font-bold text-foreground">{socMax}%</span>
+                            </div>
+                            <Slider min={70} max={100} step={1} value={[socMax]} onValueChange={([v]) => setSocMax(v)}
+                              className="[&_[role=slider]]:bg-orange-500 [&_.bg-primary]:bg-orange-500" />
+                          </div>
+                        </div>
+                        <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
+                          Usable window: <span className="font-bold text-foreground">{socMax - socMin}%</span>
+                          {' '}→{' '}<span className="font-bold text-orange-500">{usableEnergy.toFixed(0)} kWh</span> effective
                         </div>
                       </div>
-                      {lpLoadKw && lpBackupHrs && (
-                        <div className="flex flex-col gap-3">
-                          <div className="grid grid-cols-3 gap-2">
+
+                      <Separator />
+
+                      <div className="space-y-3">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Financial Assumptions</Label>
+                        <div className="space-y-2">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Peak Load (kW)</Label>
+                            <Input type="number" placeholder="e.g. 500" value={peakKw} onChange={(e) => setPeakKw(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1">
+                              State
+                              <Tooltip>
+                                <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
+                                <TooltipContent>Selects tariff structure from master. Updates Tariff Δ automatically.</TooltipContent>
+                              </Tooltip>
+                            </Label>
+                            <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                              value={selectedState} onChange={e => handleStateChange(e.target.value)}>
+                              <option value="">— Select state —</option>
+                              {stateList.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          {discomList.length > 1 && (
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">DISCOM</Label>
+                              <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
+                                value={selectedDiscom} onChange={e => handleDiscomChange(e.target.value)}>
+                                {discomList.map(d => <option key={d} value={d}>{d}</option>)}
+                              </select>
+                            </div>
+                          )}
+                          {activeTariffRow && (
+                            <div className="rounded-md bg-orange-50 border border-orange-200 px-3 py-2 text-xs space-y-0.5">
+                              <div className="flex justify-between"><span className="text-muted-foreground">Peak tariff</span><span className="font-bold">₹{activeTariffRow.energy_charge_peak}/kWh</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Off-peak tariff</span><span className="font-bold">₹{activeTariffRow.energy_charge_offpeak}/kWh</span></div>
+                              <div className="flex justify-between border-t border-orange-200 pt-1 mt-1">
+                                <span className="text-orange-700 font-semibold">ToD Spread</span>
+                                <span className="text-orange-700 font-black">₹{tariffDiff}/kWh</span>
+                              </div>
+                            </div>
+                          )}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1">
+                              Tariff Δ (₹/kWh)
+                              <Tooltip>
+                                <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
+                                <TooltipContent>Auto-filled from state tariff master. Override manually if needed.</TooltipContent>
+                              </Tooltip>
+                            </Label>
+                            <Input type="number" step="0.1" value={tariffDiff} onChange={(e) => setTariffDiff(+e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3" /> Degradation Profile
+                        </Label>
+                        <div className="flex flex-col gap-1">
+                          {Object.entries(CYCLE_DATASETS).map(([key, ds]) => (
+                            <button key={key} onClick={() => setCycleDatasetKey(key)}
+                              className={`w-full text-left rounded-md border px-3 py-2 transition-all text-xs ${
+                                cycleDatasetKey === key
+                                  ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                  : 'border-border hover:border-orange-300 bg-background text-muted-foreground'
+                              }`}>
+                              <span className="font-bold block">{ds.label}</span>
+                              <span className="text-[10px] opacity-70">{ds.description}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground px-1">
+                          Yr-1 RTE: <span className="font-bold text-foreground">{(yr1.rte * 100).toFixed(1)}%</span>
+                          {' '}· Yr-1 SOH: <span className="font-bold text-foreground">{(yr1.soh * 100).toFixed(1)}%</span>
+                          {' '}· {cyclesPerYear} cycles/yr
+                        </p>
+                      </div>
+
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* RIGHT PANEL — analysis tabs */}
+                <div className="flex flex-col gap-4 min-w-0">
+                  <div ref={tabsTopRef} style={{ scrollMarginTop: '8px' }} />
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
+                    <TabsList className="w-full flex overflow-x-auto gap-0.5 h-auto p-1">
+                      <TabsTrigger value="summary"    className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Summary</TabsTrigger>
+                      <TabsTrigger value="financials" className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Financials</TabsTrigger>
+                      <TabsTrigger value="tod"        className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">ToD</TabsTrigger>
+                      <TabsTrigger value="specs"      className="flex-1 min-w-fit text-xs px-3 py-1.5 whitespace-nowrap">Specs</TabsTrigger>
+                    </TabsList>
+
+                    {/* ── TAB: Summary ── */}
+                    <TabsContent value="summary" className="flex flex-col gap-4 mt-0">
+                      <Card className="bg-[#2D2D2D] text-white border-0">
+                        <CardContent className="p-6">
+                          <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">System Summary</p>
+                          <div className="grid grid-cols-2 gap-4 mb-6">
                             {[
-                              ['Required Energy', `${(parseFloat(lpLoadKw) * parseFloat(lpBackupHrs)).toFixed(0)} kWh`],
-                              ['At 80% DoD',      `${(parseFloat(lpLoadKw) * parseFloat(lpBackupHrs) / 0.8).toFixed(0)} kWh`],
-                              ['Units (est.)',    `${Math.ceil((parseFloat(lpLoadKw) * parseFloat(lpBackupHrs) / 0.8) / 261)} × UESS-125`],
-                            ].map(([lbl, val]) => (
-                              <div key={lbl} className="bg-muted/60 rounded-lg px-3 py-2 text-center">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{lbl}</p>
-                                <p className="text-sm font-black text-orange-500 mt-0.5">{val}</p>
+                              { label: 'Total Power',    value: `${totalPower.toLocaleString('en-IN')} kW` },
+                              { label: 'Total Energy',   value: `${totalEnergy.toLocaleString('en-IN')} kWh` },
+                              { label: 'Usable Energy',  value: `${usableEnergy.toFixed(0)} kWh` },
+                              { label: 'Configuration',  value: `${numUnits} × ${u.model ?? '—'}` },
+                            ].map(({ label, value }) => (
+                              <div key={label} className="bg-white/5 rounded-lg p-4">
+                                <p className="text-[11px] text-gray-400 mb-1">{label}</p>
+                                <p className="text-lg font-black">{value}</p>
                               </div>
                             ))}
                           </div>
-                          <Button
-                            className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
-                            onClick={() => runRecommendation({
-                              source: 'Backup Requirement',
-                              critical_load_kw:   parseFloat(lpLoadKw),
-                              backup_hours:        parseFloat(lpBackupHrs),
-                              required_kwh:        parseFloat(lpLoadKw) * parseFloat(lpBackupHrs),
-                              required_kwh_at_80dod: parseFloat(lpLoadKw) * parseFloat(lpBackupHrs) / 0.8,
-                            })}
-                          >
-                            <Cpu className="w-3.5 h-3.5 mr-1.5" /> Get AI Recommendation
+                          <Separator className="bg-white/10 mb-4" />
+                          <div className="flex justify-between items-end">
+                            <div>
+                              <p className="text-xs text-gray-400">Indicative CAPEX (Ex-GST)</p>
+                              <p className="text-4xl font-black text-orange-500">{inrCr(totalPrice)}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">+ 18% GST = {inrCr(totalPrice * 1.18)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-400">Simple Payback</p>
+                              <p className="text-3xl font-black text-white">{simplePayback} yrs</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{cyclesPerYear} cycles/yr assumed</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm">Energy Breakdown</CardTitle>
+                            <CardDescription>Gross vs usable capacity</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {energyBreakdown.map((item) => (
+                                <div key={item.name}>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-muted-foreground">{item.name}</span>
+                                    <span className="font-bold">{item.value.toFixed(0)} kWh</span>
+                                  </div>
+                                  <Progress value={totalEnergy ? (item.value / totalEnergy) * 100 : 0} className="h-2" />
+                                </div>
+                              ))}
+                            </div>
+                            <Separator className="my-4" />
+                            <div className="text-xs text-muted-foreground">
+                              SoC window <span className="font-bold text-foreground">{socMin}–{socMax}%</span>
+                              {' '}→ efficiency factor <span className="font-bold text-orange-500">{(socMax - socMin).toFixed(0)}%</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm">CAPEX Split</CardTitle>
+                            <CardDescription>Typical cost breakdown</CardDescription>
+                          </CardHeader>
+                          <CardContent className="flex flex-col items-center">
+                            <ResponsiveContainer width="100%" height={160}>
+                              <PieChart>
+                                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={72} paddingAngle={3} dataKey="value">
+                                  {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+                                </Pie>
+                                <ReTooltip formatter={(v, n) => [`${v}%`, n]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 w-full">
+                              {pieData.map((d, i) => (
+                                <div key={d.name} className="flex items-center gap-1.5 text-[11px]">
+                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i] }} />
+                                  <span className="text-muted-foreground">{d.name}</span>
+                                  <span className="font-bold ml-auto">{d.value}%</span>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-orange-500" /> Scalability — {u.model ?? '—'}
+                          </CardTitle>
+                          <CardDescription>Energy (kWh) and CAPEX (₹ L) vs number of units</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={scaleData} barGap={4}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                              <XAxis dataKey="units" tick={{ fontSize: 11 }} />
+                              <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                              <ReTooltip content={<ChartTooltip />} />
+                              <Bar yAxisId="left"  dataKey="energy" name="Energy (kWh)" fill="#F26B4E" radius={[4,4,0,0]} />
+                              <Bar yAxisId="right" dataKey="capex"  name="CAPEX (₹L)"  fill="#6366F1" radius={[4,4,0,0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      {/* Save Configuration */}
+                      <Card className="border-orange-200 bg-orange-50/40">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <Settings className="w-4 h-4 text-orange-500" /> Save Configuration to Database
+                          </CardTitle>
+                          <CardDescription>Link this configuration to a site for future reference</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-3">
+                          {saveSuccess && (
+                            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                              <CheckCircle2 className="w-4 h-4" /> Configuration saved successfully.
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-muted-foreground">Site</label>
+                              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                value={saveSiteId} onChange={e => setSaveSiteId(e.target.value)}>
+                                <option value="">Select site…</option>
+                                {siteList.map(s => <option key={s.id} value={s.id}>{s.site_name}</option>)}
+                              </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-muted-foreground">Config Name</label>
+                              <input className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                placeholder={`${numUnits}× ${u.model ?? 'BESS'} – ${appLabel}`}
+                                value={saveConfigName} onChange={e => setSaveConfigName(e.target.value)} />
+                            </div>
+                          </div>
+                          <Button className="bg-orange-500 hover:bg-orange-600 h-9 text-sm font-bold"
+                            onClick={handleSaveConfig} disabled={saveSaving || !saveSiteId || !saveConfigName.trim()}>
+                            {saveSaving ? 'Saving…' : 'Save Configuration'}
                           </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
 
-                  {/* ── MODE: Manual Input Sheet ── */}
-                  {lpMode === 'manual' && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setLpMode(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                          <X className="w-3 h-3" /> Back
-                        </button>
-                        <span className="text-xs font-bold text-foreground">Manual Input Sheet</span>
+                    {/* ── TAB: Financials ── */}
+                    <TabsContent value="financials" className="flex flex-col gap-4 mt-0">
+                      <div className="grid grid-cols-3 gap-4">
+                        <SparkKpi label="Annual Savings"   value={inrL(annualSavings)}                                sub={`${cyclesPerYear} cycles/yr`} icon={TrendingUp} accent />
+                        <SparkKpi label="Simple Payback"   value={`${simplePayback} yrs`}                           sub="At current tariff Δ"       icon={Clock} />
+                        <SparkKpi label="Break-even Year"  value={breakEvenYear != null ? `Yr ${breakEvenYear}` : '—'} sub="Degradation-adjusted"   icon={Clock} />
+                        <SparkKpi label="IRR (10-yr NPV)"  value={irrPct != null && irrPct > 0 ? `${irrPct}%` : '—'} sub="With degradation + O&M" icon={Award} />
                       </div>
-                      <a
-                        href="https://docs.google.com/forms/d/e/1FAIpQLSfffMETWxybmqb83ss9qTXdcAkRlXfvpE5HvbzdICXTERRU2w/viewform?usp=sharing"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:bg-orange-50/50 transition-all"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
-                          <Link2 className="w-4 h-4 text-orange-500" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold">UnityESS BESS Intake Form</p>
-                          <p className="text-[10px] text-muted-foreground">Send this to the client to fill their load data</p>
-                        </div>
-                      </a>
-                      <Separator />
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Or enter monthly totals manually</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
-                          <div key={m} className="space-y-1">
-                            <Label className="text-[10px] text-muted-foreground">{m} (kWh)</Label>
-                            <Input
-                              type="number" min="0" placeholder="0"
-                              className="h-8 text-xs"
-                              value={lpManualKwh[i]}
-                              onChange={e => {
-                                const next = [...lpManualKwh];
-                                next[i] = e.target.value;
-                                setLpManualKwh(next);
-                              }}
-                            />
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">Cumulative Cash Flow</CardTitle>
+                          <CardDescription>12-year · ₹ Lakhs · degradation + O&M included · {dataset.label}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <AreaChart data={paybackData}>
+                              <defs>
+                                <linearGradient id="cfGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%"  stopColor="#F26B4E" stopOpacity={0.3} />
+                                  <stop offset="95%" stopColor="#F26B4E" stopOpacity={0}   />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit=" L" />
+                              <ReTooltip formatter={(v) => [`₹${v} L`, 'Cumulative P/L']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                              <Area type="monotone" dataKey="cashflow" stroke="#F26B4E" strokeWidth={2.5} fill="url(#cfGrad)" dot={{ r: 3, fill: '#F26B4E' }} activeDot={{ r: 5 }} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="w-3 h-3 rounded-full bg-orange-500 shrink-0" />
+                            Break-even at <span className="font-bold text-foreground mx-1">{simplePayback} years</span>— cumulative savings thereafter = revenue
                           </div>
-                        ))}
-                      </div>
-                      {lpManualKwh.some(v => v && parseFloat(v) > 0) && (
-                        <Button
-                          className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
-                          onClick={() => {
-                            const vals = lpManualKwh.map(v => parseFloat(v) || 0);
-                            const filled = vals.filter(v => v > 0);
-                            const total = vals.reduce((a, b) => a + b, 0);
-                            const avg = filled.length ? total / filled.length : 0;
-                            const max = Math.max(...vals);
-                            runRecommendation({
-                              source: 'Manual Input',
-                              monthly_kwh: vals,
-                              total_annual_kwh: total,
-                              avg_monthly_kwh: avg,
-                              max_monthly_kwh: max,
-                              months_with_data: filled.length,
-                            });
-                          }}
-                        >
-                          <Cpu className="w-3.5 h-3.5 mr-1.5" /> Get AI Recommendation
-                        </Button>
-                      )}
-                    </div>
-                  )}
-
-                  </> /* end !lpData input modes */
-                  )} {/* end !lpVerified && !lpRec && !lpRecommending && !lpData */}
-
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* ── TAB: Sizing ──────────────────────────────────────────────── */}
-            <TabsContent value="sizing" className="flex flex-col gap-4 mt-0">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-orange-500" />
-                    BESS Sizing Tool
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Rule-based requirement calculator → Economical &amp; Recommended configurations → Finance model.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-
-                  {/* ── PHASE 1: Use case selection ── */}
-                  {!szUseCase && (
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        {
-                          key: 'dg',
-                          label: 'DG Replacement',
-                          desc: 'Size BESS to replace diesel generator runtime. Savings calculated from fuel displaced.',
-                        },
-                        {
-                          key: 'tod',
-                          label: 'ToD Arbitrage',
-                          desc: 'Size BESS for peak/off-peak tariff arbitrage. Savings from daily tariff spread.',
-                        },
-                      ].map(({ key, label, desc }) => (
-                        <button
-                          key={key}
-                          onClick={() => { setSzUseCase(key); setSzResult(null); setSzAiNote(null); }}
-                          className="text-left p-4 rounded-xl border-2 border-border hover:border-orange-400 hover:bg-orange-50/50 transition-all group"
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                              <TrendingUp className="w-4 h-4 text-orange-500" />
-                            </div>
-                            <span className="text-xs font-black text-foreground">{label}</span>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* ── PHASE 2: Inputs ── */}
-                  {szUseCase && !szResult && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setSzUseCase(null)}
-                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                        >
-                          <X className="w-3 h-3" /> Back
-                        </button>
-                        <span className="text-xs font-bold text-foreground">
-                          {szUseCase === 'dg' ? 'DG Replacement Inputs' : 'ToD Arbitrage Inputs'}
-                        </span>
-                      </div>
-
-                      {/* Category + State + Client row */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">SKU Category</Label>
-                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
-                            value={szCategory} onChange={e => setSzCategory(e.target.value)}>
-                            <option value="cabinet">Cabinet</option>
-                            <option value="container">Container</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">State</Label>
-                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
-                            value={szState} onChange={e => handleSzStateChange(e.target.value)}>
-                            <option value="">— Select state —</option>
-                            {stateList.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Client (optional)</Label>
-                          <select className="w-full h-9 text-xs rounded-md border border-input bg-background px-3"
-                            value={szClientId} onChange={e => setSzClientId(e.target.value)}>
-                            <option value="">— None —</option>
-                            {clientList.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      {szUseCase === 'dg' && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Critical Load (kW)</Label>
-                            <Input type="number" min="0" placeholder="e.g. 250" className="h-9 text-xs"
-                              value={szLoadKw} onChange={e => setSzLoadKw(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Backup Duration (hrs)</Label>
-                            <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4" className="h-9 text-xs"
-                              value={szBackupHrs} onChange={e => setSzBackupHrs(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fuel Cost (₹/litre)</Label>
-                            <Input type="number" min="0" placeholder="e.g. 90" className="h-9 text-xs"
-                              value={szFuelCost} onChange={e => setSzFuelCost(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">DG Efficiency (L/kWh)</Label>
-                            <Input type="number" min="0.1" step="0.01" placeholder="e.g. 0.31" className="h-9 text-xs"
-                              value={szDgEff} onChange={e => setSzDgEff(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5 col-span-2">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
-                            <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
-                              value={szDgDays} onChange={e => setSzDgDays(e.target.value)} />
-                          </div>
-                        </div>
-                      )}
-
-                      {szUseCase === 'tod' && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">BESS Capacity (MWh)</Label>
-                            <Input type="number" min="0" step="0.1" placeholder="e.g. 1.0" className="h-9 text-xs"
-                              value={szCapacityMwh} onChange={e => setSzCapacityMwh(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Depth of Discharge (%)</Label>
-                            <Input type="number" min="50" max="100" step="1" placeholder="e.g. 85" className="h-9 text-xs"
-                              value={szDod} onChange={e => setSzDod(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Window (hrs)</Label>
-                            <Input type="number" min="0.5" step="0.5" placeholder="e.g. 4" className="h-9 text-xs"
-                              value={szPeakWindow} onChange={e => setSzPeakWindow(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Operating Days / Year</Label>
-                            <Input type="number" min="1" max="365" placeholder="e.g. 300" className="h-9 text-xs"
-                              value={szTodDays} onChange={e => setSzTodDays(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Peak Tariff (₹/kWh)</Label>
-                            <Input type="number" min="0" step="0.1" placeholder="e.g. 10.5" className="h-9 text-xs"
-                              value={szPeakTariff} onChange={e => setSzPeakTariff(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Off-Peak Tariff (₹/kWh)</Label>
-                            <Input type="number" min="0" step="0.1" placeholder="e.g. 5.5" className="h-9 text-xs"
-                              value={szOffpeakTariff} onChange={e => setSzOffpeakTariff(e.target.value)} />
-                          </div>
-                        </div>
-                      )}
-
-                      <Button
-                        className="w-full bg-orange-500 hover:bg-orange-600 h-10 text-xs font-bold"
-                        disabled={szUseCase === 'dg'
-                          ? !(szLoadKw && szBackupHrs)
-                          : !(szCapacityMwh && szPeakTariff && szOffpeakTariff)}
-                        onClick={runSizing}
-                      >
-                        <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Calculate Sizing
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* ── PHASE 3: Results ── */}
-                  {szResult && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground">
-                          {szUseCase === 'dg' ? 'DG Replacement' : 'ToD Arbitrage'} — Sizing Results
-                        </span>
-                        <button
-                          onClick={() => { setSzResult(null); setSzAiNote(null); setSzSaved(null); setOfferType('budgetary'); setQSupplyL(''); setQInstallL(''); }}
-                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                        >
-                          <X className="w-3 h-3" /> Recalculate
-                        </button>
-                      </div>
-
-                      {/* ── ToD capacity-first results ── */}
-                      {szResult.use_case === 'tod' ? (
-                        <>
-                          {/* Capacity summary card */}
-                          <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Capacity Summary</p>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <p className="text-[10px] text-gray-400">Installed Capacity</p>
-                                <p className="text-xl font-black text-orange-500">{szResult.capacity_mwh} MWh</p>
-                                <p className="text-[10px] text-gray-500 mt-0.5">{szResult.dod_pct}% DoD → {Math.round(szResult.usable_kwh_per_day).toLocaleString('en-IN')} kWh usable/day</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-gray-400">Minimum PCS Rating</p>
-                                <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
-                                <p className="text-[10px] text-gray-500 mt-0.5">over {szPeakWindow}h peak window</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Financial return card */}
-                          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-green-700 mb-3">Financial Return</p>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div>
-                                <p className="text-[10px] text-green-600 font-bold uppercase">Annual Savings</p>
-                                <p className="text-lg font-black text-green-700">{inrL(szResult.annual_savings_inr)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Annual Dispatch</p>
-                                <p className="text-lg font-black">{(szResult.dispatch_kwh_per_year / 1000).toFixed(1)} MWh</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">₹/kWh Benefit</p>
-                                <p className="text-lg font-black">
-                                  {szResult.dispatch_kwh_per_year > 0
-                                    ? `₹${(szResult.annual_savings_inr / szResult.dispatch_kwh_per_year).toFixed(2)}`
-                                    : '—'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Apply + Save row */}
-                          <div className="flex gap-2">
-                            <Button className="flex-1 bg-orange-500 hover:bg-orange-600 h-9 text-xs font-bold"
-                              onClick={() => {
-                                if (szPeakTariff && szOffpeakTariff) {
-                                  const diff = parseFloat(szPeakTariff) - parseFloat(szOffpeakTariff);
-                                  if (diff > 0) setTariffDiff(diff);
-                                }
-                                setActiveTab('summary');
-                              }}>
-                              Apply to Configurator →
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {/* DG path: original Nominal Requirement card */}
-                          <div className="bg-[#2D2D2D] rounded-xl p-4 text-white">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Nominal Requirement</p>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div>
-                                <p className="text-[10px] text-gray-400">Energy</p>
-                                <p className="text-xl font-black text-orange-500">{Math.round(szResult.nominal_kwh).toLocaleString('en-IN')} kWh</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-gray-400">Power</p>
-                                <p className="text-xl font-black">{Math.round(szResult.nominal_kw).toLocaleString('en-IN')} kW</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-gray-400">Annual Savings</p>
-                                <p className="text-xl font-black text-green-400">{inrL(szResult.annual_savings_inr)}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* DG path: Economical + Recommended cards for active unit */}
-                          {(() => {
-                            const ac = szResult.allConfigs.find(c => c.unit.id === activeUnit?.id);
-                            if (!ac) return null;
-                            return (
-                              <div className="grid grid-cols-2 gap-3">
-                                <Card className="border-border">
-                                  <CardContent className="p-4 flex flex-col gap-2">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Economical</p>
-                                    <p className="text-sm font-black">{ac.eco.count} × {ac.unit.model}</p>
-                                    <p className="text-[11px] text-muted-foreground">{ac.eco.kwh.toLocaleString('en-IN')} kWh · {ac.eco.kw.toLocaleString('en-IN')} kW</p>
-                                    <Separator />
-                                    <div className="space-y-1 text-xs">
-                                      <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.eco.capex > 0 ? inrCr(ac.eco.capex) : 'On request'}</span></div>
-                                      <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold">{ac.eco.headroom}%</span></div>
-                                      <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.eco.payback ? `${ac.eco.payback.toFixed(1)} yrs` : '—'}</span></div>
-                                      <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.eco.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.eco.roi10 != null ? `${ac.eco.roi10}%` : '—'}</span></div>
-                                    </div>
-                                    <div className="flex gap-2 mt-1">
-                                      <Button size="sm" variant="outline" className="h-8 text-xs flex-1"
-                                        onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.eco.count); setActiveTab('summary'); }}>
-                                        Apply
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
-                                        disabled={szSaving || !!szSaved}
-                                        onClick={() => saveSizingAnalysis(ac.unit, 'economical')}>
-                                        {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
-                                      </Button>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                                <Card className="border-orange-300 bg-orange-50/50">
-                                  <CardContent className="p-4 flex flex-col gap-2">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">★ Recommended</p>
-                                    <p className="text-sm font-black">{ac.rec.count} × {ac.unit.model}</p>
-                                    <p className="text-[11px] text-muted-foreground">{ac.rec.kwh.toLocaleString('en-IN')} kWh · {ac.rec.kw.toLocaleString('en-IN')} kW</p>
-                                    <Separator />
-                                    <div className="space-y-1 text-xs">
-                                      <div className="flex justify-between"><span className="text-muted-foreground">CAPEX Ex-GST</span><span className="font-black">{ac.rec.capex > 0 ? inrCr(ac.rec.capex) : 'On request'}</span></div>
-                                      <div className="flex justify-between"><span className="text-muted-foreground">Headroom</span><span className="font-bold text-orange-500">{ac.rec.headroom}%</span></div>
-                                      <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{ac.rec.payback ? `${ac.rec.payback.toFixed(1)} yrs` : '—'}</span></div>
-                                      <div className="flex justify-between"><span className="text-muted-foreground">10-yr ROI</span><span className={`font-bold ${(ac.rec.roi10 ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{ac.rec.roi10 != null ? `${ac.rec.roi10}%` : '—'}</span></div>
-                                    </div>
-                                    <div className="flex gap-2 mt-1">
-                                      <Button size="sm" className="h-8 text-xs flex-1 bg-orange-500 hover:bg-orange-600"
-                                        onClick={() => { setSelectedUnit(ac.unit); setNumUnits(ac.rec.count); setActiveTab('summary'); }}>
-                                        Apply
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="h-8 text-xs flex-1 border-green-400 text-green-700 hover:bg-green-50"
-                                        disabled={szSaving || !!szSaved}
-                                        onClick={() => saveSizingAnalysis(ac.unit, 'recommended')}>
-                                        {szSaving ? 'Saving…' : szSaved ? 'Saved ✓' : 'Save'}
-                                      </Button>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            );
-                          })()}
-
-                      {/* All configurations comparison table */}
-                      <div className="flex flex-col gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">All Configurations</p>
-                        <div className="rounded-xl border overflow-hidden">
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Model Assumptions</CardTitle></CardHeader>
+                        <CardContent className="p-0">
                           <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/60 hover:bg-muted/60">
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0">Model</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-center">Eco (n×kWh)</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-center">Rec (n×kWh)</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Eco CAPEX</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0 text-right">Payback</TableHead>
-                                <TableHead className="text-[10px] uppercase font-bold h-8 py-0"></TableHead>
-                              </TableRow>
-                            </TableHeader>
+                            <TableHeader><TableRow><TableHead>Parameter</TableHead><TableHead>Value</TableHead><TableHead>Notes</TableHead></TableRow></TableHeader>
                             <TableBody>
-                              {szResult.allConfigs.map((cfg) => (
-                                <TableRow key={cfg.unit.id} className={cfg.unit.id === activeUnit?.id ? 'bg-orange-50/60' : ''}>
-                                  <TableCell className="py-2 text-xs font-bold">
-                                    {cfg.unit.model}{cfg.unit.id === activeUnit?.id && <span className="ml-1 text-orange-500 text-[10px]">◀ active</span>}
-                                  </TableCell>
-                                  <TableCell className="py-2 text-xs text-center">{cfg.eco.count}× · {cfg.eco.kwh.toLocaleString('en-IN')} kWh</TableCell>
-                                  <TableCell className="py-2 text-xs text-center text-orange-600 font-medium">{cfg.rec.count}× · {cfg.rec.kwh.toLocaleString('en-IN')} kWh</TableCell>
-                                  <TableCell className="py-2 text-xs text-right font-bold">{cfg.eco.capex > 0 ? inrCr(cfg.eco.capex) : '—'}</TableCell>
-                                  <TableCell className="py-2 text-xs text-right">{cfg.eco.payback ? `${cfg.eco.payback.toFixed(1)} yr` : '—'}</TableCell>
-                                  <TableCell className="py-2">
-                                    <button
-                                      onClick={() => { setSelectedUnit(cfg.unit); setNumUnits(cfg.rec.count); setActiveTab('summary'); }}
-                                      className="text-[10px] text-orange-500 hover:text-orange-700 font-bold whitespace-nowrap"
-                                    >
-                                      Apply ★
-                                    </button>
-                                  </TableCell>
+                              {[
+                                ['Application',      appLabel,                                    'User-selected'],
+                                ['Usable Energy',    `${usableEnergy.toFixed(0)} kWh`,            `SoC ${socMin}–${socMax}%`],
+                                ['Yr-1 At Meter',    `${atMeterYr1.toFixed(0)} kWh`,              `After SOH ${(yr1.soh*100).toFixed(1)}% + RTE ${(yr1.rte*100).toFixed(1)}%`],
+                                ['Cycle Profile',    dataset.label,                               `${cyclesPerYear} cycles/yr`],
+                                ['Tariff Δ',         `₹${tariffDiff}/kWh`,                        'Peak − off-peak spread'],
+                                ['Yr-1 Gross Sav.',  inrL(grossSavYr1),                           'Before O&M'],
+                                ['O&M Yr-1',         inrL(omYr1),                                 '1.5% of CAPEX, +3%/yr'],
+                                ['Yr-1 Net Savings', inrL(annualSavings),                         'Post O&M'],
+                                ['IRR (10-yr NPV)',  irrPct != null ? `${irrPct}%` : '—',         'Degradation + O&M included'],
+                                ['CAPEX (Ex-GST)',   inrCr(totalPrice),                           'Indicative ex-works'],
+                                ['GST',              '18%',                                        'Applicable on supply'],
+                              ].map(([p, v, n]) => (
+                                <TableRow key={p}>
+                                  <TableCell className="font-medium text-xs">{p}</TableCell>
+                                  <TableCell className="font-black text-xs text-orange-500">{v}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{n}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
                           </Table>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground italic px-1">
-                          Economical = minimum units to meet nominal. Recommended = ≥15% headroom for derating and dispatch buffer.
-                        </p>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* ── TAB: ToD ── */}
+                    <TabsContent value="tod" className="flex flex-col gap-4 mt-0">
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">Delhi ToD Tariff Profile (Illustrative)</CardTitle>
+                          <CardDescription>Charge during off-peak · discharge during peak · spread = ₹{tariffDiff}/kWh</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={TOD_SLOTS} barSize={26}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                              <XAxis dataKey="hour" tickFormatter={(h) => `${h}:00`} tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit=" ₹" />
+                              <ReTooltip formatter={(v, n) => [`₹${v}/kWh`, n]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                              <Legend />
+                              <Bar dataKey="buy" name="Buy (Grid)" radius={[3,3,0,0]}>
+                                {TOD_SLOTS.map((s, i) => <Cell key={i} fill={SLOT_COLORS[s.slot]} />)}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                          <div className="flex gap-4 mt-3 flex-wrap">
+                            {Object.entries(SLOT_COLORS).map(([slot, color]) => (
+                              <div key={slot} className="flex items-center gap-1.5 text-xs">
+                                <span className="w-3 h-3 rounded-sm" style={{ background: color }} />
+                                <span className="text-muted-foreground">{slot}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <div className="grid grid-cols-3 gap-4">
+                        {[
+                          { label: 'Daily Arbitrage Revenue', value: `₹${(usableEnergy * tariffDiff).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: `${usableEnergy.toFixed(0)} kWh × ₹${tariffDiff}` },
+                          { label: 'Monthly Revenue',         value: `₹${((atMeterYr1 * tariffDiff * 25) / 1e3).toFixed(1)} K`, sub: '25 arbitrage days/month · Yr-1' },
+                          { label: 'Annual Net (Yr-1)',        value: inrL(annualSavings), sub: `Post O&M · ${cyclesPerYear} cycles/yr` },
+                        ].map((item) => (
+                          <Card key={item.label}>
+                            <CardContent className="p-5">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground font-bold mb-1">{item.label}</p>
+                              <p className="text-xl font-black text-orange-500">{item.value}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{item.sub}</p>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
-                        </>
-                      )}
-
-                      {/* AI narrative */}
-                      {szAiLoading && (
-                        <div className="flex items-center gap-2 text-xs text-orange-500 bg-orange-50 rounded-lg px-3 py-2.5">
-                          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                          Gemini generating sizing rationale…
-                        </div>
-                      )}
-                      {szAiNote && !szAiLoading && (
-                        <div className="flex flex-col gap-2 bg-muted/40 rounded-xl p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                            <Cpu className="w-3 h-3" /> AI Rationale
-                          </p>
-                          {(szAiNote.sizing_logic?.rationale || szAiNote.primary?.reasoning) && (
-                            <p className="text-xs text-foreground leading-relaxed">
-                              {szAiNote.sizing_logic?.rationale ?? szAiNote.primary?.reasoning}
-                            </p>
-                          )}
-                          {szAiNote.financial_estimate?.assumptions && (
-                            <p className="text-[11px] text-muted-foreground italic">{szAiNote.financial_estimate.assumptions}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ── Quote Panel ──────────────────────────────── */}
-                      <div className="border border-orange-200 rounded-xl p-4 bg-orange-50/30 flex flex-col gap-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 flex items-center gap-1.5">
-                          <FileText className="w-3 h-3" /> Quote Pricing
-                        </p>
-
-                        {/* Offer type toggle */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setOfferType('budgetary')}
-                            className={`flex-1 text-xs font-bold py-1.5 rounded-lg border transition-colors ${offerType === 'budgetary' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-muted-foreground border-border hover:border-orange-300'}`}
-                          >
-                            Budgetary
-                          </button>
-                          <button
-                            onClick={() => setOfferType('negotiation')}
-                            className={`flex-1 text-xs font-bold py-1.5 rounded-lg border transition-colors ${offerType === 'negotiation' ? 'bg-[#2D2D2D] text-white border-[#2D2D2D]' : 'bg-white text-muted-foreground border-border hover:border-gray-400'}`}
-                          >
-                            Negotiation
-                          </button>
-                        </div>
-
-                        {/* Price inputs — read-only in Budgetary, editable in Negotiation */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-bold uppercase text-muted-foreground">Supply Ex-GST ₹L</label>
-                            <Input
-                              type="number"
-                              placeholder={totalPrice > 0 ? (totalPrice / 1e5).toFixed(2) : '0.00'}
-                              value={qSupplyL}
-                              onChange={e => setQSupplyL(e.target.value)}
-                              className="h-8 text-xs"
-                              readOnly={offerType === 'budgetary'}
-                            />
-                            {offerType === 'budgetary' && (
-                              <p className="text-[10px] text-muted-foreground italic">Pre-filled · indicative</p>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-bold uppercase text-muted-foreground">Install Ex-GST ₹L</label>
-                            <Input
-                              type="number"
-                              placeholder={skuInstallOnly > 0 ? (skuInstallOnly / 1e5).toFixed(2) : '0.00'}
-                              value={qInstallL}
-                              onChange={e => setQInstallL(e.target.value)}
-                              className="h-8 text-xs"
-                              readOnly={offerType === 'budgetary'}
-                            />
-                            {offerType === 'budgetary' && (
-                              <p className="text-[10px] text-muted-foreground italic">Pre-filled · indicative</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Total CAPEX + live-recalculated financials */}
-                        <div className="bg-white rounded-lg p-3 border border-orange-100 flex flex-col gap-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-foreground">Total CAPEX (Ex-GST)</span>
-                            <span className="text-sm font-black text-orange-600">{qCapex > 0 ? inrCr(qCapex) : '—'}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px] text-muted-foreground">
-                            <span>Supply {qSupplyRs > 0 ? inrL(qSupplyRs) : '—'}</span>
-                            <span>+ Install {qInstallRs > 0 ? inrL(qInstallRs) : '—'}</span>
-                            <span>+ 18% GST extra</span>
-                          </div>
-                          {quoteFinancials && (
-                            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
-                              <div className="text-center">
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Payback</p>
-                                <p className="text-xs font-black">{quoteFinancials.payback ? `${quoteFinancials.payback} yr` : '—'}</p>
+                      <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Optimal Dispatch Strategy</CardTitle></CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {[
+                              { time: '00:00–06:00', action: 'Charge',    slot: 'Off-peak', rate: '₹5.2/kWh',  bg: 'bg-green-50',  text: 'text-green-700' },
+                              { time: '06:00–08:00', action: 'Hold',      slot: 'Shoulder', rate: '₹6.8/kWh',  bg: 'bg-amber-50',  text: 'text-amber-700' },
+                              { time: '08:00–12:00', action: 'Discharge', slot: 'Peak',     rate: '₹9.5/kWh',  bg: 'bg-red-50',    text: 'text-orange-600' },
+                              { time: '12:00–16:00', action: 'Partial',   slot: 'Shoulder', rate: '₹7.2/kWh',  bg: 'bg-amber-50',  text: 'text-amber-700' },
+                              { time: '16:00–22:00', action: 'Discharge', slot: 'Peak',     rate: '₹11.5/kWh', bg: 'bg-red-50',    text: 'text-orange-600' },
+                              { time: '22:00–24:00', action: 'Charge',    slot: 'Off-peak', rate: '₹5.5/kWh',  bg: 'bg-green-50',  text: 'text-green-700' },
+                            ].map((row) => (
+                              <div key={row.time} className={`flex items-center justify-between rounded-lg px-4 py-2.5 ${row.bg}`}>
+                                <span className="text-xs font-bold text-muted-foreground w-28">{row.time}</span>
+                                <Badge variant="outline" className={`${row.text} border-current text-xs`}>{row.action}</Badge>
+                                <span className="text-xs text-muted-foreground">{row.slot}</span>
+                                <span className={`text-xs font-black ${row.text}`}>{row.rate}</span>
                               </div>
-                              <div className="text-center">
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">IRR 10yr</p>
-                                <p className={`text-xs font-black ${(quoteFinancials.irrPct ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
-                                  {quoteFinancials.irrPct != null ? `${quoteFinancials.irrPct}%` : '—'}
-                                </p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">NPV 10yr</p>
-                                <p className="text-xs font-black">{quoteFinancials.npv != null ? inrL(quoteFinancials.npv) : '—'}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
 
-                        {/* Generate Proposal CTA */}
-                        <Button
-                          className="h-9 text-xs font-bold bg-orange-500 hover:bg-orange-600 w-full"
-                          onClick={() => setShowPropModal(true)}
-                        >
-                          <FileText className="w-3.5 h-3.5 mr-1.5" /> Generate Proposal
-                        </Button>
+                    {/* ── TAB: Specs ── */}
+                    <TabsContent value="specs" className="flex flex-col gap-4 mt-0">
+                      <div className="grid grid-cols-2 gap-4">
+                        {[
+                          { icon: Battery,    label: 'Chemistry',      value: `${u.chemistry ?? '—'} (LFP)`,     desc: 'IEC 62619 certified' },
+                          { icon: Layers,     label: 'Form Factor',    value: u.form_factor ?? '—',               desc: 'Containerised, weatherproof' },
+                          { icon: Weight,     label: 'System Weight',  value: u.weight_kg ? `${(u.weight_kg * numUnits / 1000).toFixed(1)} t` : '—', desc: `${numUnits} units combined` },
+                          { icon: Thermometer, label: 'Coupling',      value: `${coupling}-Coupled`,              desc: 'IEC 62477 compliant' },
+                          { icon: Wifi,       label: 'Communication',  value: 'CAN · RS485 · Modbus TCP',         desc: 'IEC 61850 SCADA ready' },
+                          { icon: Shield,     label: 'Certifications', value: 'IEC · IS · BIS',                   desc: 'IEC 62619 · IS 16270 · BIS' },
+                        ].map(({ icon: Icon, label, value, desc }) => (
+                          <Card key={label} className="hover:border-orange-300 transition-colors">
+                            <CardContent className="p-4 flex items-start gap-3">
+                              <div className="rounded-md bg-orange-50 p-2 shrink-0"><Icon className="w-4 h-4 text-orange-500" /></div>
+                              <div>
+                                <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">{label}</p>
+                                <p className="text-sm font-black mt-0.5">{value}</p>
+                                <p className="text-[11px] text-muted-foreground">{desc}</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
-                    </div>
-                  )}
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">Complete Specifications — {u.model ?? '—'}</CardTitle>
+                          <CardDescription>× {numUnits} units</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <Table>
+                            <TableBody>
+                              {[
+                                ['Model',              u.model ?? '—'],
+                                ['Rated Power',        `${u.power_kw ?? '—'} kW (per unit)`],
+                                ['Rated Energy',       `${u.energy_kwh ?? '—'} kWh (per unit)`],
+                                ['System Power',       `${totalPower} kW`],
+                                ['System Energy',      `${totalEnergy} kWh`],
+                                ['Usable Energy',      `${usableEnergy.toFixed(0)} kWh (SoC ${socMin}–${socMax}%)`],
+                                ['Chemistry',          `${u.chemistry ?? '—'} (Lithium Iron Phosphate)`],
+                                ['Form Factor',        u.form_factor ?? '—'],
+                                ['Coupling',           `${coupling}-Coupled`],
+                                ['Application',        appLabel],
+                                ['Communication',      'CAN / RS485 / Modbus TCP / IEC 61850'],
+                                ['Safety Standards',   'IEC 62619, IEC 62477, IS 16270'],
+                                ['Pricing (Ex-GST)',   `${inrCr(totalPrice)} for ${numUnits} units`],
+                                ['GST (18%)',          inrCr(totalPrice * 0.18)],
+                                ['Total (Inc. GST)',   inrCr(totalPrice * 1.18)],
+                              ].map(([k, v]) => (
+                                <TableRow key={k}>
+                                  <TableCell className="text-xs text-muted-foreground font-semibold w-44">{k}</TableCell>
+                                  <TableCell className="text-xs font-bold">{v}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                      <Button
+                        className="w-full bg-orange-500 hover:bg-orange-600 h-11 text-sm font-bold"
+                        onClick={() => { setPropSuccess(null); setShowPropModal(true); }}
+                        disabled={!activeUnit}
+                      >
+                        Generate Commercial Proposal <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </TabsContent>
 
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-          </Tabs>
-          </div>{/* end right-panel wrapper */}
+                  </Tabs>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── Generate Proposal Modal ─────────────────────────────────── */}
+        {/* ── Generate Proposal Modal ────────────────────────────────────── */}
         <Dialog open={showPropModal} onOpenChange={(o) => { setShowPropModal(o); if (!o) setPropSuccess(null); }}>
           <DialogContent className="max-w-md">
             {propSuccess ? (
@@ -2541,9 +2087,7 @@ export default function BESSConfig() {
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                  <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setShowPropModal(false)}>
-                    Done
-                  </Button>
+                  <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setShowPropModal(false)}>Done</Button>
                 </DialogFooter>
               </>
             ) : (
@@ -2552,65 +2096,41 @@ export default function BESSConfig() {
                   <DialogTitle>Generate Commercial Proposal</DialogTitle>
                   <DialogDescription>
                     Creates a proposal for{' '}
-                    <span className="font-bold text-foreground">
-                      {numUnits}× {u.model ?? 'BESS'} — {inrCr(totalPrice)} Ex-GST
-                    </span>
+                    <span className="font-bold text-foreground">{numUnits}× {u.model ?? 'BESS'} — {inrCr(totalPrice)} Ex-GST</span>
                   </DialogDescription>
                 </DialogHeader>
-
                 <div className="flex flex-col gap-4 py-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">Client <span className="text-red-500">*</span></Label>
                     <Select value={propClientId} onValueChange={setPropClientId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select client…" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
                       <SelectContent>
-                        {clientList.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.company_name}
-                          </SelectItem>
-                        ))}
+                        {clientList.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.company_name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="space-y-1.5">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">Site (optional)</Label>
                     <Select value={propSiteId} onValueChange={setPropSiteId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select site…" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select site…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— None —</SelectItem>
-                        {siteList
-                          .filter((s) => !propClientId || String(s.client_id) === propClientId)
-                          .map((s) => (
-                            <SelectItem key={s.id} value={String(s.id)}>
-                              {s.site_name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link to Project (optional)</Label>
-                    <Select value={propProjectId || '__none__'} onValueChange={v => setPropProjectId(v === '__none__' ? '' : v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— None —</SelectItem>
-                        {projectList.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.project_code} — {p.company_name}
-                          </SelectItem>
+                        {siteList.filter((s) => !propClientId || String(s.client_id) === propClientId).map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.site_name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-
+                  <div className="space-y-1.5">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link to Project (optional)</Label>
+                    <Select value={propProjectId || '__none__'} onValueChange={v => setPropProjectId(v === '__none__' ? '' : v)}>
+                      <SelectTrigger><SelectValue placeholder="Select project…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {projectList.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.project_code} — {p.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1">
                     <div className="flex justify-between"><span className="text-muted-foreground">Configuration</span><span className="font-bold">{numUnits}× {u.model ?? '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">System</span><span className="font-bold">{totalPower} kW / {totalEnergy} kWh</span></div>
@@ -2618,26 +2138,16 @@ export default function BESSConfig() {
                     <div className="flex justify-between"><span className="text-muted-foreground">Annual Savings</span><span className="font-bold">{inrL(annualSavings)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Payback</span><span className="font-bold">{simplePayback} yrs</span></div>
                   </div>
-
                   <div className="space-y-1.5">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">Notes (optional)</Label>
-                    <textarea
-                      placeholder="Any additional notes for this proposal…"
-                      value={propNotes}
-                      onChange={(e) => setPropNotes(e.target.value)}
-                      rows={2}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                    />
+                    <textarea placeholder="Any additional notes for this proposal…" value={propNotes}
+                      onChange={(e) => setPropNotes(e.target.value)} rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none" />
                   </div>
                 </div>
-
                 <DialogFooter className="gap-2">
                   <Button variant="outline" onClick={() => setShowPropModal(false)}>Cancel</Button>
-                  <Button
-                    className="bg-orange-500 hover:bg-orange-600"
-                    onClick={handleGenerateProposal}
-                    disabled={!propClientId || propLoading}
-                  >
+                  <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleGenerateProposal} disabled={!propClientId || propLoading}>
                     {propLoading ? 'Creating…' : 'Create Proposal'}
                   </Button>
                 </DialogFooter>
@@ -2656,9 +2166,7 @@ export default function BESSConfig() {
           </CardHeader>
           <CardContent className="p-0">
             {cfgList.length === 0 ? (
-              <div className="py-12 text-center text-muted-foreground text-sm">
-                No configurations saved yet.
-              </div>
+              <div className="py-12 text-center text-muted-foreground text-sm">No configurations saved yet.</div>
             ) : (
               <Table>
                 <TableHeader>
@@ -2677,23 +2185,11 @@ export default function BESSConfig() {
                     <TableRow key={c.id} className="cursor-pointer">
                       <TableCell className="font-bold text-sm">{c.config_name}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{c.site_name}</TableCell>
-                      <TableCell>
-                        <Badge variant="default" className="bg-orange-500 text-white font-black">
-                          ×{c.num_units}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm font-medium">
-                        {Number(c.total_power_kw).toLocaleString('en-IN')} kW
-                      </TableCell>
-                      <TableCell className="font-bold text-sm">
-                        {Number(c.total_energy_kwh).toLocaleString('en-IN')} kWh
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{c.coupling_type}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {(c.application ?? '').replace(/_/g, ' ')}
-                      </TableCell>
+                      <TableCell><Badge variant="default" className="bg-orange-500 text-white font-black">×{c.num_units}</Badge></TableCell>
+                      <TableCell className="text-sm font-medium">{Number(c.total_power_kw).toLocaleString('en-IN')} kW</TableCell>
+                      <TableCell className="font-bold text-sm">{Number(c.total_energy_kwh).toLocaleString('en-IN')} kWh</TableCell>
+                      <TableCell><Badge variant="secondary">{c.coupling_type}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{(c.application ?? '').replace(/_/g, ' ')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
