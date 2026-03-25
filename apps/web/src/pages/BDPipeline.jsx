@@ -491,8 +491,10 @@ function OpportunitiesTab({
   const [stageFilter, setStageFilter] = useState('');
   const [showAdd,     setShowAdd]     = useState(false);
   const [form, setForm] = useState({ account_id:'', contact_id:'', owner_id:'', title:'', scope_type:'', estimated_value:'' });
-  const [saving,  setSaving]  = useState(false);
-  const [formErr, setFormErr] = useState('');
+  const [saving,    setSaving]    = useState(false);
+  const [formErr,   setFormErr]   = useState('');
+  const [movingId,  setMovingId]  = useState(null);
+  const [stageErr,  setStageErr]  = useState('');
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -520,8 +522,18 @@ function OpportunitiesTab({
   }
 
   const handleStageChange = useCallback(async (oppId, newStage) => {
-    try { await bdApi.patchOpp(oppId, { stage: newStage }); refetch(); } catch (_) {}
-  }, [refetch]);
+    if (movingId) return;
+    setMovingId(oppId);
+    setStageErr('');
+    try {
+      await bdApi.patchOpp(oppId, { stage: newStage });
+      refetch();
+    } catch (err) {
+      setStageErr(err.message || 'Failed to move — try again');
+    } finally {
+      setMovingId(null);
+    }
+  }, [refetch, movingId]);
 
   const openOpps  = opps.filter(o => !o.closed_at && o.stage !== 'lost');
   const totalVal  = openOpps.reduce((s,o) => s + parseFloat(o.estimated_value||0), 0);
@@ -575,6 +587,13 @@ function OpportunitiesTab({
         </Button>}
       </div>
 
+      {stageErr && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-xs text-red-700 font-semibold">
+          <AlertTriangle size={13}/> {stageErr}
+          <button onClick={() => setStageErr('')} className="ml-auto text-red-400 hover:text-red-600"><X size={12}/></button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
           <Briefcase size={32} className="opacity-20"/>
@@ -627,9 +646,10 @@ function OpportunitiesTab({
                             </div>
                             {nextStage && o.stage !== 'lost' && (
                               <button onClick={() => handleStageChange(o.id, nextStage.key)}
-                                className="mt-2 w-full py-1 rounded text-[10px] font-bold border border-dashed transition-colors"
+                                disabled={movingId === o.id}
+                                className="mt-2 w-full py-1 rounded text-[10px] font-bold border border-dashed transition-colors disabled:opacity-50 disabled:cursor-wait"
                                 style={{ borderColor: nextStage.color, color: nextStage.color }}>
-                                Move → {nextStage.label}
+                                {movingId === o.id ? 'Moving…' : `Move → ${nextStage.label}`}
                               </button>
                             )}
                           </div>

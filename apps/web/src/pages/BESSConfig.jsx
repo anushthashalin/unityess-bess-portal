@@ -282,6 +282,10 @@ export default function BESSConfig() {
   const [szAiLoading,     setSzAiLoading]     = useState(false);
   const [szSaving,        setSzSaving]        = useState(false);
   const [szSaved,         setSzSaved]         = useState(null); // { sizing_id, rec_id, finance_id }
+  // Quote panel: offer type + price overrides (in ₹ Lakhs as strings)
+  const [offerType,       setOfferType]       = useState('budgetary');
+  const [qSupplyL,        setQSupplyL]        = useState(''); // '' = pre-fill from SKU
+  const [qInstallL,       setQInstallL]       = useState(''); // '' = pre-fill from SKU
 
   // ── Save Configuration state ──────────────────────────────────────────────
   const [saveSiteId,      setSaveSiteId]      = useState('');
@@ -320,6 +324,8 @@ export default function BESSConfig() {
   };
 
   const runSizing = async () => {
+    // Reset quote overrides so the new result starts clean
+    setOfferType('budgetary'); setQSupplyL(''); setQInstallL('');
     let nominal_kwh = 0, nominal_kw = 0, annual_savings_inr = 0, dispatch_kwh_per_year = 0;
     const todExtra = {};  // populated in the ToD branch, spread into setSzResult
     if (szUseCase === 'dg') {
@@ -462,12 +468,14 @@ export default function BESSConfig() {
 
       // 3 — finance record
       const chosenRow = selectedConfig === 'economical' ? ecoRow : recRow;
+      // Use quote-overridden CAPEX if set, otherwise fall back to SKU-derived CAPEX
+      const finCapex = qCapex > 0 ? qCapex : chosenRow.capex;
       const benefit_rs_kwh = szResult.dispatch_kwh_per_year > 0
         ? szResult.annual_savings_inr / szResult.dispatch_kwh_per_year : 0;
       const tdiff = szResult.dispatch_kwh_per_year > 0
         ? szResult.annual_savings_inr / (szResult.dispatch_kwh_per_year / dataset.cycles_per_year) : 0;
       const { flows: finFlows, rows: finRows } = buildCashflows({
-        capex: chosenRow.capex, nominalKwh: chosenRow.kwh,
+        capex: finCapex, nominalKwh: chosenRow.kwh,
         socWindow: 0.90, tariffDiff: tdiff, dataset, years: 10,
       });
       const irrR    = calcIRR(finFlows);
@@ -475,14 +483,17 @@ export default function BESSConfig() {
       const bey     = calcBreakEvenYear(finFlows);
       const roi     = calcROI(finFlows);
       const annYr1  = finRows[0]?.net_cashflow ?? null;
-      const pb      = chosenRow.capex > 0 && annYr1 > 0 ? parseFloat((chosenRow.capex / annYr1).toFixed(2)) : null;
+      const pb      = finCapex > 0 && annYr1 > 0 ? parseFloat((finCapex / annYr1).toFixed(2)) : null;
       const npv     = Math.round(finFlows.reduce((s, cf, t) => s + cf / Math.pow(1.10, t), 0));
 
       await bessApi.createFinanceRecord({
         recommendation_id:       recRes.data.id,
         client_id:               szClientId ? parseInt(szClientId) : null,
         selected_config:         selectedConfig,
-        capex_ex_gst:            chosenRow.capex,
+        capex_ex_gst:            finCapex,
+        offer_type:              offerType,
+        price_supply_ex_gst:     qSupplyRs  || null,
+        price_install_ex_gst:    qInstallRs || null,
         use_case:                szResult.use_case,
         benefit_rs_kwh:          parseFloat(benefit_rs_kwh.toFixed(2)),
         cycles_per_year:         dataset.cycles_per_year,
@@ -525,6 +536,14 @@ export default function BESSConfig() {
   const socWindow    = (socMax - socMin) / 100;
   const usableEnergy = totalEnergy * socWindow;   // nameplate usable (kWh)
 
+  // ── Two-tier CAPEX: quote panel derived values ────────────────────────────
+  const skuInstallTotal = numUnits * (u.price_installed_ex_gst ?? 0);
+  const skuInstallOnly  = Math.max(0, skuInstallTotal - totalPrice);  // install-only portion from SKU
+  // Effective prices: use user-entered ₹L value if set, otherwise fall back to SKU default
+  const qSupplyRs  = qSupplyL  !== '' ? parseFloat(qSupplyL)  * 1e5 : totalPrice;
+  const qInstallRs = qInstallL !== '' ? parseFloat(qInstallL) * 1e5 : skuInstallOnly;
+  const qCapex     = (qSupplyRs || 0) + (qInstallRs || 0);   // total CAPEX for this quote
+
   // ── Degradation-aware financial model ────────────────────────────────────
   const dataset        = CYCLE_DATASETS[cycleDatasetKey] ?? CYCLE_DATASETS.q25c_365;
   const cyclesPerYear  = dataset.cycles_per_year;
@@ -540,6 +559,18 @@ export default function BESSConfig() {
     if (!totalPrice || !usableEnergy || !tariffDiff) return null;
     return buildCashflows({ capex: totalPrice, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 10 });
   }, [totalPrice, usableEnergy, tariffDiff, cycleDatasetKey]); // eslint-disable-line
+
+  // ── Quote-adjusted financials (reactive to qCapex override) ─────────────
+  const quoteFinancials = useMemo(() => {
+    if (!qCapex || !usableEnergy || !tariffDiff) return null;
+    const { flows, rows } = buildCashflows({ capex: qCapex, nominalKwh: usableEnergy, socWindow: 1, tariffDiff, dataset, years: 10 });
+    const irrR   = calcIRR(flows);
+    const irrP   = isFinite(irrR) ? Math.round(irrR * 100) : null;
+    const annYr1 = rows[0]?.net_cashflow ?? null;
+    const pb     = qCapex > 0 && annYr1 > 0 ? parseFloat((qCapex / annYr1).toFixed(1)) : null;
+    const npv    = Math.round(flows.reduce((s, cf, t) => s + cf / Math.pow(1.10, t), 0));
+    return { irrPct: irrP, payback: pb, npv, annYr1 };
+  }, [qCapex, usableEnergy, tariffDiff, cycleDatasetKey]); // eslint-disable-line
 
   const cashflows10   = financeModel10?.flows ?? [];
   const cashflowRows  = financeModel10?.rows  ?? [];
@@ -628,14 +659,21 @@ export default function BESSConfig() {
     if (!propClientId) return;
     setPropLoading(true);
     try {
+      // Use quote-overridden CAPEX + its recalculated financials when available
+      const effectiveCapex   = qCapex || totalPrice;
+      const effectivePayback = quoteFinancials?.payback ?? (parseFloat(simplePayback) || null);
+      const effectiveIrr     = quoteFinancials?.irrPct  ?? irrPct ?? null;
       const res = await bessApi.createProposal({
-        client_id:     parseInt(propClientId),
-        site_id:       (propSiteId && propSiteId !== 'none') ? parseInt(propSiteId) : null,
-        project_id:    propProjectId ? parseInt(propProjectId) : null,
-        capex_ex_gst:  totalPrice,
-        annual_savings: Math.round(annualSavings),
-        payback_years:  parseFloat(simplePayback) || null,
-        irr_percent:    irrPct || null,
+        client_id:            parseInt(propClientId),
+        site_id:              (propSiteId && propSiteId !== 'none') ? parseInt(propSiteId) : null,
+        project_id:           propProjectId ? parseInt(propProjectId) : null,
+        capex_ex_gst:         effectiveCapex,
+        annual_savings:       Math.round(annualSavings),
+        payback_years:        effectivePayback,
+        irr_percent:          effectiveIrr,
+        offer_type:           offerType,
+        price_supply_ex_gst:  qSupplyRs  || null,
+        price_install_ex_gst: qInstallRs || null,
         notes: propNotes ||
           `${numUnits}× ${u.model ?? 'BESS'} | ${totalPower} kW / ${totalEnergy} kWh | ${coupling}-Coupled | ${appLabel}`,
         validity_days: 30,
@@ -2171,7 +2209,7 @@ export default function BESSConfig() {
                           {szUseCase === 'dg' ? 'DG Replacement' : 'ToD Arbitrage'} — Sizing Results
                         </span>
                         <button
-                          onClick={() => { setSzResult(null); setSzAiNote(null); setSzSaved(null); }}
+                          onClick={() => { setSzResult(null); setSzAiNote(null); setSzSaved(null); setOfferType('budgetary'); setQSupplyL(''); setQInstallL(''); }}
                           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                         >
                           <X className="w-3 h-3" /> Recalculate
@@ -2383,6 +2421,100 @@ export default function BESSConfig() {
                           )}
                         </div>
                       )}
+
+                      {/* ── Quote Panel ──────────────────────────────── */}
+                      <div className="border border-orange-200 rounded-xl p-4 bg-orange-50/30 flex flex-col gap-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 flex items-center gap-1.5">
+                          <FileText className="w-3 h-3" /> Quote Pricing
+                        </p>
+
+                        {/* Offer type toggle */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setOfferType('budgetary')}
+                            className={`flex-1 text-xs font-bold py-1.5 rounded-lg border transition-colors ${offerType === 'budgetary' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-muted-foreground border-border hover:border-orange-300'}`}
+                          >
+                            Budgetary
+                          </button>
+                          <button
+                            onClick={() => setOfferType('negotiation')}
+                            className={`flex-1 text-xs font-bold py-1.5 rounded-lg border transition-colors ${offerType === 'negotiation' ? 'bg-[#2D2D2D] text-white border-[#2D2D2D]' : 'bg-white text-muted-foreground border-border hover:border-gray-400'}`}
+                          >
+                            Negotiation
+                          </button>
+                        </div>
+
+                        {/* Price inputs — read-only in Budgetary, editable in Negotiation */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-bold uppercase text-muted-foreground">Supply Ex-GST ₹L</label>
+                            <Input
+                              type="number"
+                              placeholder={totalPrice > 0 ? (totalPrice / 1e5).toFixed(2) : '0.00'}
+                              value={qSupplyL}
+                              onChange={e => setQSupplyL(e.target.value)}
+                              className="h-8 text-xs"
+                              readOnly={offerType === 'budgetary'}
+                            />
+                            {offerType === 'budgetary' && (
+                              <p className="text-[10px] text-muted-foreground italic">Pre-filled · indicative</p>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-bold uppercase text-muted-foreground">Install Ex-GST ₹L</label>
+                            <Input
+                              type="number"
+                              placeholder={skuInstallOnly > 0 ? (skuInstallOnly / 1e5).toFixed(2) : '0.00'}
+                              value={qInstallL}
+                              onChange={e => setQInstallL(e.target.value)}
+                              className="h-8 text-xs"
+                              readOnly={offerType === 'budgetary'}
+                            />
+                            {offerType === 'budgetary' && (
+                              <p className="text-[10px] text-muted-foreground italic">Pre-filled · indicative</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Total CAPEX + live-recalculated financials */}
+                        <div className="bg-white rounded-lg p-3 border border-orange-100 flex flex-col gap-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-foreground">Total CAPEX (Ex-GST)</span>
+                            <span className="text-sm font-black text-orange-600">{qCapex > 0 ? inrCr(qCapex) : '—'}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-muted-foreground">
+                            <span>Supply {qSupplyRs > 0 ? inrL(qSupplyRs) : '—'}</span>
+                            <span>+ Install {qInstallRs > 0 ? inrL(qInstallRs) : '—'}</span>
+                            <span>+ 18% GST extra</span>
+                          </div>
+                          {quoteFinancials && (
+                            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                              <div className="text-center">
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Payback</p>
+                                <p className="text-xs font-black">{quoteFinancials.payback ? `${quoteFinancials.payback} yr` : '—'}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">IRR 10yr</p>
+                                <p className={`text-xs font-black ${(quoteFinancials.irrPct ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                  {quoteFinancials.irrPct != null ? `${quoteFinancials.irrPct}%` : '—'}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">NPV 10yr</p>
+                                <p className="text-xs font-black">{quoteFinancials.npv != null ? inrL(quoteFinancials.npv) : '—'}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Generate Proposal CTA */}
+                        <Button
+                          className="h-9 text-xs font-bold bg-orange-500 hover:bg-orange-600 w-full"
+                          onClick={() => setShowPropModal(true)}
+                        >
+                          <FileText className="w-3.5 h-3.5 mr-1.5" /> Generate Proposal
+                        </Button>
+                      </div>
                     </div>
                   )}
 

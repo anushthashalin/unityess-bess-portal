@@ -16,47 +16,39 @@ import ThemeToggle from './ThemeToggle.jsx';
 // ── Nav definitions ──────────────────────────────────────────────────────────
 
 const BESS_CORE_NAV = [
-  { label: 'Dashboard',         to: '/bess/dashboard',     icon: LayoutDashboard },
-  { label: 'BESS Configurator', to: '/bess/config',        icon: Zap },
-  { label: 'Proposals',         to: '/bess/proposals',     icon: FileText },
-  { label: 'Projects',          to: '/bess/projects',      icon: FolderOpen },
-  { label: 'Clients',           to: '/bess/clients',       icon: Users },
-  { label: 'Sites',             to: '/bess/sites',         icon: MapPin },
-  { label: 'Tariff Structures', to: '/bess/tariffs',       icon: Receipt },
-  { label: 'Load Profiles',     to: '/bess/load-profiles', icon: BarChart2 },
+  { label: 'Dashboard',         to: '/bess/dashboard',  icon: LayoutDashboard },
+  { label: 'Clients',           to: '/bess/clients',    icon: Users },
+  { label: 'BESS Configurator', to: '/bess/config',     icon: Zap },
+  { label: 'Projects',          to: '/bess/projects',   icon: FolderOpen },
+  { label: 'Proposals',         to: '/bess/proposals',  icon: FileText },
+  { label: 'Tariff Structures', to: '/bess/tariffs',    icon: Receipt },
 ];
 
 const BESS_BD_NAV = [
-  { label: 'Command Centre',  to: '/bess/bd',               icon: Target },
-  { label: 'Pipeline',        to: '/bess/bd/pipeline',      icon: Briefcase },
+  { label: 'Clients',         to: '/bess/bd/pipeline',      icon: Users },
   { label: 'Activity Log',    to: '/bess/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
-  { label: 'Proposals',       to: '/bess/bd/proposals',     icon: FileText },
-  { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload,    perm: 'import' },
-  { label: 'Audit Log',       to: '/bess/bd/audit-log',     icon: History,   perm: 'audit'  },
+  { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload,   perm: 'import' },
+  { label: 'Audit Log',       to: '/bess/bd/audit-log',     icon: History,  perm: 'audit'  },
 ];
 
 const EPC_CORE_NAV = [
-  { label: 'Dashboard',         to: '/epc/dashboard',     icon: LayoutDashboard },
-  { label: 'EPC Configurator',  to: '/epc/config',        icon: Zap },
-  { label: 'Proposals',         to: '/epc/proposals',     icon: FileText },
-  { label: 'Projects',          to: '/epc/projects',      icon: FolderOpen },
-  { label: 'Clients',           to: '/epc/clients',       icon: Users },
-  { label: 'Sites',             to: '/epc/sites',         icon: MapPin },
-  { label: 'Tariff Structures', to: '/epc/tariffs',       icon: Receipt },
-  { label: 'Load Profiles',     to: '/epc/load-profiles', icon: BarChart2 },
+  { label: 'Dashboard',        to: '/epc/dashboard',  icon: LayoutDashboard },
+  { label: 'Clients',          to: '/epc/clients',    icon: Users },
+  { label: 'EPC Configurator', to: '/epc/config',     icon: Zap },
+  { label: 'Projects',         to: '/epc/projects',   icon: FolderOpen },
+  { label: 'Proposals',        to: '/epc/proposals',  icon: FileText },
+  { label: 'Tariff Structures',to: '/epc/tariffs',    icon: Receipt },
 ];
 
 const EPC_BD_NAV = [
-  { label: 'Command Centre',  to: '/epc/bd',               icon: Target },
-  { label: 'Pipeline',        to: '/epc/bd/pipeline',      icon: Briefcase },
+  { label: 'Clients',         to: '/epc/bd/pipeline',      icon: Users },
   { label: 'Activity Log',    to: '/epc/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/epc/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },
-  { label: 'Proposals',       to: '/epc/bd/proposals',     icon: FileText },
-  { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload,    perm: 'import' },
-  { label: 'Audit Log',       to: '/epc/bd/audit-log',     icon: History,   perm: 'audit'  },
+  { label: 'Sheets Import',   to: '/epc/bd/import',        icon: Upload,   perm: 'import' },
+  { label: 'Audit Log',       to: '/epc/bd/audit-log',     icon: History,  perm: 'audit'  },
 ];
 
 const ALL_PAGES = [...BESS_CORE_NAV, ...BESS_BD_NAV, ...EPC_CORE_NAV, ...EPC_BD_NAV];
@@ -100,7 +92,8 @@ export default function Layout({ children }) {
   const activeProduct = pathname.startsWith('/epc') ? 'epc' : 'bess';
 
   const coreNav = activeProduct === 'epc' ? EPC_CORE_NAV : BESS_CORE_NAV;
-  const bdNav   = (activeProduct === 'epc' ? EPC_BD_NAV : BESS_BD_NAV).filter(item => !item.perm || can(item.perm));
+  const bdNav   = (activeProduct === 'epc' ? EPC_BD_NAV : BESS_BD_NAV)
+    .filter(item => !item.perm || can(item.perm));
 
   const pageTitle =
     ALL_PAGES.find(n => pathname === n.to || pathname.startsWith(n.to + '/'))?.label

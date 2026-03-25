@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Link2, ExternalLink, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApiMulti } from '../hooks/useApi.js';
 import { bessApi } from '../lib/api.js';
 import { inr } from '../lib/fmt.js';
@@ -18,12 +19,31 @@ const EMPTY = {
 };
 
 export default function Projects() {
+  const navigate = useNavigate();
   const [open, setOpen]       = useState(false);
   const [form, setForm]       = useState(EMPTY);
   const [saving, setSaving]   = useState(false);
   const [saveErr, setSaveErr] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [patchingId, setPatchingId] = useState(null);
+  // Inline proposal-linking state
+  const [linkingProjectId, setLinkingProjectId]     = useState(null);
+  const [linkingProposalId, setLinkingProposalId]   = useState('');
+  const [linkingSaving, setLinkingSaving]           = useState(false);
+
+  const handleLinkProposal = async (projectId) => {
+    if (!linkingProposalId) return;
+    setLinkingSaving(true);
+    try {
+      await bessApi.patchProject(projectId, { proposal_id: parseInt(linkingProposalId) });
+      setLinkingProjectId(null);
+      setRefresh(r => r + 1);
+    } catch (err) {
+      console.error('Link failed:', err.message);
+    } finally {
+      setLinkingSaving(false);
+    }
+  };
 
   const handleStageClick = async (projectId, newStage) => {
     setPatchingId(projectId);
@@ -89,8 +109,8 @@ export default function Projects() {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:900, color:'#2D2D2D', margin:0 }}>Projects</h1>
-          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>{pj.length} projects in pipeline</p>
+          <h1 style={{ fontSize:22, fontWeight:900, color:'hsl(var(--foreground))', margin:0 }}>Projects</h1>
+          <p style={{ fontSize:13, color:'hsl(var(--muted-foreground))', margin:'4px 0 0' }}>{pj.length} projects in pipeline</p>
         </div>
         <button className="btn-primary" onClick={() => { setForm(EMPTY); setSaveErr(''); setOpen(true); }}>
           <Plus size={14} style={{ marginRight:6, display:'inline' }} />New Project
@@ -99,7 +119,7 @@ export default function Projects() {
 
       {/* Project cards with pipeline tracker */}
       {pj.length === 0
-        ? <div style={{ padding:64, textAlign:'center', color:'#9CA3AF', fontSize:14 }}>
+        ? <div style={{ padding:64, textAlign:'center', color:'hsl(var(--muted-foreground))', fontSize:14 }}>
             No projects yet. Create your first project to start tracking.
           </div>
         : pj.map(proj => {
@@ -117,19 +137,79 @@ export default function Projects() {
                       </span>
                     </div>
                     <div style={{ fontSize:16, fontWeight:800 }}>{proj.company_name}</div>
-                    {config && <div style={{ fontSize:12, color:'#6B7280', marginTop:2 }}>{config.num_units} × {config.config_name}</div>}
+                    {config && <div style={{ fontSize:12, color:'hsl(var(--muted-foreground))', marginTop:2 }}>{config.num_units} × {config.config_name}</div>}
                   </div>
-                  <div style={{ textAlign:'right' }}>
-                    {proposal && (
+                  <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6 }}>
+                    {proposal ? (
                       <>
                         <div style={{ fontSize:20, fontWeight:900, color:'#F26B4E' }}>{inr(proposal.capex_ex_gst)}</div>
-                        <div style={{ fontSize:11, color:'#9CA3AF' }}>
+                        <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))' }}>
                           Ex-GST · IRR {proposal.irr_percent ?? '—'}% · {proposal.payback_years ?? '—'} yrs payback
                         </div>
+                        <div style={{ display:'flex', gap:6, marginTop:2 }}>
+                          <span style={{ fontFamily:'monospace', fontSize:11, color:'#F26B4E', fontWeight:700 }}>{proposal.proposal_number}</span>
+                          <button onClick={() => { setLinkingProjectId(proj.id); setLinkingProposalId(String(proposal.id)); }}
+                            style={{ fontSize:10, fontWeight:700, color:'hsl(var(--muted-foreground))', background:'hsl(var(--muted))', border:'none', borderRadius:4, padding:'2px 6px', cursor:'pointer' }}>
+                            Change
+                          </button>
+                        </div>
                       </>
+                    ) : (
+                      linkingProjectId === proj.id ? null : (
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6 }}>
+                          <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', fontStyle:'italic' }}>No proposal linked</div>
+                          <div style={{ display:'flex', gap:6 }}>
+                            <button
+                              onClick={() => { setLinkingProjectId(proj.id); setLinkingProposalId(''); }}
+                              style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color:'#F26B4E', background:'rgba(242,107,78,0.08)', border:'1px solid rgba(242,107,78,0.3)', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
+                              <Link2 size={11}/> Link Proposal
+                            </button>
+                            <button
+                              onClick={() => navigate(`/bess/config?client_id=${proj.client_id}`)}
+                              style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', background:'hsl(var(--muted))', border:'1px solid hsl(var(--border))', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
+                              <ExternalLink size={11}/> New Proposal
+                            </button>
+                          </div>
+                        </div>
+                      )
                     )}
+                    {/* Inline link picker */}
+                    {linkingProjectId === proj.id && (() => {
+                      const clientProps = pr.filter(p => String(p.client_id) === String(proj.client_id));
+                      return (
+                        <div style={{ display:'flex', flexDirection:'column', gap:6, alignItems:'flex-end' }}>
+                          {clientProps.length === 0 ? (
+                            <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))' }}>No proposals for this client yet.</div>
+                          ) : (
+                            <select className="bess-input" value={linkingProposalId} onChange={e => setLinkingProposalId(e.target.value)}
+                              style={{ fontSize:12, minWidth:200 }}>
+                              <option value="">Select proposal…</option>
+                              {clientProps.map(p => (
+                                <option key={p.id} value={p.id}>{p.proposal_number} — {inr(p.capex_ex_gst)}</option>
+                              ))}
+                            </select>
+                          )}
+                          <div style={{ display:'flex', gap:6 }}>
+                            {clientProps.length > 0 && (
+                              <button onClick={() => handleLinkProposal(proj.id)} disabled={!linkingProposalId || linkingSaving}
+                                style={{ fontSize:11, fontWeight:700, color:'white', background:'#F26B4E', border:'none', borderRadius:6, padding:'4px 12px', cursor:'pointer', opacity: (!linkingProposalId || linkingSaving) ? 0.5 : 1 }}>
+                                {linkingSaving ? 'Saving…' : 'Save'}
+                              </button>
+                            )}
+                            <button onClick={() => navigate(`/bess/config?client_id=${proj.client_id}`)}
+                              style={{ display:'flex', alignItems:'center', gap:3, fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', background:'hsl(var(--muted))', border:'1px solid hsl(var(--border))', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
+                              <ExternalLink size={10}/> New Proposal
+                            </button>
+                            <button onClick={() => setLinkingProjectId(null)}
+                              style={{ display:'flex', alignItems:'center', background:'none', border:'none', cursor:'pointer', color:'hsl(var(--muted-foreground))', padding:4 }}>
+                              <X size={13}/>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {proj.po_number && (
-                      <div style={{ fontSize:11, color:'#6B7280', marginTop:4, fontFamily:'monospace' }}>
+                      <div style={{ fontSize:11, color:'hsl(var(--muted-foreground))', fontFamily:'monospace' }}>
                         PO: {proj.po_number}
                       </div>
                     )}
@@ -170,7 +250,7 @@ export default function Projects() {
                           <div style={{
                             fontSize:10, marginTop:5, textAlign:'center',
                             fontWeight: current ? 700 : 400,
-                            color: current ? '#F26B4E' : done ? '#2D2D2D' : '#9CA3AF',
+                            color: current ? '#F26B4E' : done ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
                             maxWidth:64, lineHeight:1.3,
                           }}>
                             {stage.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}
@@ -226,8 +306,8 @@ export default function Projects() {
             </Field>
           </FormGrid>
 
-          <div style={{ borderTop:'1px solid #F3F4F6', paddingTop:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Purchase Order Details</div>
+          <div style={{ borderTop:'1px solid hsl(var(--border))', paddingTop:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Purchase Order Details</div>
             <FormGrid cols={2}>
               <Field label="PO Number">
                 <Input placeholder="e.g. PO/2025-26/0042" value={form.po_number} onChange={e => set('po_number', e.target.value)} />
@@ -239,8 +319,8 @@ export default function Projects() {
             </FormGrid>
           </div>
 
-          <div style={{ borderTop:'1px solid #F3F4F6', paddingTop:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Key Dates</div>
+          <div style={{ borderTop:'1px solid hsl(var(--border))', paddingTop:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'hsl(var(--muted-foreground))', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Key Dates</div>
             <FormGrid cols={2}>
               <Field label="Target Installation Date">
                 <Input type="date" value={form.installation_date} onChange={e => set('installation_date', e.target.value)} />

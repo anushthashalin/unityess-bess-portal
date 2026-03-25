@@ -80,7 +80,7 @@ export default function App() {
               <Route path="/bess/load-profiles" element={<LoadProfiles />} />
 
               {/* BESS BD */}
-              <Route path="/bess/bd"                    element={<BDCommandCenter product="bess" />} />
+              <Route path="/bess/bd"                    element={<Navigate to="/bess/bd/pipeline" replace />} />
               <Route path="/bess/bd/pipeline"           element={<BDPipeline      product="bess" />} />
               <Route path="/bess/bd/accounts"           element={<Navigate to="/bess/bd/pipeline" replace />} />
               <Route path="/bess/bd/contacts"           element={<Navigate to="/bess/bd/pipeline" replace />} />
@@ -104,7 +104,7 @@ export default function App() {
               <Route path="/epc/load-profiles" element={<LoadProfiles product="epc" />} />
 
               {/* EPC BD */}
-              <Route path="/epc/bd"                    element={<BDCommandCenter product="epc" />} />
+              <Route path="/epc/bd"                    element={<Navigate to="/epc/bd/pipeline" replace />} />
               <Route path="/epc/bd/pipeline"           element={<BDPipeline      product="epc" />} />
               <Route path="/epc/bd/accounts"           element={<Navigate to="/epc/bd/pipeline" replace />} />
               <Route path="/epc/bd/contacts"           element={<Navigate to="/epc/bd/pipeline" replace />} />
