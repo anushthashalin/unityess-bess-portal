@@ -175,7 +175,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
           ))}
         </div>
         <span className="text-[11px] text-muted-foreground ml-auto">{filtered.length} of {accounts.length}</span>
-        {can('write') && {can('write') && {can('write') && <Button onClick={() => setShowAdd(true)}
+        {can('write') && <Button onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm text-[13px]">
           <Plus size={14}/> Add Account
         </Button>}
