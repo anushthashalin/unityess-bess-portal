@@ -445,10 +445,13 @@ function LeadsTab() {
                       const done = isDone(v);
                       return (
                         <TableCell key={i} className="py-2.5 text-center px-1">
-                          <div className={cn(
-                            'w-4 h-4 rounded-full border mx-auto flex items-center justify-center',
-                            done ? 'bg-[#F26B4E] border-[#F26B4E]' : 'border-border/50'
-                          )}>
+                          <div style={{
+                            width: 16, height: 16, borderRadius: '50%',
+                            border: `1.5px solid ${done ? '#F26B4E' : '#d1d5db'}`,
+                            background: done ? '#F26B4E' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            margin: '0 auto',
+                          }}>
                             {done && <Check size={8} color="white" strokeWidth={3}/>}
                           </div>
                         </TableCell>
@@ -527,22 +530,26 @@ function LeadsTab() {
                       { key: 'tcOffer',    label: 'TC Offer' },
                       { key: 'finalQuote', label: 'Final Quote' },
                       { key: 'followup',   label: 'Follow-up' },
-                    ].map(({ key, label }) => (
-                      <div key={key} className="flex flex-col items-center gap-1.5 flex-1">
-                        <div className={cn(
-                          'w-9 h-9 rounded-full border-2 flex items-center justify-center transition-colors',
-                          isDone(selectedLead[key])
-                            ? 'bg-[#F26B4E] border-[#F26B4E] shadow-sm'
-                            : 'bg-transparent border-border/40'
-                        )}>
-                          {isDone(selectedLead[key]) && <Check size={14} color="white" strokeWidth={3}/>}
+                    ].map(({ key, label }) => {
+                      const done = isDone(selectedLead[key]);
+                      const dateStr = isDoneDate(selectedLead[key]);
+                      return (
+                        <div key={key} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flex:1 }}>
+                          <div style={{
+                            width: 36, height: 36, borderRadius: '50%',
+                            border: `2px solid ${done ? '#F26B4E' : '#d1d5db'}`,
+                            background: done ? '#F26B4E' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                            boxShadow: done ? '0 1px 4px rgba(242,107,78,0.35)' : 'none',
+                          }}>
+                            {done && <Check size={14} color="white" strokeWidth={3}/>}
+                          </div>
+                          <span style={{ fontSize: 10, color: '#6b7280', textAlign: 'center', lineHeight: 1.3 }}>{label}</span>
+                          {dateStr && <span style={{ fontSize: 9, color: '#F26B4E', fontWeight: 700 }}>{dateStr}</span>}
                         </div>
-                        <span className="text-[10px] text-muted-foreground text-center leading-tight">{label}</span>
-                        {isDoneDate(selectedLead[key]) && (
-                          <span className="text-[9px] text-[#F26B4E] font-semibold">{isDoneDate(selectedLead[key])}</span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
