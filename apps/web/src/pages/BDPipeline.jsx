@@ -27,10 +27,12 @@ import {
   Search, Plus, Building2, MapPin, TrendingUp, Activity,
   ArrowUpDown, X, Mail, Phone, Star, AlertTriangle,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronRight,
-  Calendar, LayoutGrid, List, Users, Briefcase,
+  Calendar, LayoutGrid, List, Users, Briefcase, Filter,
+  ChevronDown, Download, Check, Circle, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '../lib/utils.js';
 import AddToCalendar from '../components/AddToCalendar.jsx';
+import { BD_LEADS, BD_TEAM, STATUS_CONFIG } from '../data/bdLeads.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const INDUSTRIES = ['C&I Solar','Utility Solar','EPC','Manufacturing','Real Estate','Hospitality','Healthcare','Education','Government','Other'];
@@ -86,6 +88,476 @@ function KpiChip({ label, value, icon: Icon, color }) {
         <div className="text-[20px] font-black leading-none text-foreground">{value}</div>
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{label}</div>
       </div>
+    </div>
+  );
+}
+
+// ── LEADS TAB ─────────────────────────────────────────────────────────────────
+function isDone(v) {
+  if (!v || v === 'not done') return false;
+  return true;
+}
+function isDoneDate(v) {
+  if (!v || v === 'not done' || v === 'done') return null;
+  const m = v.match(/done on (\d{2}\.\d{2}\.\d{2})/);
+  return m ? m[1] : null;
+}
+
+function PhaseDot({ value, label }) {
+  const done = isDone(value);
+  const dateStr = isDoneDate(value);
+  return (
+    <div className="flex flex-col items-center gap-1 min-w-[60px]">
+      <div className={cn(
+        'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+        done ? 'bg-[#F26B4E] border-[#F26B4E]' : 'bg-transparent border-border/50'
+      )}>
+        {done && <Check size={10} color="white" strokeWidth={3}/>}
+      </div>
+      <span className="text-[9px] text-muted-foreground text-center leading-tight">{label}</span>
+      {dateStr && <span className="text-[8px] text-[#F26B4E] font-semibold">{dateStr}</span>}
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] ?? { color: '#94a3b8', bg: '#f8fafc', label: status };
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap"
+      style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.color + '40' }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function BDAvatar({ bdName, size = 7 }) {
+  const member = BD_TEAM.find(b => bdName?.toLowerCase().includes(b.match));
+  const color = member?.color ?? '#94a3b8';
+  const initials = (bdName || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <div className={`w-${size} h-${size} rounded-full flex items-center justify-center shrink-0 text-white text-[10px] font-black`}
+      style={{ background: color }}>
+      {initials}
+    </div>
+  );
+}
+
+function LeadsTab() {
+  const [view, setView] = useState('all');            // 'all' | 'team' | bd-key
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [bdFilter, setBdFilter] = useState('');
+  const [sortField, setSortField] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [selectedLead, setSelectedLead] = useState(null);
+
+  // Stats
+  const stats = useMemo(() => ({
+    total:        BD_LEADS.length,
+    negotiation:  BD_LEADS.filter(l => l.status === 'Under Negotiation').length,
+    customers:    BD_LEADS.filter(l => l.status === 'Customer').length,
+    prospects:    BD_LEADS.filter(l => l.status === 'Prospect').length,
+    leads:        BD_LEADS.filter(l => l.status === 'Lead').length,
+    hold:         BD_LEADS.filter(l => l.status === 'Hold').length,
+  }), []);
+
+  // BD-specific leads when in BD view
+  const activeBD = view !== 'all' && view !== 'team' ? BD_TEAM.find(b => b.key === view) : null;
+
+  const filtered = useMemo(() => {
+    let rows = BD_LEADS;
+
+    // If viewing a specific BD rep's leads
+    if (activeBD) {
+      rows = rows.filter(l => l.bd?.toLowerCase().includes(activeBD.match));
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      rows = rows.filter(l =>
+        l.name?.toLowerCase().includes(q) ||
+        l.bd?.toLowerCase().includes(q) ||
+        l.location?.toLowerCase().includes(q) ||
+        l.type?.toLowerCase().includes(q) ||
+        l.remarks?.toLowerCase().includes(q)
+      );
+    }
+    if (statusFilter) rows = rows.filter(l => l.status === statusFilter);
+    if (bdFilter)     rows = rows.filter(l => l.bd?.toLowerCase().includes(bdFilter.toLowerCase()));
+
+    return [...rows].sort((a, b) => {
+      const av = (a[sortField] ?? '').toString().toLowerCase();
+      const bv = (b[sortField] ?? '').toString().toLowerCase();
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }, [search, statusFilter, bdFilter, sortField, sortDir, activeBD]);
+
+  function toggleSort(field) {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  }
+
+  function SortBtn({ field, children }) {
+    return (
+      <button onClick={() => toggleSort(field)}
+        className={cn('flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest transition-colors',
+          sortField === field ? 'text-[#F26B4E]' : 'text-white/70 hover:text-white')}>
+        {children}<ArrowUpDown size={9}/>
+      </button>
+    );
+  }
+
+  // Export CSV
+  function exportCSV() {
+    const headers = ['ID','Company','Status','Contact','BD','kWh','Location','Type','Timeline','Qualified','Budgetary','Tech Disc','TC Offer','Final Quote','Followup','Remarks'];
+    const rows = filtered.map(l => [
+      l.id, l.name, l.status, l.contact, l.bd, l.kwh, l.location, l.type, l.timeline,
+      l.qualified, l.budgetary, l.techDisc, l.tcOffer, l.finalQuote, l.followup, l.remarks
+    ].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a'); a.href=url; a.download='bd_leads.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Stats row */}
+      <div className="grid grid-cols-6 gap-3">
+        {[
+          { label: 'Total Leads',     value: stats.total,       color: '#2D2D2D', icon: Users },
+          { label: 'Under Negotiation', value: stats.negotiation, color: '#F26B4E', icon: TrendingUp },
+          { label: 'Customers',       value: stats.customers,   color: '#10b981', icon: CheckCircle2 },
+          { label: 'Prospects',       value: stats.prospects,   color: '#3b82f6', icon: Activity },
+          { label: 'Active Leads',    value: stats.leads,       color: '#8b5cf6', icon: Briefcase },
+          { label: 'Hold',            value: stats.hold,        color: '#94a3b8', icon: Circle },
+        ].map(s => (
+          <KpiChip key={s.label} label={s.label} value={s.value} icon={s.icon} color={s.color}/>
+        ))}
+      </div>
+
+      {/* View switcher */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex border border-border/50 rounded-xl overflow-hidden bg-card shadow-sm">
+          <button onClick={() => { setView('all'); setBdFilter(''); }}
+            className={cn('px-4 py-2 text-[12px] font-bold transition-all',
+              view === 'all' ? 'bg-[#F26B4E] text-white' : 'text-muted-foreground hover:text-foreground')}>
+            All Leads
+          </button>
+          <button onClick={() => setView('team')}
+            className={cn('px-4 py-2 text-[12px] font-bold transition-all',
+              view === 'team' ? 'bg-[#F26B4E] text-white' : 'text-muted-foreground hover:text-foreground')}>
+            By BD Rep
+          </button>
+        </div>
+
+        {view === 'all' && (
+          <>
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
+              <Input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search company, BD, location…"
+                className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl"/>
+              {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
+            </div>
+
+            {/* Status pills */}
+            <div className="flex gap-1.5 flex-wrap">
+              {['', 'Under Negotiation', 'Customer', 'Prospect', 'Lead', 'Hold'].map(s => (
+                <button key={s||'all'} onClick={() => setStatusFilter(s)}
+                  className={cn('px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all whitespace-nowrap',
+                    statusFilter === s
+                      ? 'bg-[#F26B4E] text-white border-[#F26B4E]'
+                      : 'bg-card text-muted-foreground border-border/50 hover:border-[#F26B4E] hover:text-[#F26B4E]')}>
+                  {s || 'All'}
+                </button>
+              ))}
+            </div>
+
+            {/* BD filter */}
+            <Select value={bdFilter} onValueChange={setBdFilter}>
+              <SelectTrigger className="w-36 h-9 text-sm rounded-xl border-border/50 bg-card">
+                <SelectValue placeholder="All BDs"/>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All BDs</SelectItem>
+                {BD_TEAM.map(b => <SelectItem key={b.key} value={b.match}>{b.short}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <span className="text-[11px] text-muted-foreground">{filtered.length} of {BD_LEADS.length}</span>
+            <button onClick={exportCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold border border-border/50 bg-card text-muted-foreground hover:text-[#F26B4E] hover:border-[#F26B4E] transition-all">
+              <Download size={12}/> CSV
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* BD Team grid */}
+      {view === 'team' && (
+        <div className="grid grid-cols-3 gap-4">
+          {BD_TEAM.map(bd => {
+            const bdLeads    = BD_LEADS.filter(l => l.bd?.toLowerCase().includes(bd.match));
+            const negCount   = bdLeads.filter(l => l.status === 'Under Negotiation').length;
+            const custCount  = bdLeads.filter(l => l.status === 'Customer').length;
+            const initials   = bd.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            return (
+              <button key={bd.key}
+                onClick={() => { setView(bd.key); setSearch(''); setStatusFilter(''); setBdFilter(''); }}
+                className="text-left bg-card rounded-2xl border border-border/50 p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-[15px] font-black shrink-0 shadow-sm"
+                    style={{ background: bd.color }}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-black text-[14px] text-foreground">{bd.name}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">BD Executive</div>
+                    <div className="flex gap-3 mt-3">
+                      <div className="text-center">
+                        <div className="text-[22px] font-black text-foreground leading-none">{bdLeads.length}</div>
+                        <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Total</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[22px] font-black leading-none" style={{ color: '#F26B4E' }}>{negCount}</div>
+                        <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Neg.</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[22px] font-black leading-none" style={{ color: '#10b981' }}>{custCount}</div>
+                        <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Won</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Status bar */}
+                <div className="mt-4 flex gap-1 h-1.5 rounded-full overflow-hidden bg-border/30">
+                  {Object.entries(STATUS_CONFIG).map(([status, cfg]) => {
+                    const count = bdLeads.filter(l => l.status === status).length;
+                    if (!count) return null;
+                    const pct = (count / bdLeads.length * 100).toFixed(1);
+                    return <div key={status} style={{ width: pct + '%', background: cfg.color }} title={`${status}: ${count}`}/>;
+                  })}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Individual BD lead list */}
+      {activeBD && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setView('team')}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground hover:text-[#F26B4E] transition-colors">
+              ← Back to team
+            </button>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[11px] font-black"
+                style={{ background: activeBD.color }}>
+                {activeBD.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div className="font-black text-[14px] text-foreground">{activeBD.name}</div>
+                <div className="text-[11px] text-muted-foreground">{filtered.length} leads</div>
+              </div>
+            </div>
+            {/* Status pills for BD view */}
+            <div className="flex gap-1.5 flex-wrap ml-4">
+              {['', 'Under Negotiation', 'Customer', 'Prospect', 'Lead', 'Hold'].map(s => (
+                <button key={s||'all'} onClick={() => setStatusFilter(s)}
+                  className={cn('px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all whitespace-nowrap',
+                    statusFilter === s
+                      ? 'bg-[#F26B4E] text-white border-[#F26B4E]'
+                      : 'bg-card text-muted-foreground border-border/50 hover:border-[#F26B4E] hover:text-[#F26B4E]')}>
+                  {s || 'All'}
+                </button>
+              ))}
+            </div>
+            <div className="relative ml-2">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
+              <Input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search leads…"
+                className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl w-52"/>
+              {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
+            </div>
+            <span className="text-[11px] text-muted-foreground ml-auto">{filtered.length} leads</span>
+          </div>
+        </div>
+      )}
+
+      {/* Leads table — shown in 'all' or individual BD view */}
+      {(view === 'all' || activeBD) && (
+        filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+            <Users size={32} className="opacity-20"/>
+            <p className="text-sm">No leads match your filters.</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border/50 overflow-hidden shadow-sm bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-[#2D2D2D] hover:bg-[#2D2D2D] border-0">
+                  <TableHead className="h-10 w-8 text-center text-white/50 text-[10px] font-bold">#</TableHead>
+                  <TableHead className="h-10"><SortBtn field="name">Company</SortBtn></TableHead>
+                  <TableHead className="h-10"><SortBtn field="status">Status</SortBtn></TableHead>
+                  {view === 'all' && <TableHead className="h-10"><SortBtn field="bd">BD Rep</SortBtn></TableHead>}
+                  <TableHead className="h-10 text-white/70 text-[10px] font-bold uppercase tracking-widest">kWh</TableHead>
+                  <TableHead className="h-10 text-white/70 text-[10px] font-bold uppercase tracking-widest">Location</TableHead>
+                  <TableHead className="h-10 text-white/70 text-[10px] font-bold uppercase tracking-widest">Type</TableHead>
+                  <TableHead className="h-10 text-white/70 text-[10px] font-bold uppercase tracking-widest text-center" colSpan={5}>Phase Tracking</TableHead>
+                  <TableHead className="h-10 text-white/70 text-[10px] font-bold uppercase tracking-widest">Follow-up</TableHead>
+                </TableRow>
+                <TableRow className="bg-[#3a3a3a] hover:bg-[#3a3a3a] border-0">
+                  <TableHead className="h-6" colSpan={view === 'all' ? 7 : 6}/>
+                  {['Budget','Tech','TC Offer','Final Q.','Follow'].map(h => (
+                    <TableHead key={h} className="h-6 text-[9px] text-white/50 font-bold text-center px-1">{h}</TableHead>
+                  ))}
+                  <TableHead className="h-6"/>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((l, idx) => (
+                  <TableRow key={l.id}
+                    onClick={() => setSelectedLead(l)}
+                    className="hover:bg-[#F26B4E]/[0.04] transition-colors border-border/30 cursor-pointer group">
+                    <TableCell className="py-2.5 text-center text-[11px] text-muted-foreground/50 font-mono">{idx + 1}</TableCell>
+                    <TableCell className="py-2.5 px-4">
+                      <div className="font-bold text-[13px] text-foreground leading-tight">{l.name}</div>
+                      {l.remarks && <div className="text-[10px] text-muted-foreground mt-0.5 max-w-[160px] truncate">{l.remarks}</div>}
+                    </TableCell>
+                    <TableCell className="py-2.5"><StatusBadge status={l.status}/></TableCell>
+                    {view === 'all' && (
+                      <TableCell className="py-2.5">
+                        <div className="flex items-center gap-2">
+                          <BDAvatar bdName={l.bd} size={6}/>
+                          <span className="text-[12px] text-muted-foreground truncate max-w-[80px]">{l.bd || '—'}</span>
+                        </div>
+                      </TableCell>
+                    )}
+                    <TableCell className="py-2.5 text-[12px] font-semibold text-foreground/80 whitespace-nowrap">{l.kwh || '—'}</TableCell>
+                    <TableCell className="py-2.5 text-[12px] text-muted-foreground">{l.location || '—'}</TableCell>
+                    <TableCell className="py-2.5 text-[12px] text-muted-foreground max-w-[100px] truncate">{l.type || '—'}</TableCell>
+                    {/* Phase dots */}
+                    {[l.budgetary, l.techDisc, l.tcOffer, l.finalQuote, l.followup].map((v, i) => {
+                      const done = isDone(v);
+                      return (
+                        <TableCell key={i} className="py-2.5 text-center px-1">
+                          <div className={cn(
+                            'w-4 h-4 rounded-full border mx-auto flex items-center justify-center',
+                            done ? 'bg-[#F26B4E] border-[#F26B4E]' : 'border-border/50'
+                          )}>
+                            {done && <Check size={8} color="white" strokeWidth={3}/>}
+                          </div>
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="py-2.5 text-[11px] text-muted-foreground max-w-[80px] truncate">{l.followup || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )
+      )}
+
+      {/* Lead detail drawer */}
+      <Sheet open={!!selectedLead} onOpenChange={open => !open && setSelectedLead(null)}>
+        <SheetContent className="w-[460px] sm:max-w-[460px] overflow-y-auto">
+          {selectedLead && (
+            <>
+              <SheetHeader className="pb-4 border-b border-border/50">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <SheetTitle className="text-xl font-black">{selectedLead.name}</SheetTitle>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <StatusBadge status={selectedLead.status}/>
+                      {selectedLead.qualified && selectedLead.qualified !== '?' && (
+                        <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full',
+                          selectedLead.qualified === 'Yes' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500')}>
+                          {selectedLead.qualified === 'Yes' ? '✓ Qualified' : '✗ Not Qualified'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground font-mono">ID: {selectedLead.id}</div>
+                </div>
+              </SheetHeader>
+
+              <div className="py-5 space-y-5">
+                {/* BD + contact */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">BD Executive</div>
+                    <div className="flex items-center gap-2">
+                      <BDAvatar bdName={selectedLead.bd} size={8}/>
+                      <span className="font-semibold text-[13px]">{selectedLead.bd || '—'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Contact</div>
+                    <span className="text-[13px] text-foreground">{selectedLead.contact || '—'}</span>
+                  </div>
+                </div>
+
+                {/* Specs */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Capacity', value: selectedLead.kwh ? selectedLead.kwh + ' kWh' : '—' },
+                    { label: 'Location', value: selectedLead.location || '—' },
+                    { label: 'System Type', value: selectedLead.type || '—' },
+                    { label: 'Timeline', value: selectedLead.timeline || '—' },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="bg-muted/40 rounded-xl p-3">
+                      <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</div>
+                      <div className="text-[13px] font-semibold text-foreground">{value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Phase tracking */}
+                <div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Phase Tracking</div>
+                  <div className="flex gap-2 justify-between">
+                    {[
+                      { key: 'budgetary',  label: 'Budgetary' },
+                      { key: 'techDisc',   label: 'Tech Disc.' },
+                      { key: 'tcOffer',    label: 'TC Offer' },
+                      { key: 'finalQuote', label: 'Final Quote' },
+                      { key: 'followup',   label: 'Follow-up' },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="flex flex-col items-center gap-1.5 flex-1">
+                        <div className={cn(
+                          'w-9 h-9 rounded-full border-2 flex items-center justify-center transition-colors',
+                          isDone(selectedLead[key])
+                            ? 'bg-[#F26B4E] border-[#F26B4E] shadow-sm'
+                            : 'bg-transparent border-border/40'
+                        )}>
+                          {isDone(selectedLead[key]) && <Check size={14} color="white" strokeWidth={3}/>}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground text-center leading-tight">{label}</span>
+                        {isDoneDate(selectedLead[key]) && (
+                          <span className="text-[9px] text-[#F26B4E] font-semibold">{isDoneDate(selectedLead[key])}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Remarks */}
+                {selectedLead.remarks && (
+                  <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4">
+                    <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">Remarks</div>
+                    <p className="text-[13px] text-foreground leading-relaxed">{selectedLead.remarks}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -380,7 +852,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
         <Button onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm text-[13px]">
           <Plus size={14}/> Add Contact
-        </Button>}
+        </Button>
       </div>
 
       {/* Table */}
@@ -584,7 +1056,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
         <Button onClick={() => setShowAdd(true)}
           className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm text-[13px]">
           <Plus size={14}/> Add Opportunity
-        </Button>}
+        </Button>
       </div>
 
       {stageErr && (
@@ -805,15 +1277,19 @@ export default function BDPipeline({ product = 'bess' }) {
         <div>
           <h1 className="text-[22px] font-black text-foreground tracking-tight">Pipeline</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
-            {accounts.length} accounts · {contacts.length} contacts · {openOpps.length} open deals
-            {product === 'bess' ? ' · BESS Sizing' : ' · Solar EPC'}
+            {BD_LEADS.length} leads tracked · {accounts.length} accounts · {openOpps.length} open deals
           </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="accounts" className="w-full">
+      <Tabs defaultValue="leads" className="w-full">
         <TabsList className="h-10 bg-card border border-border/50 rounded-xl p-1 gap-0.5 shadow-sm">
+          <TabsTrigger value="leads"
+            className="rounded-lg text-[12.5px] font-bold data-[state=active]:bg-[#F26B4E] data-[state=active]:text-white data-[state=active]:shadow-sm transition-all px-4 flex items-center gap-1.5">
+            <Users size={13}/> BD Leads
+            <span className="ml-1 text-[10px] bg-current/20 px-1.5 py-0.5 rounded-full">{BD_LEADS.length}</span>
+          </TabsTrigger>
           <TabsTrigger value="accounts"
             className="rounded-lg text-[12.5px] font-bold data-[state=active]:bg-[#F26B4E] data-[state=active]:text-white data-[state=active]:shadow-sm transition-all px-4 flex items-center gap-1.5">
             <Building2 size={13}/> Accounts
@@ -831,6 +1307,9 @@ export default function BDPipeline({ product = 'bess' }) {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="leads" className="mt-5">
+          <LeadsTab/>
+        </TabsContent>
         <TabsContent value="accounts" className="mt-5">
           <AccountsTab product={product} accounts={accounts} users={users} refetch={refetch}/>
         </TabsContent>
