@@ -55,12 +55,12 @@ const PRINT_CSS = `
   body * { visibility: hidden !important; }
   #quote-print-area, #quote-print-area * { visibility: visible !important; }
   #quote-print-area {
-    position: fixed !important; top: 0; left: 0;
-    width: 210mm; min-height: 297mm;
-    margin: 0; padding: 0;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    color-adjust: exact;
+    position: fixed !important; top: 0 !important; left: 0 !important;
+    width: 210mm !important; min-height: 297mm !important;
+    margin: 0 !important; padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
   @page { size: A4 portrait; margin: 0; }
 }
@@ -267,8 +267,8 @@ export default function QuoteGenerator() {
         </div>
       </div>
 
-      {/* Hidden print area — exact copy of preview, full size */}
-      <div style={{ display: 'none' }}>
+      {/* Hidden print area — off-screen so browser renders it; print CSS brings it into view */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, pointerEvents: 'none' }}>
         <QuoteDocument
           id="quote-print-area"
           clientName={clientName || 'Your Client Name'}
