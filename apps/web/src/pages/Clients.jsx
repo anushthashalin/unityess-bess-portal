@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Mail, Phone, MapPin, Building, Pencil, Map, LayoutGrid } from 'lucide-react';
+import { Search, Plus, Mail, Phone, MapPin, Building, Pencil, Map, LayoutGrid, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApiMulti } from '../hooks/useApi.js';
 import { bessApi } from '../lib/api.js';
 import { inr } from '../lib/fmt.js';
@@ -31,6 +31,11 @@ const LEAD_STATUSES = ['new','contacted','qualified','proposal_sent','negotiatio
 
 const TIMELINES = ['< 1 month','1–3 months','3–6 months','6–12 months','12–18 months','> 18 months'];
 
+const TARIFF_CATEGORIES = [
+  'HT - Industrial','HT - Commercial','LT - Industrial','LT - Commercial',
+  'EHT - Industrial','EHT - Commercial','HT - General','LT - General',
+];
+
 const STATE_LATLNG = {
   'Andhra Pradesh':     [15.9, 79.7],  'Arunachal Pradesh':  [28.2, 94.7],
   'Assam':              [26.2, 92.9],  'Bihar':              [25.1, 85.3],
@@ -52,18 +57,19 @@ const STATE_LATLNG = {
 };
 
 const EMPTY = {
-  // Identity
   company_name:'', contact_person:'', email:'', phone:'',
   alternate_contact:'', alternate_phone:'', website:'',
-  // Location
   city:'', state:'', gstin:'',
-  // Classification
   industry_type:'', project_type:'', requirement_kwh:'',
-  // BD tracking
   lead_status:'new', bd_name:'', meeting_date:'', timeline:'', remarks:'',
-  // Sales milestones (booleans)
   qualified: false, budgetary_quote: false, tech_discussion: false,
   tc_offer: false, final_quote: false,
+};
+
+const SITE_EMPTY = {
+  client_id:'', site_name:'', address:'', state:'', discom:'',
+  tariff_category:'', sanctioned_load_kva:'', contract_demand_kva:'',
+  connection_voltage_kv:'', meter_number:'',
 };
 
 function SectionLabel({ children }) {
@@ -131,7 +137,6 @@ function LeafletMap({ clients }) {
       const label = totalKwh >= 1000
         ? `${(totalKwh / 1000).toFixed(1)}MWh`
         : totalKwh > 0 ? `${Math.round(totalKwh)}kWh` : `${sc.length}`;
-      // Scale radius by capacity: base 12, +1px per 100 kWh, max 36
       const r = totalKwh > 0 ? Math.min(12 + Math.floor(totalKwh / 100), 36) : Math.min(12 + sc.length * 4, 28);
       const circle = L.circleMarker([lat,lng], { radius:r, fillColor:'#F26B4E', color:'white', weight:2, fillOpacity:0.9 }).addTo(map);
       const names = sc.map(c => {
@@ -158,29 +163,46 @@ function LeafletMap({ clients }) {
   );
 }
 
+const categoryColor = { HT:'#F26B4E', LT:'#3B82F6', EHT:'#7C3AED' };
+const catKey = cat => cat?.split(' - ')[0] ?? '';
+
 export default function Clients() {
   const [search, setSearch]         = useState('');
   const [view, setView]             = useState('grid');
+
+  // Client modal state
   const [open, setOpen]             = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [form, setForm]             = useState(EMPTY);
   const [saving, setSaving]         = useState(false);
   const [saveErr, setSaveErr]       = useState('');
-  const [refresh, setRefresh]       = useState(0);
 
-  const { clients, proposals, projects } = useApiMulti({
+  // Site inline state
+  const [expandedClientId, setExpandedClientId] = useState(null);
+  const [siteOpen, setSiteOpen]                 = useState(false);
+  const [siteEditTarget, setSiteEditTarget]     = useState(null);
+  const [siteClientId, setSiteClientId]         = useState(null); // client context for Add Site
+  const [siteForm, setSiteForm]                 = useState(SITE_EMPTY);
+  const [siteSaving, setSiteSaving]             = useState(false);
+  const [siteSaveErr, setSiteSaveErr]           = useState('');
+
+  const [refresh, setRefresh] = useState(0);
+
+  const { clients, proposals, projects, sites } = useApiMulti({
     clients:   bessApi.clients,
     proposals: bessApi.proposals,
     projects:  bessApi.projects,
+    sites:     bessApi.sites,
   }, [refresh]);
 
-  const loading = clients?.loading || proposals?.loading || projects?.loading;
+  const loading = clients?.loading || proposals?.loading || projects?.loading || sites?.loading;
   if (loading) return <Spinner />;
   if (clients?.error) return <ErrorBanner message={clients.error} />;
 
   const cl = clients?.data   ?? [];
   const pr = proposals?.data ?? [];
   const pj = projects?.data  ?? [];
+  const st = sites?.data     ?? [];
 
   const filtered = cl.filter(c =>
     c.company_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -189,6 +211,7 @@ export default function Clients() {
     (c.industry_type ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
+  // ── Client handlers ────────────────────────────────────────────────────────
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const openAdd = () => { setEditTarget(null); setForm(EMPTY); setSaveErr(''); setOpen(true); };
@@ -244,6 +267,56 @@ export default function Clients() {
     }
   };
 
+  // ── Site handlers ──────────────────────────────────────────────────────────
+  const sset = (k, v) => setSiteForm(f => ({ ...f, [k]: v }));
+
+  const openAddSite = (clientId) => {
+    setSiteClientId(clientId);
+    setSiteEditTarget(null);
+    setSiteForm({ ...SITE_EMPTY, client_id: String(clientId) });
+    setSiteSaveErr('');
+    setSiteOpen(true);
+  };
+
+  const openEditSite = (site) => {
+    setSiteClientId(site.client_id);
+    setSiteEditTarget(site);
+    setSiteForm({
+      client_id:             String(site.client_id ?? ''),
+      site_name:             site.site_name             ?? '',
+      address:               site.address               ?? '',
+      state:                 site.state                 ?? '',
+      discom:                site.discom                ?? '',
+      tariff_category:       site.tariff_category       ?? '',
+      sanctioned_load_kva:   String(site.sanctioned_load_kva   ?? ''),
+      contract_demand_kva:   String(site.contract_demand_kva   ?? ''),
+      connection_voltage_kv: String(site.connection_voltage_kv ?? ''),
+      meter_number:          site.meter_number          ?? '',
+    });
+    setSiteSaveErr('');
+    setSiteOpen(true);
+  };
+
+  const handleSiteSubmit = async e => {
+    e.preventDefault();
+    setSiteSaveErr('');
+    if (!siteForm.site_name.trim()) { setSiteSaveErr('Site name is required.'); return; }
+    setSiteSaving(true);
+    try {
+      if (siteEditTarget) {
+        await bessApi.patchSite(siteEditTarget.id, siteForm);
+      } else {
+        await bessApi.createSite(siteForm);
+      }
+      setSiteOpen(false); setSiteEditTarget(null); setSiteForm(SITE_EMPTY);
+      setRefresh(r => r + 1);
+    } catch (err) {
+      setSiteSaveErr(err.message);
+    } finally {
+      setSiteSaving(false);
+    }
+  };
+
   const LEAD_STATUS_COLORS = {
     new:'#6B7280', contacted:'#3B82F6', qualified:'#F59E0B', proposal_sent:'#8B5CF6',
     negotiation:'#F26B4E', won:'#16A34A', lost:'#DC2626', dormant:'#9CA3AF',
@@ -256,7 +329,7 @@ export default function Clients() {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
           <h1 style={{ fontSize:22, fontWeight:900, color:'#2D2D2D', margin:0 }}>Clients</h1>
-          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>{cl.length} clients</p>
+          <p style={{ fontSize:13, color:'#9CA3AF', margin:'4px 0 0' }}>{cl.length} clients · {st.length} sites</p>
         </div>
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
           <div style={{ display:'flex', background:'#F3F4F6', borderRadius:8, padding:3 }}>
@@ -289,8 +362,11 @@ export default function Clients() {
               {filtered.map(client => {
                 const clientProposals = pr.filter(p => p.client_id === client.id);
                 const clientProjects  = pj.filter(p => p.client_id === client.id);
-                const totalCapex = clientProposals.reduce((s,p) => s + Number(p.capex_ex_gst ?? 0), 0);
-                const lsc = LEAD_STATUS_COLORS[client.lead_status] ?? '#6B7280';
+                const clientSites     = st.filter(s => s.client_id === client.id);
+                const totalCapex      = clientProposals.reduce((s,p) => s + Number(p.capex_ex_gst ?? 0), 0);
+                const lsc             = LEAD_STATUS_COLORS[client.lead_status] ?? '#6B7280';
+                const isExpanded      = expandedClientId === client.id;
+
                 return (
                   <div key={client.id} className="kpi-card" style={{ position:'relative' }}>
                     <button onClick={() => openEdit(client)}
@@ -342,20 +418,90 @@ export default function Clients() {
                       </div>
                     )}
 
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', borderTop:'1px solid #F3F4F6', paddingTop:10, gap:6 }}>
+                    {/* Stats row */}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', borderTop:'1px solid #F3F4F6', paddingTop:10, gap:4 }}>
                       <div style={{ textAlign:'center' }}>
-                        <div style={{ fontSize:16, fontWeight:900, color:'#2D2D2D' }}>{clientProposals.length}</div>
+                        <div style={{ fontSize:15, fontWeight:900, color:'#2D2D2D' }}>{clientProposals.length}</div>
                         <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Proposals</div>
                       </div>
-                      <div style={{ textAlign:'center', borderLeft:'1px solid #F3F4F6', borderRight:'1px solid #F3F4F6' }}>
-                        <div style={{ fontSize:16, fontWeight:900, color:'#2D2D2D' }}>{clientProjects.length}</div>
+                      <div style={{ textAlign:'center', borderLeft:'1px solid #F3F4F6' }}>
+                        <div style={{ fontSize:15, fontWeight:900, color:'#2D2D2D' }}>{clientProjects.length}</div>
                         <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Projects</div>
                       </div>
-                      <div style={{ textAlign:'center' }}>
-                        <div style={{ fontSize:14, fontWeight:900, color:'#F26B4E' }}>{inr(totalCapex)}</div>
+                      {/* Sites — clickable toggle */}
+                      <div
+                        onClick={() => setExpandedClientId(isExpanded ? null : client.id)}
+                        style={{ textAlign:'center', borderLeft:'1px solid #F3F4F6', cursor:'pointer', borderRadius:6, padding:'2px 0', transition:'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background='#FEF2EF'}
+                        onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                          <div style={{ fontSize:15, fontWeight:900, color: isExpanded ? '#F26B4E' : '#2D2D2D' }}>{clientSites.length}</div>
+                          {isExpanded ? <ChevronUp size={10} color="#F26B4E" /> : <ChevronDown size={10} color="#9CA3AF" />}
+                        </div>
+                        <div style={{ fontSize:10, color: isExpanded ? '#F26B4E' : '#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Sites</div>
+                      </div>
+                      <div style={{ textAlign:'center', borderLeft:'1px solid #F3F4F6' }}>
+                        <div style={{ fontSize:12, fontWeight:900, color:'#F26B4E' }}>{inr(totalCapex)}</div>
                         <div style={{ fontSize:10, color:'#9CA3AF', fontWeight:600, textTransform:'uppercase' }}>Value</div>
                       </div>
                     </div>
+
+                    {/* ── Inline Sites Panel ── */}
+                    {isExpanded && (
+                      <div style={{ marginTop:12, borderTop:'1px solid #F3F4F6', paddingTop:12 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                          <span style={{ fontSize:11, fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.5px' }}>Sites</span>
+                          <button
+                            onClick={() => openAddSite(client.id)}
+                            style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color:'#F26B4E', background:'#FEF2EF', border:'1px solid #FDDDD4', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background='#FDDDD4'}
+                            onMouseLeave={e => e.currentTarget.style.background='#FEF2EF'}>
+                            <Plus size={11} /> Add Site
+                          </button>
+                        </div>
+
+                        {clientSites.length === 0 ? (
+                          <div style={{ fontSize:12, color:'#9CA3AF', textAlign:'center', padding:'10px 0' }}>
+                            No sites registered yet.
+                          </div>
+                        ) : (
+                          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                            {clientSites.map(site => {
+                              const ck = catKey(site.tariff_category);
+                              const cc = categoryColor[ck] ?? '#9CA3AF';
+                              return (
+                                <div key={site.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#F9FAFB', borderRadius:8, padding:'8px 12px', border:'1px solid #F3F4F6' }}>
+                                  <div style={{ display:'flex', alignItems:'center', gap:9, minWidth:0 }}>
+                                    <div style={{ width:28, height:28, borderRadius:7, background:`${cc}18`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                      <MapPin size={13} color={cc} />
+                                    </div>
+                                    <div style={{ minWidth:0 }}>
+                                      <div style={{ fontWeight:700, fontSize:12, color:'#2D2D2D', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:140 }}>{site.site_name}</div>
+                                      <div style={{ fontSize:10, color:'#9CA3AF', marginTop:1 }}>
+                                        {[site.state, site.discom].filter(Boolean).join(' · ') || '—'}
+                                        {site.sanctioned_load_kva ? ` · ${Number(site.sanctioned_load_kva).toLocaleString('en-IN')} kVA` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                                    {site.tariff_category && (
+                                      <span style={{ fontSize:9, fontWeight:700, background:`${cc}18`, color:cc, padding:'2px 7px', borderRadius:8 }}>{site.tariff_category}</span>
+                                    )}
+                                    <button
+                                      onClick={() => openEditSite(site)}
+                                      style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:'3px', borderRadius:4, display:'flex', alignItems:'center' }}
+                                      onMouseEnter={e => e.currentTarget.style.color='#F26B4E'}
+                                      onMouseLeave={e => e.currentTarget.style.color='#9CA3AF'}>
+                                      <Pencil size={11} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -367,7 +513,6 @@ export default function Clients() {
         title={editTarget ? `Edit — ${editTarget.company_name}` : 'Add New Client'} width={640}>
         <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-          {/* ── Company Identity ── */}
           <SectionLabel>Company Details</SectionLabel>
           <Field label="Company Name" required>
             <Input placeholder="e.g. Amrita Hospitals Pvt. Ltd." value={form.company_name} onChange={e => set('company_name', e.target.value)} />
@@ -391,7 +536,6 @@ export default function Clients() {
             </Field>
           </FormGrid>
 
-          {/* ── Primary Contact ── */}
           <SectionLabel>Primary Contact</SectionLabel>
           <FormGrid cols={2}>
             <Field label="Contact Person">
@@ -413,7 +557,6 @@ export default function Clients() {
             </Field>
           </FormGrid>
 
-          {/* ── Location ── */}
           <SectionLabel>Location</SectionLabel>
           <FormGrid cols={2}>
             <Field label="City">
@@ -427,7 +570,6 @@ export default function Clients() {
             </Field>
           </FormGrid>
 
-          {/* ── BESS Requirement ── */}
           <SectionLabel>BESS Requirement</SectionLabel>
           <FormGrid cols={2}>
             <Field label="Project Type">
@@ -442,7 +584,6 @@ export default function Clients() {
             </Field>
           </FormGrid>
 
-          {/* ── BD Tracking ── */}
           <SectionLabel>BD Tracking</SectionLabel>
           <FormGrid cols={2}>
             <Field label="Lead Status">
@@ -466,7 +607,6 @@ export default function Clients() {
             </Field>
           </FormGrid>
 
-          {/* ── Sales Milestones ── */}
           <SectionLabel>Sales Milestones</SectionLabel>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, padding:'4px 0' }}>
             <CheckBox label="Qualified" checked={form.qualified} onChange={v => set('qualified', v)} />
@@ -476,7 +616,6 @@ export default function Clients() {
             <CheckBox label="Final Quote" checked={form.final_quote} onChange={v => set('final_quote', v)} />
           </div>
 
-          {/* ── Remarks ── */}
           <Field label="Remarks / Notes">
             <textarea value={form.remarks} onChange={e => set('remarks', e.target.value)}
               placeholder="Key observations, site conditions, decision makers, blockers…"
@@ -495,6 +634,69 @@ export default function Clients() {
 
           <SubmitRow onClose={() => { setOpen(false); setEditTarget(null); }} loading={saving}
             label={editTarget ? 'Save Changes' : 'Add Client'} />
+        </form>
+      </Modal>
+
+      {/* ── Add / Edit Site Modal ── */}
+      <Modal open={siteOpen} onClose={() => { setSiteOpen(false); setSiteEditTarget(null); }}
+        title={siteEditTarget ? `Edit Site — ${siteEditTarget.site_name}` : 'Add New Site'} width={580}>
+        <form onSubmit={handleSiteSubmit} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+          <FormGrid cols={2}>
+            <Field label="Site Name" required>
+              <Input placeholder="e.g. Amrita Hospital — Faridabad" value={siteForm.site_name} onChange={e => sset('site_name', e.target.value)} />
+            </Field>
+            <Field label="Meter Number">
+              <Input placeholder="EB meter number" value={siteForm.meter_number} onChange={e => sset('meter_number', e.target.value)} />
+            </Field>
+          </FormGrid>
+
+          <Field label="Address">
+            <Input placeholder="Full address of the metering point" value={siteForm.address} onChange={e => sset('address', e.target.value)} />
+          </Field>
+
+          <FormGrid cols={2}>
+            <Field label="State">
+              <select className="bess-input" value={siteForm.state} onChange={e => sset('state', e.target.value)} style={{ width:'100%' }}>
+                <option value="">Select state…</option>
+                {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="DISCOM">
+              <Input placeholder="e.g. DHBVN, MSEDCL, BESCOM" value={siteForm.discom} onChange={e => sset('discom', e.target.value)} />
+            </Field>
+          </FormGrid>
+
+          <Field label="Tariff Category">
+            <select className="bess-input" value={siteForm.tariff_category} onChange={e => sset('tariff_category', e.target.value)} style={{ width:'100%' }}>
+              <option value="">Select category…</option>
+              {TARIFF_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+
+          <FormGrid cols={3}>
+            <Field label="Sanctioned Load (kVA)">
+              <Input type="number" min="0" step="0.1" placeholder="e.g. 500"
+                value={siteForm.sanctioned_load_kva} onChange={e => sset('sanctioned_load_kva', e.target.value)} />
+            </Field>
+            <Field label="Contract Demand (kVA)">
+              <Input type="number" min="0" step="0.1" placeholder="e.g. 400"
+                value={siteForm.contract_demand_kva} onChange={e => sset('contract_demand_kva', e.target.value)} />
+            </Field>
+            <Field label="Voltage (kV)">
+              <Input type="number" min="0" step="0.001" placeholder="e.g. 11"
+                value={siteForm.connection_voltage_kv} onChange={e => sset('connection_voltage_kv', e.target.value)} />
+            </Field>
+          </FormGrid>
+
+          {siteSaveErr && (
+            <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:8, padding:'10px 14px', fontSize:13, color:'#DC2626', fontWeight:600 }}>
+              {siteSaveErr}
+            </div>
+          )}
+
+          <SubmitRow onClose={() => { setSiteOpen(false); setSiteEditTarget(null); }} loading={siteSaving}
+            label={siteEditTarget ? 'Save Changes' : 'Add Site'} />
         </form>
       </Modal>
 
