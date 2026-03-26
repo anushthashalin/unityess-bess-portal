@@ -52,12 +52,16 @@ function todayStr() {
 // ── Quote print styles ─────────────────────────────────────────────────────────
 const PRINT_CSS = `
 @media print {
-  body * { visibility: hidden !important; }
-  #quote-print-area, #quote-print-area * { visibility: visible !important; }
+  #no-print-wrapper { display: none !important; }
+  #quote-print-wrapper {
+    position: static !important;
+    left: auto !important; top: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: auto !important;
+  }
   #quote-print-area {
-    position: fixed !important; top: 0 !important; left: 0 !important;
-    width: 210mm !important; min-height: 297mm !important;
-    margin: 0 !important; padding: 0 !important;
+    width: 210mm !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
@@ -112,7 +116,8 @@ export default function QuoteGenerator() {
   const noteText = notes || `This is a budgetary offer for the supply of UnityESS Battery Energy Storage System(s) as described above. Prices are Ex-Works, New Delhi, and exclude GST @ 18%. This offer is valid for ${validDays} days from the date above and is subject to revision based on the Lithium Carbonate Index at the time of final order. Freight, civil works, and installation charges (if applicable) will be quoted separately.`;
 
   return (
-    <div className="space-y-6">
+    <>
+    <div id="no-print-wrapper" className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -267,25 +272,27 @@ export default function QuoteGenerator() {
         </div>
       </div>
 
-      {/* Hidden print area — off-screen so browser renders it; print CSS brings it into view */}
-      <div style={{ position: 'fixed', left: '-9999px', top: 0, pointerEvents: 'none' }}>
-        <QuoteDocument
-          id="quote-print-area"
-          clientName={clientName || 'Your Client Name'}
-          quoteDate={quoteDate}
-          model={model}
-          qty={qty}
-          mppt={mppt}
-          mpptQty={mpptQty}
-          finalTotal={finalTotal}
-          gst={gst}
-          totalInc={totalInc}
-          totalKwh={totalKwh}
-          totalKw={totalKw}
-          noteText={noteText}
-        />
-      </div>
     </div>
+
+    {/* Print area — off-screen via absolute, brought into flow during print */}
+    <div id="quote-print-wrapper" style={{ position: 'absolute', left: '-9999px', top: 0, overflow: 'hidden', height: '1px', pointerEvents: 'none' }}>
+      <QuoteDocument
+        id="quote-print-area"
+        clientName={clientName || 'Your Client Name'}
+        quoteDate={quoteDate}
+        model={model}
+        qty={qty}
+        mppt={mppt}
+        mpptQty={mpptQty}
+        finalTotal={finalTotal}
+        gst={gst}
+        totalInc={totalInc}
+        totalKwh={totalKwh}
+        totalKw={totalKw}
+        noteText={noteText}
+      />
+    </div>
+    </>
   );
 }
 
