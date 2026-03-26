@@ -434,6 +434,106 @@ function TodaySchedule() {
   );
 }
 
+// ── BD Pipeline Summary widget ─────────────────────────────────────────────────
+function BDPipelineSummary() {
+  const navigate = useNavigate();
+  const { opportunities, accounts, followUps } = useApiMulti({
+    opportunities: bdApi.opportunities,
+    accounts:      bdApi.accounts,
+    followUps:     bdApi.followUps,
+  }, []);
+
+  const opps    = opportunities?.data ?? [];
+  const accs    = accounts?.data      ?? [];
+  const follows = followUps?.data     ?? [];
+
+  const activeOpps  = opps.filter(o => !['won','lost'].includes(o.stage));
+  const overdueFollowUps = follows.filter(f =>
+    f.status === 'pending' && f.due_date && f.due_date.slice(0,10) < new Date().toISOString().slice(0,10)
+  );
+
+  const stageGroups = ['lead','proposal','negotiation','po_received'].map(s => ({
+    label: s.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()),
+    count: opps.filter(o => o.stage === s).length,
+    value: opps.filter(o => o.stage === s).reduce((sum, o) => sum + Number(o.estimated_value ?? 0), 0),
+  }));
+
+  const STAGE_COLOR = {
+    Lead:          '#60a5fa',
+    Proposal:      '#F26B4E',
+    Negotiation:   '#f59e0b',
+    'Po Received': '#10b981',
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-5 rounded-full bg-[#F26B4E]" />
+          <span className="text-[13px] font-black text-foreground uppercase tracking-widest">Business Development</span>
+        </div>
+        <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7 gap-1"
+          onClick={() => navigate('/bess/bd/pipeline')}>
+          Open BD Pipeline <ArrowUpRight className="w-3 h-3" />
+        </Button>
+      </div>
+
+      {/* BD KPI row */}
+      <div className="grid grid-cols-4 gap-4">
+        <Card className="border border-border/50 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate('/bess/bd/pipeline')}>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Active Accounts</p>
+            <p className="text-3xl font-black text-foreground">{accs.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{activeOpps.length} open opportunities</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/50 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate('/bess/bd/pipeline')}>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">BD Pipeline Value</p>
+            <p className="text-2xl font-black text-[#F26B4E]">
+              {inr(opps.filter(o => !['won','lost'].includes(o.stage)).reduce((s, o) => s + Number(o.estimated_value ?? 0), 0))}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Ex-GST · Active opps</p>
+          </CardContent>
+        </Card>
+
+        <Card className={`border shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow ${overdueFollowUps.length > 0 ? 'border-red-300' : 'border-border/50'}`}
+          onClick={() => navigate('/bess/bd/follow-ups')}>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Overdue Follow-ups</p>
+            <p className={`text-3xl font-black ${overdueFollowUps.length > 0 ? 'text-red-500' : 'text-foreground'}`}>
+              {overdueFollowUps.length}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{follows.filter(f => f.status==='pending').length} total pending</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/50 shadow-sm bg-card">
+          <CardContent className="p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Stage Breakdown</p>
+            <div className="flex flex-col gap-1.5">
+              {stageGroups.filter(s => s.count > 0).slice(0,3).map(s => (
+                <div key={s.label} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STAGE_COLOR[s.label] ?? '#9ca3af' }} />
+                  <span className="text-xs text-muted-foreground flex-1">{s.label}</span>
+                  <span className="text-xs font-bold">{s.count}</span>
+                </div>
+              ))}
+              {stageGroups.filter(s => s.count > 0).length === 0 && (
+                <p className="text-xs text-muted-foreground">No active opportunities</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -589,6 +689,9 @@ export default function Dashboard() {
           sub={`${draftProposals.length} drafts · ${expiringProposals.length} expiring`}
           accentColor="#16A34A" iconBg="bg-emerald-100 text-emerald-600" />
       </div>
+
+      {/* ── BD Pipeline Summary ── */}
+      <BDPipelineSummary />
 
       {/* ── Charts + Today's Schedule ── */}
       <div className="grid grid-cols-3 gap-5">

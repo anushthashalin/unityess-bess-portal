@@ -169,6 +169,10 @@ async function runMigrations() {
     `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS offer_type            TEXT DEFAULT 'budgetary'`,
     `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS price_supply_ex_gst   NUMERIC(15,2)`,
     `ALTER TABLE bess.finance_records ADD COLUMN IF NOT EXISTS price_install_ex_gst  NUMERIC(15,2)`,
+    // Activities type constraint — add 'demo' to allowed values
+    `ALTER TABLE bd.activities DROP CONSTRAINT IF EXISTS activities_type_check`,
+    `ALTER TABLE bd.activities ADD CONSTRAINT activities_type_check
+       CHECK (type = ANY(ARRAY['call','email','meeting','whatsapp','site_visit','demo']))`,
   ];
   for (const sql of migrations) {
     try {

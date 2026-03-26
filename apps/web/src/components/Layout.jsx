@@ -25,7 +25,7 @@ const BESS_CORE_NAV = [
 ];
 
 const BESS_BD_NAV = [
-  { label: 'Clients',         to: '/bess/bd/pipeline',      icon: Users },
+  { label: 'BD Pipeline',     to: '/bess/bd/pipeline',      icon: Users },
   { label: 'Activity Log',    to: '/bess/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
@@ -43,7 +43,7 @@ const EPC_CORE_NAV = [
 ];
 
 const EPC_BD_NAV = [
-  { label: 'Clients',         to: '/epc/bd/pipeline',      icon: Users },
+  { label: 'BD Pipeline',     to: '/epc/bd/pipeline',      icon: Users },
   { label: 'Activity Log',    to: '/epc/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/epc/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/epc/bd/approvals',     icon: ShieldCheck },

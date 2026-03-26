@@ -12,7 +12,7 @@ async function request(path, options = {}) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message ?? `HTTP ${res.status}`);
+    throw new Error(err.message ?? err.error ?? `HTTP ${res.status}`);
   }
   return res.json();
 }
