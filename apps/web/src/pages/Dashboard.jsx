@@ -682,7 +682,7 @@ export default function Dashboard() {
 
       {/* ── KPI Cards ── */}
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Projects Under Negotiation</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-foreground mb-3">Projects Under Negotiation</p>
         <div className="grid grid-cols-4 gap-4">
           <KPICard icon={FolderOpen}  label="Leads Under Negotiation"    rawValue={pj.length}
             sub="BESS installations tracked" accentColor="#F26B4E" iconBg="bg-orange-100 text-orange-500"
