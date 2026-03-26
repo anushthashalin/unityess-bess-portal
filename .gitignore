@@ -6,3 +6,8 @@ apps/web/dist/
 .DS_Store
 *.log
 .claude/
+.env.local
+.env*.local
+apps/api/.vercel/
+apps/web/.vercel/
+*.zip

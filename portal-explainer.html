@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UnityESS Portal — Explanatory Playground</title>
+<style>
+:root {
+  --brand: #F26B4E;
+  --navy: #0F172A;
+  --navy2: #1E293B;
+  --s50: #F8FAFC; --s100: #F1F5F9; --s200: #E2E8F0;
+  --s300: #CBD5E1; --s400: #94A3B8; --s500: #64748B;
+  --s600: #475569; --s700: #334155;
+  --em: #10B981; --blue: #3B82F6; --pur: #8B5CF6;
+  --amb: #F59E0B; --red: #EF4444; --cy: #06B6D4;
+  --r: 10px; --mono: 'SFMono-Regular',Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:60px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--s50);color:var(--s700);line-height:1.6;-webkit-font-smoothing:antialiased}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;background:rgba(15,23,42,.96);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.nav-brand{color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.nav-brand span{color:var(--brand)}
+.nav-links{display:flex;gap:2px}
+.nav-links a{color:var(--s400);text-decoration:none;font-size:12px;font-weight:500;padding:5px 12px;border-radius:6px;transition:all .2s}
+.nav-links a:hover,.nav-links a.active{color:#fff;background:rgba(255,255,255,.08)}
+.evidence-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;vertical-align:middle;margin-left:6px;text-transform:uppercase;letter-spacing:.04em}
+.eb-source{background:rgba(16,185,129,.15);color:var(--em)}
+.eb-infer{background:rgba(148,163,184,.12);color:var(--s400)}
+.eb-test{background:rgba(59,130,246,.12);color:var(--blue)}
+code{font-family:var(--mono);font-size:11.5px;background:var(--s100);padding:1px 5px;border-radius:4px;color:var(--s700)}
+
+/* ── HERO ── */
+.hero{padding:120px 32px 72px;background:linear-gradient(135deg,var(--navy) 0%,#1a2744 55%,#1E293B 100%);text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 25% 60%,rgba(242,107,78,.07) 0%,transparent 55%),radial-gradient(ellipse at 75% 30%,rgba(59,130,246,.05) 0%,transparent 45%)}
+.hero-inner{position:relative;max-width:760px;margin:0 auto}
+.chip{display:inline-flex;align-items:center;gap:6px;background:rgba(242,107,78,.14);color:var(--brand);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:4px 14px;border-radius:100px;margin-bottom:18px}
+.hero h1{font-size:38px;font-weight:800;color:#fff;line-height:1.15;margin-bottom:14px}
+.hero p{color:var(--s400);font-size:16px;max-width:580px;margin:0 auto 28px}
+.hero-q{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:32px}
+.q-pill{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--s300);font-size:12px;padding:6px 14px;border-radius:20px;cursor:pointer;transition:all .2s}
+.q-pill:hover{background:rgba(242,107,78,.15);border-color:var(--brand);color:var(--brand)}
+.hero-stats{display:flex;justify-content:center;gap:32px;flex-wrap:wrap}
+.stat .n{font-size:28px;font-weight:800;color:#fff}
+.stat .l{font-size:11px;color:var(--s400);text-transform:uppercase;letter-spacing:.06em}
+
+/* ── SECTIONS ── */
+.sec{max-width:1160px;margin:0 auto;padding:72px 32px}
+.sec-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--brand);margin-bottom:6px}
+.sec-title{font-size:26px;font-weight:800;color:var(--navy);margin-bottom:10px}
+.sec-desc{font-size:14px;color:var(--s500);margin-bottom:36px;max-width:600px}
+.alt-bg{background:var(--s100)}
+.dark-bg{background:var(--navy);padding:72px 32px}
+.dark-bg .sec-title{color:#fff}
+.dark-bg .sec-desc{color:var(--s400)}
+
+/* ── SYSTEM MAP ── */
+#sysmap-container{background:#fff;border:1px solid var(--s200);border-radius:var(--r);padding:32px;overflow-x:auto}
+.sysmap-svg{display:block;margin:0 auto}
+.map-node{cursor:pointer;transition:all .2s}
+.map-node:hover rect,.map-node:hover circle{filter:brightness(1.08)}
+.node-detail{display:none;background:#fff;border:1px solid var(--s200);border-radius:var(--r);padding:20px 24px;margin-top:20px;animation:fadeUp .25s ease}
+.node-detail.show{display:block}
+.node-detail h4{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.node-detail p{font-size:13px;color:var(--s600);margin-bottom:10px}
+.node-detail .files{display:flex;flex-wrap:wrap;gap:6px}
+.file-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);background:var(--s100);color:var(--s600);padding:3px 10px;border-radius:5px;border:1px solid var(--s200)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── STEPPER ── */
+.stepper{background:#fff;border:1px solid var(--s200);border-radius:var(--r);overflow:hidden}
+.step-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--s100)}
+.step-counter{font-size:12px;font-weight:700;color:var(--s500)}
+.step-nav{display:flex;gap:8px}
+.step-btn{padding:6px 14px;border-radius:6px;border:1.5px solid var(--s200);background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:var(--s600);transition:all .2s}
+.step-btn:hover:not(:disabled){border-color:var(--brand);color:var(--brand)}
+.step-btn:disabled{opacity:.35;cursor:not-allowed}
+.step-btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.step-btn.primary:hover{background:#e05a3d}
+.step-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.step-narrative{padding:28px;border-right:1px solid var(--s100)}
+.step-num{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--brand);margin-bottom:8px}
+.step-title{font-size:17px;font-weight:800;color:var(--navy);margin-bottom:10px}
+.step-body-text{font-size:13px;color:var(--s600);line-height:1.6;margin-bottom:14px}
+.step-actor{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;margin-bottom:14px}
+.step-code-panel{padding:24px;background:var(--navy);overflow:hidden}
+.step-code-label{font-size:10px;font-weight:700;color:var(--s400);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.step-code{font-family:var(--mono);font-size:12px;color:#e2e8f0;line-height:1.7;white-space:pre;overflow-x:auto}
+.step-dots{display:flex;gap:6px;padding:16px 24px;border-top:1px solid var(--s100);background:var(--s50)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--s300);cursor:pointer;transition:all .2s}
+.dot.active{background:var(--brand);transform:scale(1.3)}
+@media(max-width:700px){.step-body{grid-template-columns:1fr}}
+
+/* ── STATE MACHINE ── */
+.stage-machine{display:flex;flex-direction:column;gap:16px}
+.stage-flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:24px;background:#fff;border:1px solid var(--s200);border-radius:var(--r)}
+.stage-node{padding:10px 16px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid;cursor:pointer;transition:all .2s;text-align:center;min-width:110px}
+.stage-node:hover{transform:scale(1.06)}
+.stage-node.active{box-shadow:0 0 0 3px rgba(242,107,78,.3)}
+.stage-chevron{color:var(--s300);font-size:16px;flex-shrink:0}
+.stage-detail{background:#fff;border:1px solid var(--s200);border-radius:var(--r);padding:24px;display:none}
+.stage-detail.show{display:block}
+.stage-detail h4{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.stage-detail p{font-size:13px;color:var(--s600);margin-bottom:12px}
+.patch-snippet{background:var(--navy);border-radius:8px;padding:16px 20px;font-family:var(--mono);font-size:12px;color:#e2e8f0;line-height:1.7}
+
+/* ── FLOW DIAGRAM ── */
+.flow-pipe{display:flex;align-items:center;gap:0;flex-wrap:nowrap;overflow-x:auto;padding:28px;background:#fff;border:1px solid var(--s200);border-radius:var(--r)}
+.flow-node{flex-shrink:0;padding:14px 18px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid;text-align:center;cursor:pointer;transition:all .2s;min-width:130px}
+.flow-node:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.flow-node.active{box-shadow:0 0 0 3px rgba(242,107,78,.35)}
+.flow-arrow{flex-shrink:0;color:var(--s300);font-size:20px;margin:0 4px}
+.flow-detail{background:#fff;border:1px solid var(--s200);border-radius:var(--r);padding:24px;margin-top:16px;display:none}
+.flow-detail.show{display:block}
+.schema-mini{display:flex;flex-direction:column;gap:4px;margin-top:10px}
+.schema-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 8px;background:var(--s50);border-radius:5px}
+.schema-row .fn{font-family:var(--mono);font-weight:600;color:var(--navy);min-width:140px}
+.schema-row .ft{color:var(--s400);font-size:11px}
+.pk-badge,.fk-badge{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px}
+.pk-badge{background:var(--amber-light,#fffbeb);color:var(--amb)}
+.fk-badge{background:#eff6ff;color:var(--blue)}
+
+/* ── SOURCE INDEX ── */
+.source-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.source-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);padding:18px 20px;transition:all .2s}
+.source-card:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15)}
+.source-rank{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.source-path{font-family:var(--mono);font-size:12px;color:#e2e8f0;margin-bottom:6px;word-break:break-all}
+.source-why{font-size:12px;color:var(--s400);line-height:1.5}
+.source-concepts{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.concept-tag{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;background:rgba(255,255,255,.06);color:var(--s300)}
+
+/* ── INVARIANTS ── */
+.inv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.inv-card{background:#fff;border:1px solid var(--s200);border-radius:var(--r);padding:18px 20px;border-left:4px solid}
+.inv-card h4{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.inv-card p{font-size:12px;color:var(--s500);line-height:1.5}
+
+/* ── GLOSSARY ── */
+.glossary{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.g-entry{padding:12px 16px;background:#fff;border:1px solid var(--s200);border-radius:8px}
+.g-term{font-weight:700;font-size:13px;color:var(--navy)}
+.g-def{font-size:12px;color:var(--s500);margin-top:3px;line-height:1.4}
+
+/* ── MISREAD ── */
+.misread{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 18px;margin-top:14px;font-size:12px;color:#78350f}
+.misread strong{display:block;margin-bottom:4px}
+
+/* ── FOOTER ── */
+footer{background:var(--navy);text-align:center;padding:32px;color:var(--s400);font-size:12px}
+footer a{color:var(--brand);text-decoration:none}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F26B4E" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>Unity</span>ESS Portal · Explanatory Playground
+  </div>
+  <div class="nav-links">
+    <a href="#orientation">Why</a>
+    <a href="#sysmap">System Map</a>
+    <a href="#happy-path">Happy Path</a>
+    <a href="#state-machine">BD Stages</a>
+    <a href="#data-flow">Data Flow</a>
+    <a href="#invariants">Invariants</a>
+    <a href="#source-index">Source Index</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ══ -->
+<section class="hero" id="orientation">
+  <div class="hero-inner">
+    <div class="chip">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      Live Production · explanatory-playground skill
+    </div>
+    <h1>UnityESS C&I BESS Portal</h1>
+    <p>An internal sales and BD intelligence platform that tracks clients, projects, proposals, and the full BD pipeline for UnityESS battery energy storage systems.</p>
+
+    <div class="hero-q">
+      <div class="q-pill" onclick="scrollTo('#sysmap')">How is it deployed?</div>
+      <div class="q-pill" onclick="scrollTo('#happy-path')">How does a deal move?</div>
+      <div class="q-pill" onclick="scrollTo('#data-flow')">How do proposals link to projects?</div>
+      <div class="q-pill" onclick="scrollTo('#source-index')">Which file do I open first?</div>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat"><div class="n">8</div><div class="l">Pages</div></div>
+      <div class="stat"><div class="n">50+</div><div class="l">API Routes</div></div>
+      <div class="stat"><div class="n">10</div><div class="l">DB Tables</div></div>
+      <div class="stat"><div class="n">6</div><div class="l">BD Stages</div></div>
+      <div class="stat"><div class="n">2</div><div class="l">Product Lines</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ ORIENTATION ══ -->
+<section class="sec" style="padding-bottom:0">
+  <div class="sec-label">Orientation</div>
+  <div class="sec-title">Why this portal exists</div>
+  <p style="font-size:14px;color:var(--s600);line-height:1.7;max-width:800px;margin-bottom:32px">
+    Ornate Solar sells UnityESS BESS units (125 kW / 261 kWh each) to C&I clients across India. Before this portal, the team tracked deals in spreadsheets, proposals were manually typed in Word, and follow-ups were forgotten. The portal replaces those workflows with a single React SPA backed by a Node/Express API and a Neon PostgreSQL database, deployed entirely on Vercel.
+  </p>
+
+  <div class="glossary">
+    <div class="g-entry"><div class="g-term">Opportunity</div><div class="g-def">A potential BESS sale at a specific company. Lives in <code>bess.bd_opportunities</code>, has a <code>stage</code> (Kanban column), a capacity in kWh, and an assigned BD exec.</div></div>
+    <div class="g-entry"><div class="g-term">Follow-up</div><div class="g-def">A scheduled action (call, meeting, site visit) tied to an opportunity. Auto-created when logging an activity with a <code>next_action_date</code>.</div></div>
+    <div class="g-entry"><div class="g-term">Proposal</div><div class="g-def">A commercial quote generated from the Configurator. Contains CAPEX, IRR, payback. Linked to both a client and a project via FK in both directions.</div></div>
+    <div class="g-entry"><div class="g-term">Project</div><div class="g-def">A confirmed or scoping-stage BESS installation. Has a <code>client_id</code> and optionally a <code>proposal_id</code>. Separate from the BD pipeline — a project means execution is likely.</div></div>
+    <div class="g-entry"><div class="g-term">BD Pipeline</div><div class="g-def">The 6-stage Kanban board (First Connect → PO Received). Moving a card calls PATCH <code>/api/bd/opportunities/:id</code> with a new <code>stage</code> value.</div></div>
+    <div class="g-entry"><div class="g-term">Product Type</div><div class="g-def"><code>bess</code> or <code>epc</code>. Used to filter API responses. The portal has two nav trees (BESS BD, EPC BD) served by the same backend, filtered by this field.</div></div>
+  </div>
+</section>
+
+<!-- ══ SYSTEM MAP ══ -->
+<section class="sec" id="sysmap">
+  <div class="sec-label">System Map</div>
+  <div class="sec-title">What are the major parts?</div>
+  <div class="sec-desc">Click any node to see what it is, what it owns, and which files govern it. <span class="evidence-badge eb-source">source</span></div>
+
+  <div id="sysmap-container">
+    <svg class="sysmap-svg" width="760" height="300" viewBox="0 0 760 300">
+      <!-- Arrows -->
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#CBD5E1"/>
+        </marker>
+        <marker id="arr-b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#94A3B8"/>
+        </marker>
+      </defs>
+      <!-- Browser → CDN -->
+      <line x1="108" y1="80" x2="218" y2="80" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arr)"/>
+      <!-- CDN → SPA -->
+      <line x1="318" y1="80" x2="398" y2="80" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arr)"/>
+      <!-- SPA ↔ API -->
+      <line x1="498" y1="68" x2="568" y2="68" stroke="#94A3B8" stroke-width="2" marker-end="url(#arr-b)"/>
+      <line x1="568" y1="88" x2="498" y2="88" stroke="#94A3B8" stroke-width="2" marker-end="url(#arr-b)"/>
+      <!-- API → Neon -->
+      <line x1="650" y1="80" x2="700" y2="80" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arr)"/>
+      <!-- vercel.json label -->
+      <text x="340" y="108" text-anchor="middle" font-size="10" fill="#94A3B8">vercel.json routes</text>
+      <!-- SPA → DB label -->
+      <text x="605" y="62" text-anchor="middle" font-size="9" fill="#94A3B8">HTTP</text>
+
+      <!-- Browser -->
+      <g class="map-node" onclick="showNode('browser')">
+        <rect x="8" y="52" width="100" height="54" rx="10" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+        <text x="58" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#1E40AF">Browser</text>
+        <text x="58" y="90" text-anchor="middle" font-size="10" fill="#3B82F6">React SPA</text>
+        <text x="58" y="104" text-anchor="middle" font-size="9" fill="#64748B">Chrome/Safari</text>
+      </g>
+
+      <!-- Vercel CDN -->
+      <g class="map-node" onclick="showNode('vercel')">
+        <rect x="218" y="52" width="100" height="54" rx="10" fill="#0F172A" stroke="#475569" stroke-width="2"/>
+        <text x="268" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Vercel</text>
+        <text x="268" y="90" text-anchor="middle" font-size="10" fill="#94A3B8">Edge CDN</text>
+        <text x="268" y="104" text-anchor="middle" font-size="9" fill="#64748B">+ Serverless</text>
+      </g>
+
+      <!-- React SPA -->
+      <g class="map-node" onclick="showNode('spa')">
+        <rect x="398" y="44" width="100" height="70" rx="10" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+        <text x="448" y="68" text-anchor="middle" font-size="12" font-weight="700" fill="#1E40AF">React SPA</text>
+        <text x="448" y="84" text-anchor="middle" font-size="10" fill="#3B82F6">apps/web/</text>
+        <text x="448" y="100" text-anchor="middle" font-size="9" fill="#64748B">Vite build</text>
+        <text x="448" y="114" text-anchor="middle" font-size="9" fill="#64748B">8 pages</text>
+      </g>
+
+      <!-- Express API -->
+      <g class="map-node" onclick="showNode('api')">
+        <rect x="568" y="44" width="82" height="70" rx="10" fill="#ECFDF5" stroke="#10B981" stroke-width="2"/>
+        <text x="609" y="68" text-anchor="middle" font-size="12" font-weight="700" fill="#065F46">Express</text>
+        <text x="609" y="84" text-anchor="middle" font-size="10" fill="#10B981">apps/api/</text>
+        <text x="609" y="100" text-anchor="middle" font-size="9" fill="#64748B">serverless fn</text>
+        <text x="609" y="114" text-anchor="middle" font-size="9" fill="#64748B">50+ routes</text>
+      </g>
+
+      <!-- Neon DB -->
+      <g class="map-node" onclick="showNode('db')">
+        <rect x="700" y="52" width="54" height="54" rx="10" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="2"/>
+        <text x="727" y="75" text-anchor="middle" font-size="11" font-weight="700" fill="#5B21B6">Neon</text>
+        <text x="727" y="90" text-anchor="middle" font-size="9" fill="#8B5CF6">Postgres</text>
+        <text x="727" y="104" text-anchor="middle" font-size="9" fill="#64748B">10 tables</text>
+      </g>
+
+      <!-- Bottom row: key pages -->
+      <text x="380" y="170" text-anchor="middle" font-size="10" font-weight="700" fill="#94A3B8" text-transform="uppercase">KEY PAGES</text>
+      <g class="map-node" onclick="showNode('dashboard')">
+        <rect x="30" y="185" width="90" height="40" rx="7" fill="#fff" stroke="#E2E8F0" stroke-width="1.5"/>
+        <text x="75" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Dashboard</text>
+        <text x="75" y="218" text-anchor="middle" font-size="9" fill="#64748B">KPIs + schedule</text>
+      </g>
+      <g class="map-node" onclick="showNode('clients')">
+        <rect x="135" y="185" width="90" height="40" rx="7" fill="#fff" stroke="#E2E8F0" stroke-width="1.5"/>
+        <text x="180" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Clients</text>
+        <text x="180" y="218" text-anchor="middle" font-size="9" fill="#64748B">Leaflet map</text>
+      </g>
+      <g class="map-node" onclick="showNode('bdpipeline')">
+        <rect x="240" y="185" width="100" height="40" rx="7" fill="#fff" stroke="#E2E8F0" stroke-width="1.5"/>
+        <text x="290" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">BD Pipeline</text>
+        <text x="290" y="218" text-anchor="middle" font-size="9" fill="#64748B">Kanban board</text>
+      </g>
+      <g class="map-node" onclick="showNode('followups')">
+        <rect x="355" y="185" width="100" height="40" rx="7" fill="#fff" stroke="#E2E8F0" stroke-width="1.5"/>
+        <text x="405" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Follow-ups</text>
+        <text x="405" y="218" text-anchor="middle" font-size="9" fill="#64748B">Queue by urgency</text>
+      </g>
+      <g class="map-node" onclick="showNode('projects')">
+        <rect x="470" y="185" width="90" height="40" rx="7" fill="#fff" stroke="#E2E8F0" stroke-width="1.5"/>
+        <text x="515" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Projects</text>
+        <text x="515" y="218" text-anchor="middle" font-size="9" fill="#64748B">+ proposal link</text>
+      </g>
+      <g class="map-node" onclick="showNode('configurator')">
+        <rect x="575" y="185" width="100" height="40" rx="7" fill="#fff" stroke="#E2E8F0" stroke-width="1.5"/>
+        <text x="625" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Configurator</text>
+        <text x="625" y="218" text-anchor="middle" font-size="9" fill="#64748B">Quote builder</text>
+      </g>
+
+      <!-- connecting lines from SPA to pages -->
+      <line x1="448" y1="114" x2="75" y2="185" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="448" y1="114" x2="180" y2="185" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="448" y1="114" x2="290" y2="185" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="448" y1="114" x2="405" y2="185" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="448" y1="114" x2="515" y2="185" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="448" y1="114" x2="625" y2="185" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- Try this label -->
+      <text x="380" y="270" text-anchor="middle" font-size="11" fill="#94A3B8">↑ Click any node to see what it owns</text>
+    </svg>
+
+    <div id="node-detail" class="node-detail"></div>
+  </div>
+</section>
+
+<!-- ══ HAPPY PATH ══ -->
+<section class="sec alt-bg" id="happy-path">
+  <div class="sec-label">Happy Path</div>
+  <div class="sec-title">A deal from first contact to PO</div>
+  <div class="sec-desc">Step through the canonical BD lifecycle — what happens in the UI, what API call fires, and which file owns the logic. <span class="evidence-badge eb-source">source</span></div>
+
+  <div class="stepper">
+    <div class="step-header">
+      <span class="step-counter" id="step-counter">Step 1 of 6</span>
+      <div class="step-nav">
+        <button class="step-btn" id="step-prev" onclick="changeStep(-1)" disabled>← Back</button>
+        <button class="step-btn primary" id="step-next" onclick="changeStep(1)">Next →</button>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-narrative" id="step-narrative"></div>
+      <div class="step-code-panel">
+        <div class="step-code-label">
+          <span id="step-file">—</span>
+          <span class="evidence-badge eb-source">source</span>
+        </div>
+        <pre class="step-code" id="step-code"></pre>
+      </div>
+    </div>
+    <div class="step-dots" id="step-dots"></div>
+  </div>
+
+  <div class="misread">
+    <strong>Easy misread to prevent:</strong>
+    The BD Pipeline and the Projects page are separate workflows. An opportunity in "PO Received" stage does NOT automatically create a project — a project is created separately (often in parallel) and manually linked to a proposal. The Kanban is sales tracking; Projects is delivery tracking.
+  </div>
+</section>
+
+<!-- ══ STATE MACHINE ══ -->
+<section class="sec" id="state-machine">
+  <div class="sec-label">State Machine</div>
+  <div class="sec-title">BD Pipeline stage transitions</div>
+  <div class="sec-desc">Each card on the Kanban board has a <code>stage</code> field. Clicking a Move button fires one PATCH call. Click a stage below to see what triggers it and what the payload looks like. <span class="evidence-badge eb-source">source</span></div>
+
+  <div class="stage-machine">
+    <div class="stage-flow">
+      <div class="stage-node" style="background:rgba(148,163,184,.1);color:#94a3b8;border-color:#94a3b8" onclick="showStage(0)">First Connect<br><small style="font-weight:400;font-size:10px">Initial outreach</small></div>
+      <div class="stage-chevron">›</div>
+      <div class="stage-node" style="background:rgba(59,130,246,.1);color:#3b82f6;border-color:#3b82f6" onclick="showStage(1)">Req. Captured<br><small style="font-weight:400;font-size:10px">kWh locked</small></div>
+      <div class="stage-chevron">›</div>
+      <div class="stage-node" style="background:rgba(139,92,246,.1);color:#8b5cf6;border-color:#8b5cf6" onclick="showStage(2)">Proposal Sent<br><small style="font-weight:400;font-size:10px">Quote out</small></div>
+      <div class="stage-chevron">›</div>
+      <div class="stage-node" style="background:rgba(245,158,11,.1);color:#f59e0b;border-color:#f59e0b" onclick="showStage(3)">Tech. Closure<br><small style="font-weight:400;font-size:10px">Specs final</small></div>
+      <div class="stage-chevron">›</div>
+      <div class="stage-node" style="background:rgba(242,107,78,.1);color:#F26B4E;border-color:#F26B4E" onclick="showStage(4)">Commercial<br><small style="font-weight:400;font-size:10px">Pricing</small></div>
+      <div class="stage-chevron">›</div>
+      <div class="stage-node" style="background:rgba(16,185,129,.1);color:#10b981;border-color:#10b981" onclick="showStage(5)">PO Received<br><small style="font-weight:400;font-size:10px">Closed-won</small></div>
+    </div>
+    <div class="stage-detail" id="stage-detail"></div>
+  </div>
+
+  <div class="misread" style="margin-top:16px">
+    <strong>Easy misread to prevent:</strong>
+    Stages can move <em>backward</em> as well as forward — there is no guard blocking back-movement. The only state enforcement is in the UI (Move Left / Move Right buttons). The DB has no stage transition constraint.
+  </div>
+</section>
+
+<!-- ══ DATA FLOW ══ -->
+<section class="sec alt-bg" id="data-flow">
+  <div class="sec-label">Data Flow</div>
+  <div class="sec-title">Proposal ↔ Project linkage</div>
+  <div class="sec-desc">Two FKs link proposals and projects in both directions. Click each node to see the schema fields and the API call that sets the link. <span class="evidence-badge eb-source">source</span></div>
+
+  <div class="flow-pipe" id="flow-pipe">
+    <div class="flow-node" style="background:#EFF6FF;color:#1E40AF;border-color:#3B82F6" onclick="showFlow(0)">bess.clients<br><small style="font-weight:400;font-size:10px">id, company_name</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node" style="background:#ECFDF5;color:#065F46;border-color:#10B981" onclick="showFlow(1)">bess.projects<br><small style="font-weight:400;font-size:10px">client_id FK</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node" style="background:#FFF7ED;color:#92400E;border-color:#F26B4E" onclick="showFlow(2)">Configurator<br><small style="font-weight:400;font-size:10px">sizes the system</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node" style="background:#F5F3FF;color:#5B21B6;border-color:#8B5CF6" onclick="showFlow(3)">bess.proposals<br><small style="font-weight:400;font-size:10px">CAPEX/IRR/payback</small></div>
+    <div class="flow-arrow">⇄</div>
+    <div class="flow-node" style="background:#ECFDF5;color:#065F46;border-color:#10B981" onclick="showFlow(4)">projects.proposal_id<br><small style="font-weight:400;font-size:10px">PATCH to link</small></div>
+  </div>
+  <div class="flow-detail" id="flow-detail"></div>
+</section>
+
+<!-- ══ INVARIANTS ══ -->
+<section class="sec" id="invariants">
+  <div class="sec-label">State &amp; Invariants</div>
+  <div class="sec-title">What must always be true</div>
+  <div class="sec-desc">These are the architectural constraints the portal relies on — breaking them causes data integrity issues or silent failures. <span class="evidence-badge eb-source">source</span> <span class="evidence-badge eb-infer">inferred</span></div>
+
+  <div class="inv-grid">
+    <div class="inv-card" style="border-left-color:var(--em)">
+      <h4>Follow-ups always belong to an opportunity <span class="evidence-badge eb-source">source</span></h4>
+      <p><code>bd_follow_ups.opp_id</code> is a non-null FK to <code>bd_opportunities.id</code>. A follow-up with no parent opportunity cannot exist. The <code>AddFollowUpModal</code> enforces this with a required opp selector.</p>
+    </div>
+    <div class="inv-card" style="border-left-color:var(--blue)">
+      <h4>Client filter is implicit via product_type <span class="evidence-badge eb-source">source</span></h4>
+      <p>Every API call from the BD pages passes <code>?product_type=bess</code> (or <code>epc</code>). The same <code>bd_opportunities</code> table serves both product lines — the filter is the only separation.</p>
+    </div>
+    <div class="inv-card" style="border-left-color:var(--amb)">
+      <h4>Proposal linkage is bidirectional but not enforced <span class="evidence-badge eb-infer">inferred</span></h4>
+      <p><code>proposals.project_id</code> and <code>projects.proposal_id</code> both exist, but there is no DB trigger keeping them in sync. PATCH to <code>/api/bess/projects/:id</code> sets <code>proposal_id</code>; the reverse is not auto-set.</p>
+    </div>
+    <div class="inv-card" style="border-left-color:var(--red)">
+      <h4>BD CRUD routes have no authentication <span class="evidence-badge eb-source">source</span></h4>
+      <p>All <code>/api/bd/*</code> read and write routes are open — no JWT required. This is intentional for the internal tool but means any request can mutate BD data. Only <code>/api/bd/import/*</code> and <code>/api/bd/automation/run</code> are auth-gated.</p>
+    </div>
+    <div class="inv-card" style="border-left-color:var(--pur)">
+      <h4>Map bubbles degrade gracefully <span class="evidence-badge eb-source">source</span></h4>
+      <p>If <code>requirement_kwh</code> is null or 0 for all clients in a state, the Leaflet bubble shows client count instead of capacity. Radius calculation: <code>totalKwh &gt; 0 ? Math.min(12 + Math.floor(totalKwh/100), 36) : Math.min(12 + sc.length*4, 28)</code>.</p>
+    </div>
+    <div class="inv-card" style="border-left-color:var(--cy)">
+      <h4>Today's Schedule is client-side filtered <span class="evidence-badge eb-source">source</span></h4>
+      <p>The Dashboard widget calls <code>bdApi.followUps()</code> with no date params — fetches all pending follow-ups — then filters client-side to <code>due_date &lt;= today</code>. There is no server-side "today" endpoint.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ SOURCE INDEX ══ -->
+<section class="dark-bg" id="source-index">
+  <div style="max-width:1160px;margin:0 auto">
+    <div class="sec-label" style="color:var(--brand)">Source Index</div>
+    <div class="sec-title">Which files to open, in order</div>
+    <div class="sec-desc">Start here. Each file is the authority for its domain — reading these gives you 80% of the system. <span class="evidence-badge eb-source">source</span></div>
+
+    <div class="source-grid">
+      <div class="source-card">
+        <div class="source-rank" style="color:var(--brand)">Read first</div>
+        <div class="source-path">apps/api/index.js</div>
+        <div class="source-why">Every route in the system is registered here. Reading the route list tells you what the API can do. Auth middleware decisions are all in this file.</div>
+        <div class="source-concepts"><span class="concept-tag">routing</span><span class="concept-tag">auth</span><span class="concept-tag">all endpoints</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:var(--brand)">Read second</div>
+        <div class="source-path">apps/web/src/lib/api.js</div>
+        <div class="source-why">Defines <code>bessApi</code> and <code>bdApi</code> — the complete client-side surface. Every page imports from here. Understanding this file tells you what every page can request.</div>
+        <div class="source-concepts"><span class="concept-tag">api client</span><span class="concept-tag">fetch wrapper</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">BD pipeline</div>
+        <div class="source-path">apps/web/src/pages/BDPipeline.jsx</div>
+        <div class="source-why">The Kanban board. Contains <code>OpportunitiesTab</code> with <code>handleStageChange</code>, <code>movingId</code> state, and the error banner. The most complex interactive page.</div>
+        <div class="source-concepts"><span class="concept-tag">kanban</span><span class="concept-tag">stage moves</span><span class="concept-tag">error state</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">Follow-up queue</div>
+        <div class="source-path">apps/web/src/pages/BDFollowUps.jsx</div>
+        <div class="source-why">Priority queue (Overdue/Today/Week/Later). Contains <code>FollowUpCard</code>, <code>Section</code>, and <code>AddFollowUpModal</code>. All colours use CSS vars for dark-mode compatibility.</div>
+        <div class="source-concepts"><span class="concept-tag">follow-ups</span><span class="concept-tag">dark mode</span><span class="concept-tag">snooze</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">Project linkage</div>
+        <div class="source-path">apps/web/src/pages/Projects.jsx</div>
+        <div class="source-why">Shows project cards with inline proposal picker. Key state: <code>linkingProjectId</code>, <code>linkingProposalId</code>. PATCH call: <code>bessApi.patchProject(id, { proposal_id })</code>.</div>
+        <div class="source-concepts"><span class="concept-tag">proposal link</span><span class="concept-tag">inline picker</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">Map bubbles</div>
+        <div class="source-path">apps/web/src/pages/Clients.jsx</div>
+        <div class="source-why">Leaflet.js map. State clusters by <code>state</code> field. Bubble radius scales with <code>requirement_kwh</code>. Lines 128–145 are the radius/label calculation.</div>
+        <div class="source-concepts"><span class="concept-tag">leaflet</span><span class="concept-tag">geo clustering</span><span class="concept-tag">capacity</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">Dashboard widget</div>
+        <div class="source-path">apps/web/src/pages/Dashboard.jsx</div>
+        <div class="source-why">Contains <code>TodaySchedule</code> component before the default export. Fetches <code>bdApi.followUps()</code>, filters client-side, shows up to 2 cards. Charts grid is 3-column with TodaySchedule as the third.</div>
+        <div class="source-concepts"><span class="concept-tag">schedule</span><span class="concept-tag">recharts</span><span class="concept-tag">kpi</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">Data fetching</div>
+        <div class="source-path">apps/web/src/hooks/useApi.js</div>
+        <div class="source-why">Exports <code>useApiMulti</code> — fetches multiple endpoints in parallel, surfaces unified <code>loading/error/refetch</code>. Used by BDFollowUps and BDPipeline to batch their data requests.</div>
+        <div class="source-concepts"><span class="concept-tag">data fetching</span><span class="concept-tag">parallel</span><span class="concept-tag">refetch</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#94A3B8">Navigation / layout</div>
+        <div class="source-path">apps/web/src/components/Layout.jsx</div>
+        <div class="source-why">Defines <code>BESS_BD_NAV</code> and <code>EPC_BD_NAV</code> arrays. Changing a nav label or adding a page starts here. Theme toggle and WavyBackground sidebar are also in this file.</div>
+        <div class="source-concepts"><span class="concept-tag">nav</span><span class="concept-tag">routing</span><span class="concept-tag">theme</span></div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-rank" style="color:#64748B">Infrastructure</div>
+        <div class="source-path">vercel.json</div>
+        <div class="source-why">Two rules: <code>/api/(.*)</code> → serverless function in <code>apps/api/index.js</code>; everything else → SPA <code>index.html</code>. This is the entire deployment routing config.</div>
+        <div class="source-concepts"><span class="concept-tag">deployment</span><span class="concept-tag">routing</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Built from <strong>petekp/claude-code-setup — explanatory-playground</strong> skill &nbsp;·&nbsp;
+  Live portal: <a href="https://unityess-bess-portal.vercel.app" target="_blank">unityess-bess-portal.vercel.app</a>
+  &nbsp;·&nbsp; Ornate Solar / UnityESS · March 2026
+</footer>
+
+<script>
+// ── NODE DATA ──────────────────────────────────────────────────────────────
+const NODES = {
+  browser: {
+    title: 'Browser / Device',
+    color: '#3B82F6',
+    body: 'The React SPA runs entirely in the browser — no server-side rendering. React Router v6 handles client-side navigation. All state lives in component useState/useReducer; there is no global store.',
+    files: ['apps/web/src/App.jsx', 'apps/web/src/main.jsx'],
+    facts: ['React 18 + Vite', 'React Router v6 (client-side)', 'No SSR / no Next.js']
+  },
+  vercel: {
+    title: 'Vercel (CDN + Serverless)',
+    color: '#ffffff',
+    bg: '#0F172A',
+    body: 'Serves the Vite-built static assets from the CDN edge. Routes matching /api/* are rewritten to the serverless function in apps/api/index.js. Everything else returns the SPA index.html.',
+    files: ['vercel.json', 'apps/api/index.js'],
+    facts: ['/api/* → serverless fn', '/* → SPA index.html', 'Auto-deploy on push to main']
+  },
+  spa: {
+    title: 'React SPA — apps/web/',
+    color: '#3B82F6',
+    body: 'Eight pages, shared Layout with sidebar nav. Two nav trees (BESS BD + EPC BD) filtered by product_type. All API calls go through bessApi/bdApi wrappers in lib/api.js.',
+    files: ['apps/web/src/pages/', 'apps/web/src/lib/api.js', 'apps/web/src/components/Layout.jsx'],
+    facts: ['React 18 + Vite', 'Tailwind + shadcn/ui', 'Recharts + Leaflet.js', 'useApiMulti hook for parallel fetches']
+  },
+  api: {
+    title: 'Express API — apps/api/index.js',
+    color: '#10B981',
+    body: 'Single Express app exported as a Vercel serverless function. All 50+ routes are in one file. BD CRUD routes are open (no auth). Import and automation routes require requireAuth.',
+    files: ['apps/api/index.js'],
+    facts: ['Node.js + Express', 'node-postgres (pg) for DB', 'JWT only on /import/* and /automation/run', 'Single file — all routes']
+  },
+  db: {
+    title: 'Neon PostgreSQL',
+    color: '#8B5CF6',
+    body: 'Serverless Postgres hosted on Neon. All tables live in the bess schema. Connection pooling is handled by Neon. The pg client connects via DATABASE_URL env var on Vercel.',
+    files: ['apps/api/index.js (SQL queries inline)'],
+    facts: ['bess.* schema', '10 tables', 'No ORM — raw SQL via pg', 'DATABASE_URL env var']
+  },
+  dashboard: {
+    title: 'Dashboard Page',
+    color: '#3B82F6',
+    body: 'KPI cards + bar/pie/radar charts (Recharts) + project overview table. A TodaySchedule widget shows pending follow-ups due today or overdue, fetched from bdApi.followUps() and filtered client-side.',
+    files: ['apps/web/src/pages/Dashboard.jsx'],
+    facts: ['TodaySchedule component at line ~45', 'Filters follow-ups client-side by due_date <= today', 'Charts grid: 3 equal columns', 'Clicks navigate to /bess/bd/follow-ups']
+  },
+  clients: {
+    title: 'Clients Map Page',
+    color: '#06B6D4',
+    body: 'Interactive Leaflet.js map. Clusters clients by state field. Bubble radius scales with total requirement_kwh per state cluster. Falls back to client count if no capacity data.',
+    files: ['apps/web/src/pages/Clients.jsx (lines 128–145)'],
+    facts: ['Leaflet CircleMarker + DivIcon', 'State clustering by state field', 'r = Math.min(12 + totalKwh/100, 36)', 'Label: MWh if ≥1000kWh, else kWh']
+  },
+  bdpipeline: {
+    title: 'BD Pipeline Page',
+    color: '#F26B4E',
+    body: 'Kanban board with 6 stage columns. Each card has Move Left / Move Right buttons. Stage changes fire PATCH /api/bd/opportunities/:id. movingId state prevents double-clicks. stageErr banner shows failures.',
+    files: ['apps/web/src/pages/BDPipeline.jsx (lines 498–540, 596–645)'],
+    facts: ['movingId tracks per-card loading', 'stageErr shows dismissible error banner', 'handleStageChange uses useCallback', 'No role requirement — open route']
+  },
+  followups: {
+    title: 'Follow-up Queue Page',
+    color: '#F59E0B',
+    body: 'Priority queue segmented by overdue/today/this week/later/done. Cards use CSS variable colours (hsl(var(--card))) for dark-mode support. Actions: Log Activity, Mark Done, Snooze 2d.',
+    files: ['apps/web/src/pages/BDFollowUps.jsx'],
+    facts: ['4 sections: Overdue / Today / Week / Later', 'All colours: hsl(var(--border)), hsl(var(--muted))', 'Snooze adds 2 days to snooze_until', 'AddToCalendar button generates .ics link']
+  },
+  projects: {
+    title: 'Projects Page',
+    color: '#10B981',
+    body: 'Project cards linked to clients. If a project has no proposal_id, shows "Link Proposal" inline picker (filtered by matching client_id) and "New Proposal" button routing to /bess/config?client_id=…',
+    files: ['apps/web/src/pages/Projects.jsx'],
+    facts: ['linkingProjectId state controls which picker is open', 'bessApi.patchProject(id, { proposal_id })', 'Proposals filtered by matching client_id', '"New Proposal" → navigate to configurator']
+  },
+  configurator: {
+    title: 'Configurator Page',
+    color: '#8B5CF6',
+    body: 'System sizing tool. Selects number of UESS-125-261 units (125kW / 261kWh each), computes ToD arbitrage savings, and POSTs to /api/bess/proposals to create a proposal record.',
+    files: ['apps/web/src/pages/Configurator.jsx'],
+    facts: ['Base unit: 125kW / 261kWh', 'POST /api/bess/proposals on save', 'Query param: ?client_id= pre-fills', 'CAPEX / IRR / payback computed client-side']
+  }
+};
+
+function showNode(id) {
+  const n = NODES[id];
+  if (!n) return;
+  const el = document.getElementById('node-detail');
+  el.innerHTML = `
+    <h4 style="color:${n.color}">${n.title}</h4>
+    <p>${n.body}</p>
+    <div class="files">
+      ${n.files.map(f => `<span class="file-pill">📄 ${f}</span>`).join('')}
+    </div>
+    ${n.facts ? `<ul style="margin-top:10px;padding-left:16px;font-size:12px;color:var(--s600)">${n.facts.map(f=>`<li>${f}</li>`).join('')}</ul>` : ''}
+  `;
+  el.classList.add('show');
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ── STEPPER ───────────────────────────────────────────────────────────────
+const STEPS = [
+  {
+    num:'Step 1', title:'Create a BD Account',
+    actor:'BD Exec', actorColor:'#3B82F6',
+    body:'Everything starts with a company record. The BD exec navigates to BD Pipeline → Accounts, clicks "Add Account", and enters the company name, state, and industry. This creates a row in <code>bess.bd_accounts</code> which all opportunities reference.',
+    file:'POST /api/bd/accounts',
+    code:`// apps/api/index.js
+app.post('/api/bd/accounts', async (req, res) => {
+  const { company_name, state, industry,
+          product_type } = req.body;
+  const { rows } = await pool.query(
+    \`INSERT INTO bess.bd_accounts
+     (company_name, state, industry, product_type)
+     VALUES ($1,$2,$3,$4) RETURNING *\`,
+    [company_name, state, industry,
+     product_type ?? 'bess']
+  );
+  res.json({ data: rows[0] });
+});`
+  },
+  {
+    num:'Step 2', title:'Create an Opportunity',
+    actor:'BD Exec', actorColor:'#3B82F6',
+    body:'With an account in place, the exec adds an opportunity — the specific deal. It gets an initial <code>stage</code> of <code>first_connect</code>, a capacity estimate in kWh, and is assigned to a user. This card now appears in the leftmost Kanban column.',
+    file:'POST /api/bd/opportunities',
+    code:`// BDPipeline.jsx — OpportunitiesTab
+const handleCreate = async (data) => {
+  await bdApi.createOpp({
+    account_id: data.account_id,
+    title:      data.title,
+    stage:      'first_connect',  // always starts here
+    requirement_kwh: data.kwh,
+    assigned_to: data.userId,
+    product_type: product,
+  });
+  refetch();
+};`
+  },
+  {
+    num:'Step 3', title:'Move the card to next stage',
+    actor:'BD Exec', actorColor:'#F26B4E',
+    body:'Clicking "Move →" on a Kanban card triggers <code>handleStageChange</code>. It sets <code>movingId</code> to prevent double-clicks, calls PATCH with the new stage, then refetches. If the PATCH fails, <code>stageErr</code> surfaces a dismissible error banner.',
+    file:'PATCH /api/bd/opportunities/:id — BDPipeline.jsx:498',
+    code:`// BDPipeline.jsx — handleStageChange
+const handleStageChange = useCallback(
+  async (oppId, newStage) => {
+    if (movingId) return;          // prevent double-fire
+    setMovingId(oppId);
+    setStageErr('');
+    try {
+      await bdApi.patchOpp(oppId, { stage: newStage });
+      refetch();
+    } catch (err) {
+      setStageErr(err.message || 'Failed to move');
+    } finally {
+      setMovingId(null);
+    }
+  }, [refetch, movingId]
+);`
+  },
+  {
+    num:'Step 4', title:'Log an activity',
+    actor:'BD Exec', actorColor:'#8B5CF6',
+    body:'After a call or meeting, the exec logs an activity via the QuickLogModal (accessible from Follow-up cards). The POST includes a <code>next_action_date</code> which automatically creates a new follow-up row with <code>status = pending</code>.',
+    file:'POST /api/bd/activities — auto-creates follow-up',
+    code:`// apps/api/index.js
+app.post('/api/bd/activities', async (req, res) => {
+  const { opp_id, type, notes,
+          next_action_date, next_type } = req.body;
+  await pool.query(
+    \`INSERT INTO bess.bd_activities
+     (opp_id,type,notes,next_action_date,logged_by)
+     VALUES ($1,$2,$3,$4,$5)\`,
+    [opp_id, type, notes, next_action_date, userId]
+  );
+  if (next_action_date) {
+    // auto-create the next follow-up
+    await pool.query(
+      \`INSERT INTO bess.bd_follow_ups
+       (opp_id, type, due_date, status)
+       VALUES ($1,$2,$3,'pending')\`,
+      [opp_id, next_type ?? type, next_action_date]
+    );
+  }
+  res.json({ ok: true });
+});`
+  },
+  {
+    num:'Step 5', title:'Follow-up appears on Dashboard',
+    actor:'Dashboard', actorColor:'#06B6D4',
+    body:'The TodaySchedule widget on the Dashboard calls <code>bdApi.followUps()</code> and filters client-side to <code>status === \'pending\' && due_date &lt;= today</code>. It shows at most 2 cards, with an overflow count. Overdue items get a red ring on the colour bar.',
+    file:'Dashboard.jsx — TodaySchedule component',
+    code:`// Dashboard.jsx — TodaySchedule
+const today = new Date().toISOString().slice(0,10);
+const due = allFollowUps
+  .filter(f =>
+    f.status === 'pending' &&
+    f.due_date <= today
+  )
+  .slice(0, 2);
+
+// Overdue = days_overdue > 0
+// Due today = days_overdue === 0
+const overdue = f.days_overdue > 0;`
+  },
+  {
+    num:'Step 6', title:'Generate proposal + link to project',
+    actor:'Configurator', actorColor:'#F26B4E',
+    body:'When the opportunity reaches Proposal Sent, the exec visits the Configurator to generate a quote. After saving, they go to Projects, find the relevant project, and click "Link Proposal" — an inline select filtered to proposals for the same client. PATCH sets <code>projects.proposal_id</code>.',
+    file:'Projects.jsx — handleLinkProposal',
+    code:`// Projects.jsx — handleLinkProposal
+const handleLinkProposal = async (projectId) => {
+  setLinkingSaving(true);
+  await bessApi.patchProject(projectId, {
+    proposal_id: parseInt(linkingProposalId)
+  });
+  setLinkingProjectId(null);
+  setLinkingProposalId('');
+  refetch();
+  setLinkingSaving(false);
+};
+
+// Proposals filtered to matching client
+const clientProposals = pr.filter(p =>
+  String(p.client_id) === String(proj.client_id)
+);`
+  }
+];
+
+let currentStep = 0;
+
+function renderStep() {
+  const s = STEPS[currentStep];
+  document.getElementById('step-counter').textContent = `Step ${currentStep+1} of ${STEPS.length}`;
+  document.getElementById('step-prev').disabled = currentStep === 0;
+  document.getElementById('step-next').disabled = currentStep === STEPS.length-1;
+  document.getElementById('step-file').textContent = s.file;
+  document.getElementById('step-code').textContent = s.code;
+  document.getElementById('step-narrative').innerHTML = `
+    <div class="step-num">${s.num} of ${STEPS.length}</div>
+    <div class="step-title">${s.title}</div>
+    <div class="step-actor" style="background:${s.actorColor}18;color:${s.actorColor}">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+      ${s.actor}
+    </div>
+    <div class="step-body-text">${s.body}</div>
+  `;
+  // dots
+  const dots = document.getElementById('step-dots');
+  dots.innerHTML = STEPS.map((_,i) =>
+    `<div class="dot ${i===currentStep?'active':''}" onclick="jumpStep(${i})"></div>`
+  ).join('');
+}
+
+function changeStep(dir) { currentStep = Math.max(0,Math.min(STEPS.length-1,currentStep+dir)); renderStep(); }
+function jumpStep(i) { currentStep = i; renderStep(); }
+
+// ── STAGE MACHINE ─────────────────────────────────────────────────────────
+const STAGES = [
+  {
+    label:'First Connect', value:'first_connect', color:'#94a3b8',
+    trigger:'BD exec makes initial contact — cold call, referral, or exhibition lead.',
+    next:'requirement_captured',
+    snippet:`// PATCH when BD exec clicks "Move →"
+await bdApi.patchOpp(oppId, {
+  stage: 'requirement_captured'
+});
+// apps/api/index.js
+app.patch('/api/bd/opportunities/:id',
+  async (req, res) => {
+    const { stage, ...rest } = req.body;
+    await pool.query(
+      'UPDATE bess.bd_opportunities SET stage=$1 WHERE id=$2',
+      [stage, req.params.id]
+    );
+  res.json({ ok: true });
+});`
+  },
+  {
+    label:'Requirement Captured', value:'requirement_captured', color:'#3b82f6',
+    trigger:'Client confirms load profile, capacity requirement (kWh), and use-case (peak shaving, backup, ToD arbitrage).',
+    next:'proposal_sent',
+    snippet:`// On the Kanban card — BDPipeline.jsx
+<button
+  disabled={movingId === o.id}
+  onClick={() => handleStageChange(
+    o.id,
+    NEXT_STAGE['requirement_captured']
+    // = 'proposal_sent'
+  )}
+>
+  {movingId === o.id ? 'Moving…' : 'Move →'}
+</button>`
+  },
+  {
+    label:'Proposal Sent', value:'proposal_sent', color:'#8b5cf6',
+    trigger:'Configurator generates the quote. BD exec sends it. Stage updates after confirmation of sending.',
+    next:'technical_closure',
+    snippet:`// Configurator.jsx — on save
+await bessApi.createProposal({
+  client_id: clientId,
+  capex: computed.capex,
+  irr: computed.irr,
+  payback_years: computed.payback,
+  units: numUnits,
+  capacity_kwh: numUnits * 261,
+});
+// Then stage moves on BD Pipeline separately`
+  },
+  {
+    label:'Technical Closure', value:'technical_closure', color:'#f59e0b',
+    trigger:'Client engineering team approves specs — BMS, PCS, AC/DC coupling, SLD, and grid connectivity.',
+    next:'commercial_negotiation',
+    snippet:`// No special code — same PATCH call
+// The stage value is the only difference:
+await bdApi.patchOpp(oppId, {
+  stage: 'technical_closure'
+});
+// DB: bess.bd_opportunities.stage
+// = 'technical_closure'`
+  },
+  {
+    label:'Commercial Negotiation', value:'commercial_negotiation', color:'#F26B4E',
+    trigger:'Price, payment terms, and AMC are under discussion. Client has not issued PO yet.',
+    next:'po_received',
+    snippet:`// An approval may be triggered here
+await bdApi.createApproval({
+  opp_id: oppId,
+  stage: 'commercial_negotiation',
+  notes: 'Discount requested — 5%'
+});
+// Creates row in bess.bd_approvals`
+  },
+  {
+    label:'PO Received', value:'po_received', color:'#10b981',
+    trigger:'Client issues Purchase Order. Deal is closed-won. The opportunity may be linked to a Project for delivery tracking.',
+    next:null,
+    snippet:`// Closed-won — no further moves
+// A project can now be created/linked:
+await bessApi.createProject({
+  client_id: opp.account.client_id,
+  title: opp.title,
+  status: 'active',
+  capacity_kwh: opp.requirement_kwh,
+});
+// Then link a proposal from Projects page`
+  }
+];
+
+function showStage(idx) {
+  const s = STAGES[idx];
+  document.querySelectorAll('.stage-node').forEach((n,i) => {
+    n.classList.toggle('active', i === idx);
+  });
+  const el = document.getElementById('stage-detail');
+  el.innerHTML = `
+    <h4 style="color:${s.color}">
+      ${s.label}
+      <code style="font-size:11px;background:rgba(0,0,0,.06)">${s.value}</code>
+    </h4>
+    <p><strong>What triggers this stage:</strong> ${s.trigger}</p>
+    ${s.next ? `<p style="font-size:12px;color:var(--s500)">Next stage: <strong>${s.next}</strong></p>` : '<p style="font-size:12px;color:var(--em)">Terminal stage — no further moves.</p>'}
+    <div class="patch-snippet">${s.snippet}</div>
+  `;
+  el.classList.add('show');
+}
+
+// ── DATA FLOW ─────────────────────────────────────────────────────────────
+const FLOWS = [
+  {
+    title:'bess.clients',
+    color:'#3B82F6',
+    desc:'The root entity. Every project and every BD account traces back to a client company. The Clients page renders one Leaflet marker per unique state, with bubble size = total kWh.',
+    fields:[
+      {name:'id', type:'serial', pk:true},
+      {name:'company_name', type:'text'},
+      {name:'state', type:'text'},
+      {name:'requirement_kwh', type:'numeric'},
+      {name:'product_type', type:'text'},
+      {name:'contact_name', type:'text'},
+    ],
+    api:'GET /api/bess/clients · POST /api/bess/clients'
+  },
+  {
+    title:'bess.projects',
+    color:'#10B981',
+    desc:'A project is a confirmed or near-confirmed BESS installation. It has a client_id FK and optionally a proposal_id FK. When proposal_id is set, the project card shows CAPEX / IRR / payback pulled from the linked proposal.',
+    fields:[
+      {name:'id', type:'serial', pk:true},
+      {name:'client_id', type:'int', fk:'clients.id'},
+      {name:'proposal_id', type:'int', fk:'proposals.id'},
+      {name:'title', type:'text'},
+      {name:'status', type:'text'},
+      {name:'capacity_kwh', type:'numeric'},
+    ],
+    api:'PATCH /api/bess/projects/:id  body: { proposal_id }'
+  },
+  {
+    title:'Configurator',
+    color:'#F26B4E',
+    desc:'A React page, not a DB table. It takes the number of UESS-125-261 units as input and computes CAPEX, IRR, and payback years client-side. On save it POSTs to /api/bess/proposals. The ?client_id query param pre-fills the client.',
+    fields:[
+      {name:'numUnits', type:'state (React)'},
+      {name:'capacity_kwh', type:'numUnits × 261'},
+      {name:'power_kw', type:'numUnits × 125'},
+      {name:'capex', type:'computed'},
+      {name:'irr', type:'computed'},
+      {name:'payback_years', type:'computed'},
+    ],
+    api:'POST /api/bess/proposals  → creates proposal row'
+  },
+  {
+    title:'bess.proposals',
+    color:'#8B5CF6',
+    desc:'The commercial quote record. Has a client_id FK and an optional project_id FK (set by the Configurator if client had a project). The project card reads CAPEX/IRR/payback from here via the projects.proposal_id join.',
+    fields:[
+      {name:'id', type:'serial', pk:true},
+      {name:'client_id', type:'int', fk:'clients.id'},
+      {name:'project_id', type:'int', fk:'projects.id'},
+      {name:'capex', type:'numeric'},
+      {name:'irr', type:'numeric'},
+      {name:'payback_years', type:'numeric'},
+    ],
+    api:'GET /api/bess/proposals  · POST /api/bess/proposals'
+  },
+  {
+    title:'projects.proposal_id (link)',
+    color:'#10B981',
+    desc:'The PATCH that closes the loop. Projects page shows an inline proposal picker for unlinked projects. On confirm, it calls PATCH /api/bess/projects/:id with { proposal_id }. The picker only shows proposals matching the project\'s client_id.',
+    fields:[
+      {name:'projects.proposal_id', type:'int FK', fk:'proposals.id'},
+      {name:'proposals.project_id', type:'int FK', fk:'projects.id'},
+    ],
+    api:'PATCH /api/bess/projects/:id  body: { proposal_id: N }'
+  }
+];
+
+function showFlow(idx) {
+  const f = FLOWS[idx];
+  document.querySelectorAll('.flow-node').forEach((n,i) => {
+    n.classList.toggle('active', i === idx);
+  });
+  const el = document.getElementById('flow-detail');
+  el.innerHTML = `
+    <h4 style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:8px">${f.title}</h4>
+    <p style="font-size:13px;color:var(--s600);margin-bottom:12px">${f.desc}</p>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">
+      <span style="font-size:11px;font-weight:700;color:var(--s500)">API:</span>
+      <code>${f.api}</code>
+    </div>
+    <div class="schema-mini">
+      ${f.fields.map(r => `
+        <div class="schema-row">
+          <span class="fn">${r.name}</span>
+          ${r.pk ? '<span class="pk-badge">PK</span>' : ''}
+          ${r.fk ? '<span class="fk-badge">FK→'+r.fk+'</span>' : ''}
+          <span class="ft">${r.type}</span>
+        </div>`).join('')}
+    </div>
+  `;
+  el.classList.add('show');
+}
+
+// ── NAV SCROLL SPY ────────────────────────────────────────────────────────
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('.nav-links a');
+new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting)
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#'+e.target.id));
+  });
+}, {threshold:.25}).observe && sections.forEach(s =>
+  new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting)
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#'+e.target.id));
+    });
+  }, {threshold:.25}).observe(s)
+);
+
+function scrollTo(hash) {
+  document.querySelector(hash)?.scrollIntoView({behavior:'smooth'});
+}
+
+// init
+renderStep();
+</script>
+</body>
+</html>

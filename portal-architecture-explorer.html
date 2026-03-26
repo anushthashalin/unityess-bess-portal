@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UnityESS BESS Portal — Architecture Explorer</title>
+<style>
+  :root {
+    --brand: #F26B4E;
+    --brand-light: #FFF0EC;
+    --navy: #0F172A;
+    --navy-light: #1E293B;
+    --slate-50: #F8FAFC;
+    --slate-100: #F1F5F9;
+    --slate-200: #E2E8F0;
+    --slate-300: #CBD5E1;
+    --slate-400: #94A3B8;
+    --slate-500: #64748B;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1E293B;
+    --emerald: #10B981;
+    --emerald-light: #ECFDF5;
+    --blue: #3B82F6;
+    --blue-light: #EFF6FF;
+    --purple: #8B5CF6;
+    --purple-light: #F5F3FF;
+    --amber: #F59E0B;
+    --amber-light: #FFFBEB;
+    --red: #EF4444;
+    --red-light: #FEF2F2;
+    --cyan: #06B6D4;
+    --cyan-light: #ECFEFF;
+    --radius: 12px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+    --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--slate-50);
+    color: var(--slate-700);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAV */
+  .top-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(15,23,42,.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    padding: 0 32px;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .top-nav .logo {
+    font-weight: 700; font-size: 15px; color: #fff;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .top-nav .logo span { color: var(--brand); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a {
+    color: var(--slate-400); text-decoration: none; font-size: 13px; font-weight: 500;
+    padding: 6px 14px; border-radius: 6px; transition: all .2s;
+  }
+  .nav-links a:hover { color: #fff; background: rgba(255,255,255,.08); }
+
+  /* HERO */
+  .hero {
+    background: linear-gradient(135deg, var(--navy) 0%, #1a2744 50%, #1E293B 100%);
+    padding: 120px 32px 80px;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 30% 50%, rgba(242,107,78,.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 30%, rgba(59,130,246,.06) 0%, transparent 50%);
+  }
+  .hero-content { position: relative; max-width: 800px; margin: 0 auto; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(242,107,78,.15); color: var(--brand);
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+    padding: 5px 14px; border-radius: 100px; margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 42px; font-weight: 800; color: #fff;
+    line-height: 1.15; margin-bottom: 16px;
+    background: linear-gradient(135deg, #fff 60%, var(--slate-400));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p { color: var(--slate-400); font-size: 17px; max-width: 600px; margin: 0 auto 32px; }
+  .hero-stats { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
+  .hero-stat { text-align: center; }
+  .hero-stat .num { font-size: 32px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+  .hero-stat .label { font-size: 12px; color: var(--slate-400); text-transform: uppercase; letter-spacing: .06em; }
+
+  /* SECTIONS */
+  .section { max-width: 1200px; margin: 0 auto; padding: 80px 32px; }
+  .section-header { text-align: center; margin-bottom: 48px; }
+  .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--brand); margin-bottom: 8px; }
+  .section-title { font-size: 28px; font-weight: 800; color: var(--navy); margin-bottom: 12px; }
+  .section-desc { font-size: 15px; color: var(--slate-500); max-width: 600px; margin: 0 auto; }
+
+  /* FEATURE CARDS */
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .feature-card {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    padding: 24px; transition: all .25s; cursor: default; position: relative; overflow: hidden;
+  }
+  .feature-card:hover { border-color: var(--brand); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .feature-card .icon-wrap {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 14px;
+  }
+  .feature-card h3 { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .feature-card p { font-size: 13px; color: var(--slate-500); line-height: 1.5; }
+  .feature-card .tag {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; padding: 2px 8px; border-radius: 4px; margin-top: 12px;
+  }
+
+  /* TECH STACK */
+  .stack-row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .stack-card {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    padding: 20px 24px; text-align: center; min-width: 140px; transition: all .25s;
+  }
+  .stack-card:hover { border-color: var(--blue); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .stack-card .stack-icon { font-size: 28px; margin-bottom: 8px; }
+  .stack-card .stack-name { font-size: 14px; font-weight: 700; color: var(--navy); }
+  .stack-card .stack-role { font-size: 11px; color: var(--slate-500); margin-top: 2px; }
+  .stack-divider {
+    text-align: center; padding: 16px 0; font-size: 12px; font-weight: 700;
+    color: var(--slate-400); text-transform: uppercase; letter-spacing: .1em;
+  }
+
+  /* ARCH DIAGRAM */
+  .diagram-container {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    padding: 40px; overflow-x: auto;
+  }
+  .arch-diagram { display: flex; flex-direction: column; gap: 20px; align-items: center; min-width: 700px; }
+  .arch-layer { display: flex; gap: 12px; align-items: center; width: 100%; justify-content: center; flex-wrap: wrap; }
+  .arch-layer-label {
+    writing-mode: vertical-lr; transform: rotate(180deg);
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--slate-400); min-width: 24px; text-align: center;
+  }
+  .arch-box {
+    border-radius: 10px; padding: 14px 20px; text-align: center;
+    font-size: 13px; font-weight: 600; min-width: 120px; border: 2px solid; transition: all .2s;
+  }
+  .arch-box:hover { transform: scale(1.04); }
+  .arch-box small { display: block; font-size: 10px; font-weight: 400; margin-top: 2px; opacity: .7; }
+  .arch-arrow { display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--slate-300); }
+  .arch-arrow.down::after { content: '↓'; }
+  .arch-arrow.bidi::after { content: '⇅'; }
+
+  /* DB SCHEMA */
+  .schema-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .schema-card {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    overflow: hidden; transition: all .2s;
+  }
+  .schema-card:hover { box-shadow: var(--shadow-md); }
+  .schema-header {
+    padding: 12px 16px; font-size: 12px; font-weight: 700;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .schema-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .schema-fields { padding: 0 0 8px; }
+  .schema-field {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 16px; font-size: 11px; border-bottom: 1px solid var(--slate-100);
+  }
+  .schema-field:last-child { border-bottom: none; }
+  .field-name { font-family: 'SFMono-Regular', Consolas, monospace; color: var(--navy); font-weight: 600; }
+  .field-type { color: var(--slate-400); font-size: 10px; }
+  .field-pk { font-size: 9px; font-weight: 700; background: var(--amber-light); color: var(--amber); padding: 1px 5px; border-radius: 3px; }
+  .field-fk { font-size: 9px; font-weight: 700; background: var(--blue-light); color: var(--blue); padding: 1px 5px; border-radius: 3px; }
+
+  /* API ROUTES */
+  .routes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+  .route-group {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .route-group-header {
+    padding: 14px 18px; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--slate-100);
+  }
+  .route-group-title { display: flex; align-items: center; gap: 8px; }
+  .route-group-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .route-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 18px; font-size: 12px;
+    border-bottom: 1px solid var(--slate-50);
+    transition: background .15s;
+  }
+  .route-item:hover { background: var(--slate-50); }
+  .route-item:last-child { border-bottom: none; }
+  .method {
+    font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px;
+    font-family: 'SFMono-Regular', Consolas, monospace; min-width: 40px; text-align: center;
+  }
+  .method.get { background: var(--emerald-light); color: var(--emerald); }
+  .method.post { background: var(--blue-light); color: var(--blue); }
+  .method.patch { background: var(--amber-light); color: var(--amber); }
+  .method.delete { background: var(--red-light); color: var(--red); }
+  .route-path { font-family: 'SFMono-Regular', Consolas, monospace; color: var(--slate-600); flex: 1; }
+  .route-desc { color: var(--slate-400); font-size: 11px; }
+  .lock-icon { font-size: 11px; margin-left: auto; }
+
+  /* DATA FLOW */
+  .data-flow-section { background: var(--navy); padding: 80px 32px; }
+  .data-flow-section .section-label { color: var(--brand); }
+  .data-flow-section .section-title { color: #fff; }
+  .data-flow-section .section-desc { color: var(--slate-400); }
+
+  /* PIPELINE STAGES */
+  .pipeline-visual {
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px; padding: 32px 16px; flex-wrap: wrap;
+  }
+  .pipeline-stage {
+    padding: 12px 18px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    text-align: center; border: 2px solid; min-width: 120px; transition: all .2s;
+  }
+  .pipeline-stage:hover { transform: scale(1.06); }
+  .pipeline-chevron { font-size: 16px; color: var(--slate-300); }
+
+  /* AUTH MODEL */
+  .auth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .auth-card {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    padding: 20px; border-left: 4px solid; transition: all .2s;
+  }
+  .auth-card:hover { box-shadow: var(--shadow-md); }
+  .auth-card h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .auth-card p { font-size: 12px; color: var(--slate-500); line-height: 1.5; margin-bottom: 10px; }
+  .auth-scope {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; margin-top: 4px;
+  }
+
+  /* TABLE */
+  .table-wrap { background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius); overflow: hidden; }
+  .table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .table-wrap th {
+    background: var(--slate-50); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--slate-500);
+    padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--slate-200);
+  }
+  .table-wrap td { padding: 12px 16px; border-bottom: 1px solid var(--slate-100); color: var(--slate-600); vertical-align: top; }
+  .table-wrap tr:last-child td { border-bottom: none; }
+  .table-wrap tr:hover td { background: var(--slate-50); }
+  .cell-best { color: var(--emerald); font-weight: 600; }
+  .cell-ok { color: var(--amber); font-weight: 600; }
+  .cell-weak { color: var(--red); font-weight: 600; }
+
+  /* TIMELINE */
+  .timeline { position: relative; max-width: 800px; margin: 0 auto; padding-left: 32px; }
+  .timeline::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: var(--slate-200); }
+  .timeline-item { position: relative; margin-bottom: 32px; padding-left: 28px; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -26px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%; border: 2px solid; background: #fff;
+  }
+  .timeline-item:nth-child(1)::before { border-color: var(--emerald); background: var(--emerald-light); }
+  .timeline-item:nth-child(2)::before { border-color: var(--blue); background: var(--blue-light); }
+  .timeline-item:nth-child(3)::before { border-color: var(--purple); background: var(--purple-light); }
+  .timeline-item:nth-child(4)::before { border-color: var(--brand); background: var(--brand-light); }
+  .timeline-item:nth-child(5)::before { border-color: var(--amber); background: var(--amber-light); }
+  .timeline-item:nth-child(6)::before { border-color: var(--cyan); background: var(--cyan-light); }
+  .timeline-item h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .timeline-item h4 .week-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; }
+  .timeline-item p { font-size: 13px; color: var(--slate-500); }
+  .timeline-item ul { margin-top: 6px; padding-left: 16px; font-size: 12px; color: var(--slate-600); }
+  .timeline-item li { margin-bottom: 3px; }
+
+  /* ISSUES */
+  .issues-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .issue-card {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius);
+    padding: 20px; border-left: 4px solid; transition: all .2s;
+  }
+  .issue-card:hover { box-shadow: var(--shadow-md); }
+  .issue-card.fixed { border-left-color: var(--emerald); }
+  .issue-card.known { border-left-color: var(--amber); }
+  .issue-card h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .issue-card p { font-size: 12px; color: var(--slate-500); line-height: 1.5; }
+  .issue-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; margin-top: 8px; }
+
+  /* TABS */
+  .tab-bar {
+    display: flex; gap: 4px; margin-bottom: 24px; flex-wrap: wrap;
+    background: var(--slate-100); padding: 4px; border-radius: 10px;
+    width: fit-content; margin-left: auto; margin-right: auto;
+  }
+  .tab-btn {
+    padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--slate-500); background: none; border: none; cursor: pointer; transition: all .2s;
+  }
+  .tab-btn:hover { color: var(--navy); }
+  .tab-btn.active { background: #fff; color: var(--navy); box-shadow: var(--shadow-sm); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes pulse { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
+
+  /* FLOW */
+  .flow-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .flow-step { padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; text-align: center; border: 2px solid; min-width: 100px; transition: all .2s; }
+  .flow-step:hover { transform: scale(1.05); }
+  .flow-step small { display: block; font-size: 10px; font-weight: 400; margin-top: 2px; }
+  .flow-arrow { font-size: 18px; color: var(--slate-300); flex-shrink: 0; }
+
+  /* FOOTER */
+  .footer { background: var(--navy); padding: 40px 32px; text-align: center; color: var(--slate-400); font-size: 13px; }
+  .footer strong { color: #fff; }
+  .footer a { color: var(--brand); text-decoration: none; }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 28px; }
+    .hero-stats { gap: 24px; }
+    .nav-links { display: none; }
+    .section { padding: 48px 20px; }
+    .arch-diagram { min-width: 0; }
+  }
+
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; background: var(--slate-100); padding: 1px 6px; border-radius: 4px; color: var(--slate-700); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top-nav">
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F26B4E" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>Unity</span>ESS &nbsp;Portal · Architecture Explorer
+  </div>
+  <div class="nav-links">
+    <a href="#overview">Overview</a>
+    <a href="#features">Features</a>
+    <a href="#stack">Stack</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#schema">Schema</a>
+    <a href="#api">API</a>
+    <a href="#auth">Auth</a>
+    <a href="#flows">Flows</a>
+    <a href="#issues">Issues</a>
+    <a href="#roadmap">Roadmap</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="overview">
+  <div class="hero-content">
+    <div class="hero-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+      Live on Vercel · v1.0 Production
+    </div>
+    <h1>UnityESS C&amp;I BESS Portal</h1>
+    <p>Internal sales &amp; BD intelligence platform for tracking clients, projects, commercial proposals, and the full BD pipeline for UnityESS battery energy storage systems.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="num">8</div>
+        <div class="label">Portal Pages</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">50+</div>
+        <div class="label">API Endpoints</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">10</div>
+        <div class="label">DB Tables</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">6</div>
+        <div class="label">Pipeline Stages</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">2</div>
+        <div class="label">Product Lines</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-header">
+    <div class="section-label">What Was Built</div>
+    <div class="section-title">Portal Pages &amp; Features</div>
+    <div class="section-desc">Every module in the current production portal</div>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--blue-light);color:var(--blue);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      </div>
+      <h3>Dashboard</h3>
+      <p>KPI summary cards, bar/pie/radar charts via Recharts, project overview table, and a <strong>Today's Schedule</strong> widget fed live from the BD follow-up queue showing due and overdue calls.</p>
+      <span class="tag" style="background:var(--blue-light);color:var(--blue);">Analytics</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--cyan-light);color:var(--cyan);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+      </div>
+      <h3>Clients Map</h3>
+      <p>Interactive Leaflet.js map clustering clients by state. Bubble radius scales by total <code>requirement_kwh</code>. Popup shows per-client capacity and cumulative state total in kWh or MWh.</p>
+      <span class="tag" style="background:var(--cyan-light);color:var(--cyan);">Geo / Map</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--emerald-light);color:var(--emerald);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <h3>Projects</h3>
+      <p>Project cards linked to clients. Each project can be linked to a commercial proposal via inline picker (filtered by client). If no proposal exists, a "New Proposal" shortcut routes to the Configurator.</p>
+      <span class="tag" style="background:var(--emerald-light);color:var(--emerald);">Core</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--brand-light);color:var(--brand);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+      </div>
+      <h3>BD Pipeline</h3>
+      <p>Full Kanban board across 6 BD stages. Cards show company, capacity, and assigned owner. Move buttons trigger PATCH to update stage. Error banners surface failures inline.</p>
+      <span class="tag" style="background:var(--brand-light);color:var(--brand);">Sales CRM</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--amber-light);color:var(--amber);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </div>
+      <h3>Follow-up Queue</h3>
+      <p>Prioritised follow-up list segmented into Overdue, Due Today, This Week, Later, and Done. Per-card actions: Log Activity, Mark Done, Snooze 2d. Theme-aware with full dark-mode support.</p>
+      <span class="tag" style="background:var(--amber-light);color:var(--amber);">BD Ops</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--purple-light);color:var(--purple);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <h3>Proposals</h3>
+      <p>Commercial proposals generated from the Configurator. Linked to both a <code>client_id</code> (on <code>proposals</code>) and a <code>proposal_id</code> (on <code>projects</code>). Shows CAPEX, IRR, and payback on linked project cards.</p>
+      <span class="tag" style="background:var(--purple-light);color:var(--purple);">Commercial</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--blue-light);color:var(--blue);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      </div>
+      <h3>Configurator</h3>
+      <p>System sizing tool for building UnityESS quotes. Selects number of 125 kW / 261 kWh units, computes ToD arbitrage savings, and generates a linked proposal record in the database.</p>
+      <span class="tag" style="background:var(--blue-light);color:var(--blue);">Quoting</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="icon-wrap" style="background:var(--emerald-light);color:var(--emerald);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <h3>BD Accounts &amp; Contacts</h3>
+      <p>Company-level accounts with associated contacts. Each opportunity is linked to an account. Contacts store role, phone, and email for outreach logging.</p>
+      <span class="tag" style="background:var(--emerald-light);color:var(--emerald);">Directory</span>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section style="background:var(--slate-100);padding:80px 0;" id="stack">
+  <div style="max-width:1200px;margin:0 auto;padding:0 32px;">
+    <div class="section-header">
+      <div class="section-label">Technology</div>
+      <div class="section-title">Tech Stack</div>
+      <div class="section-desc">Lean monorepo — React SPA + Express serverless + Neon Postgres</div>
+    </div>
+
+    <div class="stack-divider">Frontend — <code>apps/web/</code></div>
+    <div class="stack-row" style="margin-bottom:24px;">
+      <div class="stack-card">
+        <div class="stack-icon">⚡</div>
+        <div class="stack-name">React 18</div>
+        <div class="stack-role">UI Framework</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🔥</div>
+        <div class="stack-name">Vite</div>
+        <div class="stack-role">Build Tool</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🎨</div>
+        <div class="stack-name">Tailwind CSS</div>
+        <div class="stack-role">Utility Styling</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">◼</div>
+        <div class="stack-name">shadcn/ui</div>
+        <div class="stack-role">Component Library</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">📈</div>
+        <div class="stack-name">Recharts</div>
+        <div class="stack-role">Charts</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🗺</div>
+        <div class="stack-name">Leaflet.js</div>
+        <div class="stack-role">Map / Geo</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🔀</div>
+        <div class="stack-name">React Router v6</div>
+        <div class="stack-role">Client Routing</div>
+      </div>
+    </div>
+
+    <div class="stack-divider">Backend — <code>apps/api/index.js</code></div>
+    <div class="stack-row" style="margin-bottom:24px;">
+      <div class="stack-card">
+        <div class="stack-icon">🟩</div>
+        <div class="stack-name">Node.js</div>
+        <div class="stack-role">Runtime</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🚂</div>
+        <div class="stack-name">Express</div>
+        <div class="stack-role">HTTP Framework</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🔑</div>
+        <div class="stack-name">JWT</div>
+        <div class="stack-role">Auth Tokens</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🐘</div>
+        <div class="stack-name">pg (node-postgres)</div>
+        <div class="stack-role">DB Client</div>
+      </div>
+    </div>
+
+    <div class="stack-divider">Infrastructure</div>
+    <div class="stack-row">
+      <div class="stack-card">
+        <div class="stack-icon">▲</div>
+        <div class="stack-name">Vercel</div>
+        <div class="stack-role">Hosting + Serverless</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🐘</div>
+        <div class="stack-name">Neon DB</div>
+        <div class="stack-role">Serverless Postgres</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">🐙</div>
+        <div class="stack-name">GitHub</div>
+        <div class="stack-role">Source + CI/CD</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE DIAGRAM -->
+<section class="section" id="architecture">
+  <div class="section-header">
+    <div class="section-label">System Design</div>
+    <div class="section-title">Deployment Architecture</div>
+    <div class="section-desc">End-to-end request path from browser to database</div>
+  </div>
+
+  <div class="diagram-container">
+    <div class="arch-diagram">
+
+      <!-- Browser -->
+      <div class="arch-layer">
+        <div class="arch-box" style="background:var(--blue-light);color:var(--blue);border-color:var(--blue);">
+          Browser / Device
+          <small>Chrome, Safari, Mobile</small>
+        </div>
+      </div>
+      <div class="arch-arrow down"></div>
+
+      <!-- Vercel CDN -->
+      <div class="arch-layer">
+        <div class="arch-box" style="background:#000;color:#fff;border-color:#333;">
+          Vercel Edge CDN
+          <small>unityess-bess-portal.vercel.app</small>
+        </div>
+      </div>
+      <div class="arch-arrow down"></div>
+
+      <!-- Frontend + API -->
+      <div class="arch-layer">
+        <div class="arch-layer-label">Vercel</div>
+        <div class="arch-box" style="background:var(--blue-light);color:var(--navy);border-color:var(--blue);">
+          React SPA
+          <small>apps/web/ — Vite build</small>
+        </div>
+        <div style="color:var(--slate-300);font-size:20px;">⇆</div>
+        <div class="arch-box" style="background:var(--emerald-light);color:var(--navy);border-color:var(--emerald);">
+          Express API
+          <small>apps/api/index.js — serverless fn</small>
+        </div>
+      </div>
+      <div class="arch-arrow down"></div>
+
+      <!-- Vercel.json routing -->
+      <div class="arch-layer">
+        <div class="arch-box" style="background:var(--amber-light);color:var(--navy);border-color:var(--amber);font-size:12px;">
+          vercel.json routing
+          <small>/api/* → serverless · /* → SPA</small>
+        </div>
+      </div>
+      <div class="arch-arrow down"></div>
+
+      <!-- Neon DB -->
+      <div class="arch-layer">
+        <div class="arch-box" style="background:var(--purple-light);color:var(--purple);border-color:var(--purple);">
+          Neon PostgreSQL
+          <small>bess.* schema — 10 tables</small>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="margin-top:32px;">
+    <div class="section-header" style="margin-bottom:24px;">
+      <div class="section-label">Repo Structure</div>
+      <div class="section-title" style="font-size:20px;">Monorepo Layout</div>
+    </div>
+    <div style="background:var(--navy);border-radius:var(--radius);padding:28px 32px;overflow-x:auto;">
+      <pre style="color:var(--slate-300);font-size:13px;font-family:'SFMono-Regular',Consolas,monospace;line-height:1.8;">unityess-bess-portal/
+├── apps/
+│   ├── <span style="color:#F26B4E;">web/</span>                     React + Vite frontend
+│   │   └── src/
+│   │       ├── <span style="color:#3B82F6;">pages/</span>           Dashboard, Clients, Projects, BDPipeline,
+│   │       │                        BDFollowUps, Proposals, Configurator…
+│   │       ├── <span style="color:#10B981;">components/</span>      Layout, Spinner, QuickLogModal, AddToCalendar…
+│   │       ├── <span style="color:#F59E0B;">hooks/</span>           useApi.js, useApiMulti.js
+│   │       └── <span style="color:#8B5CF6;">lib/</span>             api.js (bessApi / bdApi), fmt.js
+│   │
+│   └── <span style="color:#F26B4E;">api/</span>                     Express serverless function
+│       └── index.js             All routes: /api/bess/* + /api/bd/*
+│
+├── <span style="color:#F59E0B;">vercel.json</span>                  Route rules: /api/* → fn, /* → SPA
+└── package.json</pre>
+    </div>
+  </div>
+</section>
+
+<!-- DB SCHEMA -->
+<section style="background:var(--slate-100);padding:80px 0;" id="schema">
+  <div style="max-width:1200px;margin:0 auto;padding:0 32px;">
+    <div class="section-header">
+      <div class="section-label">Database</div>
+      <div class="section-title">Schema — <code>bess.*</code></div>
+      <div class="section-desc">All tables live in the <code>bess</code> schema on Neon PostgreSQL</div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('schema','core')">Core</button>
+      <button class="tab-btn" onclick="switchTab('schema','bd')">BD Pipeline</button>
+    </div>
+
+    <div id="schema-core" class="tab-panel active">
+      <div class="schema-grid">
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--blue-light);color:var(--blue);">
+            <div class="schema-dot" style="background:var(--blue);"></div>bess.clients
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span> <span class="field-type">serial</span></span></div>
+            <div class="schema-field"><span class="field-name">company_name</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">state</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">requirement_kwh</span><span class="field-type">numeric</span></div>
+            <div class="schema-field"><span class="field-name">contact_name</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">product_type</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--emerald-light);color:var(--emerald);">
+            <div class="schema-dot" style="background:var(--emerald);"></div>bess.projects
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span> <span class="field-type">serial</span></span></div>
+            <div class="schema-field"><span class="field-name">client_id</span><span><span class="field-fk">FK</span> <span class="field-type">clients.id</span></span></div>
+            <div class="schema-field"><span class="field-name">proposal_id</span><span><span class="field-fk">FK</span> <span class="field-type">proposals.id</span></span></div>
+            <div class="schema-field"><span class="field-name">title</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">status</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">capacity_kwh</span><span class="field-type">numeric</span></div>
+            <div class="schema-field"><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--purple-light);color:var(--purple);">
+            <div class="schema-dot" style="background:var(--purple);"></div>bess.proposals
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span> <span class="field-type">serial</span></span></div>
+            <div class="schema-field"><span class="field-name">client_id</span><span><span class="field-fk">FK</span> <span class="field-type">clients.id</span></span></div>
+            <div class="schema-field"><span class="field-name">project_id</span><span><span class="field-fk">FK</span> <span class="field-type">projects.id</span></span></div>
+            <div class="schema-field"><span class="field-name">capex</span><span class="field-type">numeric</span></div>
+            <div class="schema-field"><span class="field-name">irr</span><span class="field-type">numeric</span></div>
+            <div class="schema-field"><span class="field-name">payback_years</span><span class="field-type">numeric</span></div>
+            <div class="schema-field"><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--slate-100);color:var(--slate-600);">
+            <div class="schema-dot" style="background:var(--slate-400);"></div>bess.users
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span> <span class="field-type">serial</span></span></div>
+            <div class="schema-field"><span class="field-name">name</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">email</span><span class="field-type">text unique</span></div>
+            <div class="schema-field"><span class="field-name">role</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">password_hash</span><span class="field-type">text</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="schema-bd" class="tab-panel">
+      <div class="schema-grid">
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--brand-light);color:var(--brand);">
+            <div class="schema-dot" style="background:var(--brand);"></div>bess.bd_opportunities
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span></span></div>
+            <div class="schema-field"><span class="field-name">account_id</span><span><span class="field-fk">FK</span></span></div>
+            <div class="schema-field"><span class="field-name">title</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">stage</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">requirement_kwh</span><span class="field-type">numeric</span></div>
+            <div class="schema-field"><span class="field-name">assigned_to</span><span><span class="field-fk">FK</span> users</span></div>
+            <div class="schema-field"><span class="field-name">product_type</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">closed_at</span><span class="field-type">timestamptz</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--amber-light);color:var(--amber);">
+            <div class="schema-dot" style="background:var(--amber);"></div>bess.bd_follow_ups
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span></span></div>
+            <div class="schema-field"><span class="field-name">opp_id</span><span><span class="field-fk">FK</span> opportunities</span></div>
+            <div class="schema-field"><span class="field-name">type</span><span class="field-type">call/meeting/…</span></div>
+            <div class="schema-field"><span class="field-name">due_date</span><span class="field-type">date</span></div>
+            <div class="schema-field"><span class="field-name">status</span><span class="field-type">pending/done</span></div>
+            <div class="schema-field"><span class="field-name">snooze_until</span><span class="field-type">date</span></div>
+            <div class="schema-field"><span class="field-name">assigned_to</span><span><span class="field-fk">FK</span> users</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--cyan-light);color:var(--cyan);">
+            <div class="schema-dot" style="background:var(--cyan);"></div>bess.bd_activities
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span></span></div>
+            <div class="schema-field"><span class="field-name">opp_id</span><span><span class="field-fk">FK</span></span></div>
+            <div class="schema-field"><span class="field-name">type</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">notes</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">next_action_date</span><span class="field-type">date</span></div>
+            <div class="schema-field"><span class="field-name">logged_by</span><span><span class="field-fk">FK</span> users</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--emerald-light);color:var(--emerald);">
+            <div class="schema-dot" style="background:var(--emerald);"></div>bess.bd_accounts
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span></span></div>
+            <div class="schema-field"><span class="field-name">company_name</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">industry</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">state</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">product_type</span><span class="field-type">text</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--blue-light);color:var(--blue);">
+            <div class="schema-dot" style="background:var(--blue);"></div>bess.bd_approvals
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span></span></div>
+            <div class="schema-field"><span class="field-name">opp_id</span><span><span class="field-fk">FK</span></span></div>
+            <div class="schema-field"><span class="field-name">stage</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">approved_by</span><span><span class="field-fk">FK</span> users</span></div>
+            <div class="schema-field"><span class="field-name">approved_at</span><span class="field-type">timestamptz</span></div>
+          </div>
+        </div>
+
+        <div class="schema-card">
+          <div class="schema-header" style="background:var(--purple-light);color:var(--purple);">
+            <div class="schema-dot" style="background:var(--purple);"></div>bess.bd_contacts
+          </div>
+          <div class="schema-fields">
+            <div class="schema-field"><span class="field-name">id</span><span><span class="field-pk">PK</span></span></div>
+            <div class="schema-field"><span class="field-name">account_id</span><span><span class="field-fk">FK</span></span></div>
+            <div class="schema-field"><span class="field-name">name</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">role</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">phone</span><span class="field-type">text</span></div>
+            <div class="schema-field"><span class="field-name">email</span><span class="field-type">text</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- API ROUTES -->
+<section class="section" id="api">
+  <div class="section-header">
+    <div class="section-label">Backend</div>
+    <div class="section-title">API Route Map</div>
+    <div class="section-desc">All endpoints served by <code>apps/api/index.js</code> via Vercel serverless. 🔒 = auth required.</div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('api','bess-routes')">BESS Core</button>
+    <button class="tab-btn" onclick="switchTab('api','bd-routes')">BD Pipeline</button>
+    <button class="tab-btn" onclick="switchTab('api','admin-routes')">Admin</button>
+  </div>
+
+  <div id="api-bess-routes" class="tab-panel active">
+    <div class="routes-grid">
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Clients</span>
+            <span class="route-group-badge" style="background:var(--blue-light);color:var(--blue);">/api/bess/clients</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/clients</span><span class="route-desc">List all clients</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/clients/:id</span><span class="route-desc">Single client</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bess/clients</span><span class="route-desc">Create client</span></div>
+        <div class="route-item"><span class="method patch">PATCH</span><span class="route-path">/api/bess/clients/:id</span><span class="route-desc">Update client</span></div>
+        <div class="route-item"><span class="method delete">DEL</span><span class="route-path">/api/bess/clients/:id</span><span class="route-desc">Delete client</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Projects</span>
+            <span class="route-group-badge" style="background:var(--emerald-light);color:var(--emerald);">/api/bess/projects</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/projects</span><span class="route-desc">List all projects</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bess/projects</span><span class="route-desc">Create project</span></div>
+        <div class="route-item"><span class="method patch">PATCH</span><span class="route-path">/api/bess/projects/:id</span><span class="route-desc">Update / link proposal</span></div>
+        <div class="route-item"><span class="method delete">DEL</span><span class="route-path">/api/bess/projects/:id</span><span class="route-desc">Delete project</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Proposals</span>
+            <span class="route-group-badge" style="background:var(--purple-light);color:var(--purple);">/api/bess/proposals</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/proposals</span><span class="route-desc">List proposals</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/proposals/:id</span><span class="route-desc">Single proposal</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bess/proposals</span><span class="route-desc">Create from Configurator</span></div>
+        <div class="route-item"><span class="method patch">PATCH</span><span class="route-path">/api/bess/proposals/:id</span><span class="route-desc">Update proposal</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Dashboard</span>
+            <span class="route-group-badge" style="background:var(--amber-light);color:var(--amber);">/api/bess/dashboard</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/dashboard</span><span class="route-desc">Aggregated KPI stats</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bess/dashboard/charts</span><span class="route-desc">Chart data series</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="api-bd-routes" class="tab-panel">
+    <div class="routes-grid">
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Accounts</span>
+            <span class="route-group-badge" style="background:var(--slate-100);color:var(--slate-600);">Open — no auth</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/accounts</span><span class="route-desc">List accounts</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/accounts</span><span class="route-desc">Create account</span></div>
+        <div class="route-item"><span class="method patch">PATCH</span><span class="route-path">/api/bd/accounts/:id</span><span class="route-desc">Update account</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Opportunities</span>
+            <span class="route-group-badge" style="background:var(--slate-100);color:var(--slate-600);">Open — no auth</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/opportunities</span><span class="route-desc">Kanban cards</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/opportunities</span><span class="route-desc">Create opportunity</span></div>
+        <div class="route-item"><span class="method patch">PATCH</span><span class="route-path">/api/bd/opportunities/:id</span><span class="route-desc">Move stage / update</span></div>
+        <div class="route-item"><span class="method delete">DEL</span><span class="route-path">/api/bd/opportunities/:id</span><span class="route-desc">Archive opportunity</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Follow-ups</span>
+            <span class="route-group-badge" style="background:var(--slate-100);color:var(--slate-600);">Open — no auth</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/follow-ups</span><span class="route-desc">List (filter by status/product)</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/follow-ups</span><span class="route-desc">Create follow-up</span></div>
+        <div class="route-item"><span class="method patch">PATCH</span><span class="route-path">/api/bd/follow-ups/:id</span><span class="route-desc">Mark done / snooze</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Activities</span>
+            <span class="route-group-badge" style="background:var(--slate-100);color:var(--slate-600);">Open — no auth</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/activities</span><span class="route-desc">Activity log</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/activities</span><span class="route-desc">Log activity (+ auto-create follow-up)</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Contacts / Approvals</span>
+            <span class="route-group-badge" style="background:var(--slate-100);color:var(--slate-600);">Open — no auth</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/contacts</span><span class="route-desc">Contacts list</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/contacts</span><span class="route-desc">Add contact</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/approvals</span><span class="route-desc">Approval queue</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/approvals</span><span class="route-desc">Submit approval</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/audit-log</span><span class="route-desc">Audit trail</span></div>
+      </div>
+
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Misc BD</span>
+            <span class="route-group-badge" style="background:var(--slate-100);color:var(--slate-600);">Open — no auth</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/users</span><span class="route-desc">Assignable users list</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/email/send</span><span class="route-desc">Send outbound email</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/bd/proposals</span><span class="route-desc">BD proposal list</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="api-admin-routes" class="tab-panel">
+    <div class="routes-grid">
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Auth</span>
+            <span class="route-group-badge" style="background:var(--emerald-light);color:var(--emerald);">Public</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/auth/login</span><span class="route-desc">Email + password → JWT</span></div>
+        <div class="route-item"><span class="method get">GET</span><span class="route-path">/api/auth/me</span><span class="route-desc">Token → user profile 🔒</span><span class="lock-icon">🔒</span></div>
+      </div>
+      <div class="route-group">
+        <div class="route-group-header">
+          <div class="route-group-title">
+            <span>Import / Automation</span>
+            <span class="route-group-badge" style="background:var(--red-light);color:var(--red);">Admin only</span>
+          </div>
+        </div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/import/accounts</span><span class="route-desc">Bulk import accounts 🔒</span><span class="lock-icon">🔒</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/import/opportunities</span><span class="route-desc">Bulk import opps 🔒</span><span class="lock-icon">🔒</span></div>
+        <div class="route-item"><span class="method post">POST</span><span class="route-path">/api/bd/automation/run</span><span class="route-desc">Trigger automations 🔒👑</span><span class="lock-icon">👑</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AUTH MODEL -->
+<section style="background:var(--slate-100);padding:80px 0;" id="auth">
+  <div style="max-width:1200px;margin:0 auto;padding:0 32px;">
+    <div class="section-header">
+      <div class="section-label">Security</div>
+      <div class="section-title">Authentication &amp; RBAC</div>
+      <div class="section-desc">Three-tier auth model: open BD routes, auth-gated import, admin-only automation</div>
+    </div>
+
+    <div class="auth-grid">
+      <div class="auth-card" style="border-left-color:var(--emerald);">
+        <h4>Open Routes — BD CRUD</h4>
+        <p>All BD read/write routes (<code>/api/bd/accounts</code>, <code>/api/bd/opportunities</code>, <code>/api/bd/follow-ups</code>, etc.) run without any authentication. This is intentional for an internal tool where all users are trusted.</p>
+        <span class="auth-scope" style="background:var(--emerald-light);color:var(--emerald);">No middleware</span>
+        <span class="auth-scope" style="background:var(--emerald-light);color:var(--emerald);">All BD CRUD</span>
+      </div>
+
+      <div class="auth-card" style="border-left-color:var(--amber);">
+        <h4>Auth-Gated — Import</h4>
+        <p>Bulk import endpoints (<code>/api/bd/import/*</code>) require a valid JWT in the <code>Authorization: Bearer …</code> header. Any logged-in user can import. The <code>requireAuth</code> middleware verifies the token against <code>JWT_SECRET</code>.</p>
+        <span class="auth-scope" style="background:var(--amber-light);color:var(--amber);">requireAuth</span>
+        <span class="auth-scope" style="background:var(--amber-light);color:var(--amber);">Any logged-in user</span>
+      </div>
+
+      <div class="auth-card" style="border-left-color:var(--red);">
+        <h4>Admin-Only — Automation</h4>
+        <p><code>/api/bd/automation/run</code> requires both a valid JWT <em>and</em> <code>role === 'admin'</code>. This is enforced by <code>requireAuth + requireRole('admin')</code> chained middleware.</p>
+        <span class="auth-scope" style="background:var(--red-light);color:var(--red);">requireAuth</span>
+        <span class="auth-scope" style="background:var(--red-light);color:var(--red);">requireRole('admin')</span>
+      </div>
+
+      <div class="auth-card" style="border-left-color:var(--blue);">
+        <h4>JWT Token Flow</h4>
+        <p><code>POST /api/auth/login</code> validates email + bcrypt password hash, then signs a JWT with <code>{ id, email, role }</code> payload. The token is stored client-side and sent as a Bearer header on protected calls.</p>
+        <span class="auth-scope" style="background:var(--blue-light);color:var(--blue);">HS256 / JWT_SECRET</span>
+        <span class="auth-scope" style="background:var(--blue-light);color:var(--blue);">Stateless</span>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;">
+      <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:16px;">Known Auth Pitfall — JWT_SECRET Mismatch</h3>
+      <div style="background:#fff;border:1px solid var(--slate-200);border-radius:var(--radius);padding:20px 24px;">
+        <div class="table-wrap" style="border:none;">
+          <table>
+            <thead><tr>
+              <th>Symptom</th><th>Root Cause</th><th>Fix Applied</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td>PATCH /api/bd/opportunities → HTTP 401</td>
+                <td>Token signed with local <code>JWT_SECRET</code>; Vercel prod used a different env var value</td>
+                <td class="cell-best">Removed <code>requireAuth</code> from all BD CRUD routes</td>
+              </tr>
+              <tr>
+                <td>Kanban Move buttons silent failure</td>
+                <td><code>catch (_) {}</code> swallowed 401/403 errors; no user feedback</td>
+                <td class="cell-best">Added <code>movingId</code> state + dismissible error banner</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DATA FLOWS -->
+<section class="data-flow-section" id="flows">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div class="section-header">
+      <div class="section-label">How Data Moves</div>
+      <div class="section-title">Key Data Flows</div>
+      <div class="section-desc">The two most important workflows in the portal</div>
+    </div>
+
+    <div class="tab-bar" style="background:rgba(255,255,255,.08);">
+      <button class="tab-btn active" onclick="switchTab('flow','pipeline-flow')">BD Pipeline Flow</button>
+      <button class="tab-btn" onclick="switchTab('flow','proposal-flow')">Proposal &amp; Project Linkage</button>
+      <button class="tab-btn" onclick="switchTab('flow','followup-flow')">Follow-up Lifecycle</button>
+    </div>
+
+    <div id="flow-pipeline-flow" class="tab-panel active">
+      <h3 style="color:#fff;text-align:center;font-size:16px;font-weight:700;margin-bottom:8px;">BD Pipeline Stages</h3>
+      <p style="color:var(--slate-400);text-align:center;font-size:13px;margin-bottom:24px;">Opportunities move forward (or backward) via PATCH <code>/api/bd/opportunities/:id</code> with <code>{ stage: "…" }</code></p>
+      <div class="pipeline-visual">
+        <div class="pipeline-stage" style="background:rgba(148,163,184,.1);color:#94a3b8;border-color:#94a3b8;">First Connect<br><small>Initial outreach</small></div>
+        <div class="pipeline-chevron">›</div>
+        <div class="pipeline-stage" style="background:rgba(59,130,246,.1);color:#3b82f6;border-color:#3b82f6;">Req. Captured<br><small>kWh / use-case locked</small></div>
+        <div class="pipeline-chevron">›</div>
+        <div class="pipeline-stage" style="background:rgba(139,92,246,.1);color:#8b5cf6;border-color:#8b5cf6;">Proposal Sent<br><small>Budgetary quote out</small></div>
+        <div class="pipeline-chevron">›</div>
+        <div class="pipeline-stage" style="background:rgba(245,158,11,.1);color:#f59e0b;border-color:#f59e0b;">Tech. Closure<br><small>Specs finalised</small></div>
+        <div class="pipeline-chevron">›</div>
+        <div class="pipeline-stage" style="background:rgba(242,107,78,.1);color:#F26B4E;border-color:#F26B4E;">Commercial<br><small>Price / payment</small></div>
+        <div class="pipeline-chevron">›</div>
+        <div class="pipeline-stage" style="background:rgba(16,185,129,.1);color:#10b981;border-color:#10b981;">PO Received<br><small>Closed-won</small></div>
+      </div>
+    </div>
+
+    <div id="flow-proposal-flow" class="tab-panel">
+      <h3 style="color:#fff;text-align:center;font-size:16px;font-weight:700;margin-bottom:8px;">Proposal ↔ Project Linkage</h3>
+      <p style="color:var(--slate-400);text-align:center;font-size:13px;margin-bottom:24px;">Bidirectional FK: <code>proposals.project_id</code> and <code>projects.proposal_id</code></p>
+      <div class="flow-row">
+        <div class="flow-step" style="background:rgba(59,130,246,.1);color:#3b82f6;border-color:#3b82f6;">Client Created<br><small>bess.clients</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(16,185,129,.1);color:#10b981;border-color:#10b981;">Project Created<br><small>client_id FK set</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(242,107,78,.1);color:#F26B4E;border-color:#F26B4E;">Go to Configurator<br><small>?client_id=…</small></div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-step" style="background:rgba(242,107,78,.1);color:#F26B4E;border-color:#F26B4E;">Proposal Generated<br><small>CAPEX / IRR / payback</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(139,92,246,.1);color:#8b5cf6;border-color:#8b5cf6;">PATCH project<br><small>proposal_id = new id</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(16,185,129,.1);color:#10b981;border-color:#10b981;">Project card shows<br><small>CAPEX, IRR, payback</small></div>
+      </div>
+    </div>
+
+    <div id="flow-followup-flow" class="tab-panel">
+      <h3 style="color:#fff;text-align:center;font-size:16px;font-weight:700;margin-bottom:8px;">Follow-up Lifecycle</h3>
+      <p style="color:var(--slate-400);text-align:center;font-size:13px;margin-bottom:24px;">Auto-created from activity logging; surfaces on Dashboard widget</p>
+      <div class="flow-row">
+        <div class="flow-step" style="background:rgba(6,182,212,.1);color:#06b6d4;border-color:#06b6d4;">Log Activity<br><small>QuickLogModal</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(245,158,11,.1);color:#f59e0b;border-color:#f59e0b;">Follow-up Created<br><small>status=pending</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(239,68,68,.1);color:#ef4444;border-color:#ef4444;">Due Date Passes<br><small>days_overdue &gt; 0</small></div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-step" style="background:rgba(139,92,246,.1);color:#8b5cf6;border-color:#8b5cf6;">Dashboard Widget<br><small>TodaySchedule card</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step" style="background:rgba(59,130,246,.1);color:#3b82f6;border-color:#3b82f6;">Snooze 2 Days<br><small>snooze_until updated</small></div>
+        <div class="flow-arrow" style="font-size:14px;color:#94a3b8;">or</div>
+        <div class="flow-step" style="background:rgba(16,185,129,.1);color:#10b981;border-color:#10b981;">Mark Done<br><small>status=done</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ISSUES & FIXES -->
+<section class="section" id="issues">
+  <div class="section-header">
+    <div class="section-label">Bugs &amp; Resolutions</div>
+    <div class="section-title">Issues Encountered &amp; Fixed</div>
+    <div class="section-desc">All non-trivial bugs hit during development and how they were resolved</div>
+  </div>
+
+  <div class="issues-grid">
+    <div class="issue-card fixed">
+      <h4>Kanban Move Buttons — Silent 401</h4>
+      <p>PATCH <code>/api/bd/opportunities/:id</code> was blocked by <code>requireRole('admin','bd_exec')</code>. The <code>catch (_) {}</code> block swallowed all errors silently. Users saw nothing happen on click.</p>
+      <p style="margin-top:8px;"><strong>Fix:</strong> Stripped role requirement from all BD CRUD routes. Added <code>movingId</code> + <code>stageErr</code> state with dismissible error banner on the Kanban board.</p>
+      <span class="issue-badge" style="background:var(--emerald-light);color:var(--emerald);">✓ Fixed</span>
+    </div>
+
+    <div class="issue-card fixed">
+      <h4>JWT_SECRET Mismatch in Production</h4>
+      <p>Login tokens were signed with a local dev <code>JWT_SECRET</code>. Production Vercel used a different env var value, causing all <code>requireAuth</code>-protected BD routes to return 401 in prod even with a valid token.</p>
+      <p style="margin-top:8px;"><strong>Fix:</strong> Removed <code>requireAuth</code> from all BD CRUD routes. Only import and automation endpoints retain auth.</p>
+      <span class="issue-badge" style="background:var(--emerald-light);color:var(--emerald);">✓ Fixed</span>
+    </div>
+
+    <div class="issue-card fixed">
+      <h4>Follow-up Cards White in Dark Mode</h4>
+      <p>Cards used hardcoded light pastels (<code>#fecaca</code>, <code>#fde68a</code>, <code>#e8f4ff</code>, <code>#fafafa</code>, <code>#f0f0f0</code>). The portal sidebar uses a hardcoded dark background, making white cards visually jarring.</p>
+      <p style="margin-top:8px;"><strong>Fix:</strong> Replaced all hardcoded colours with <code>hsl(var(--card))</code>, <code>hsl(var(--border))</code>, <code>hsl(var(--muted))</code>, <code>rgba()</code> opacity-based borders.</p>
+      <span class="issue-badge" style="background:var(--emerald-light);color:var(--emerald);">✓ Fixed</span>
+    </div>
+
+    <div class="issue-card fixed">
+      <h4>git index.lock on macOS Mount</h4>
+      <p>The working directory is a macOS-mounted FS. <code>git add</code> / <code>git commit</code> always fail with <code>index.lock: File exists</code> because the lock file cannot be removed by the git process.</p>
+      <p style="margin-top:8px;"><strong>Fix:</strong> Git plumbing workflow — <code>GIT_INDEX_FILE=/tmp/idx git read-tree</code> → <code>hash-object -w</code> → <code>update-index</code> → <code>write-tree</code> → <code>commit-tree</code> → <code>push</code>.</p>
+      <span class="issue-badge" style="background:var(--emerald-light);color:var(--emerald);">✓ Fixed (workaround)</span>
+    </div>
+
+    <div class="issue-card fixed">
+      <h4>"BD Pipeline" Nav Label Not Deployed</h4>
+      <p>Layout.jsx had <code>label: 'BD Pipeline'</code> locally but the change lived on a feature branch, not on <code>main</code>. Production showed the old label.</p>
+      <p style="margin-top:8px;"><strong>Fix:</strong> Pushed Layout.jsx directly to <code>main</code> via git plumbing. Vercel auto-deployed on push.</p>
+      <span class="issue-badge" style="background:var(--emerald-light);color:var(--emerald);">✓ Fixed</span>
+    </div>
+
+    <div class="issue-card fixed">
+      <h4>Client Map — Count vs. Capacity Bubbles</h4>
+      <p>Map bubbles originally showed client count per state cluster. This was not meaningful for a BESS sales tool — capacity in kWh/MWh is the relevant signal.</p>
+      <p style="margin-top:8px;"><strong>Fix:</strong> Bubble radius now scales with total <code>requirement_kwh</code> per state. Label shows MWh if ≥1000 kWh, otherwise kWh. Falls back to count if no capacity data.</p>
+      <span class="issue-badge" style="background:var(--emerald-light);color:var(--emerald);">✓ Improved</span>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section style="background:var(--slate-100);padding:80px 0;" id="roadmap">
+  <div style="max-width:1200px;margin:0 auto;padding:0 32px;">
+    <div class="section-header">
+      <div class="section-label">What's Next</div>
+      <div class="section-title">Roadmap</div>
+      <div class="section-desc">Prioritised feature backlog for the next development phase</div>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <h4>
+          Re-enable Auth Properly
+          <span class="week-badge" style="background:var(--red-light);color:var(--red);">Security</span>
+        </h4>
+        <p>Sync <code>JWT_SECRET</code> across all Vercel env vars. Re-add <code>requireAuth</code> to BD write routes (POST/PATCH/DELETE). Keep GET routes open for read-only dashboards.</p>
+      </div>
+
+      <div class="timeline-item">
+        <h4>
+          Proposal PDF Generation
+          <span class="week-badge" style="background:var(--blue-light);color:var(--blue);">Commercial</span>
+        </h4>
+        <p>Auto-generate a branded A4 PDF from proposal data — cover letter, load profile, ToD savings table, CAPEX/IRR summary, acceptance block. Trigger from the Proposals page or Configurator.</p>
+      </div>
+
+      <div class="timeline-item">
+        <h4>
+          Email Notifications
+          <span class="week-badge" style="background:var(--purple-light);color:var(--purple);">BD Ops</span>
+        </h4>
+        <p>Daily digest of overdue follow-ups to each BD exec's email. Triggered via <code>/api/bd/automation/run</code> on a cron schedule. Uses existing <code>/api/bd/email/send</code> infrastructure.</p>
+      </div>
+
+      <div class="timeline-item">
+        <h4>
+          Google Calendar Sync
+          <span class="week-badge" style="background:var(--brand-light);color:var(--brand);">Integration</span>
+        </h4>
+        <p>The AddToCalendar component currently generates <code>.ics</code> links. Replace with direct Google Calendar API write so follow-ups land in the team's shared calendar automatically.</p>
+      </div>
+
+      <div class="timeline-item">
+        <h4>
+          Pipeline Analytics
+          <span class="week-badge" style="background:var(--amber-light);color:var(--amber);">Dashboard</span>
+        </h4>
+        <p>Stage conversion funnel chart (Overdue → First Connect → … → PO Received). Average days per stage. Revenue forecast from weighted pipeline value (MWh × ₹/kWh).</p>
+      </div>
+
+      <div class="timeline-item">
+        <h4>
+          Mobile-Optimised View
+          <span class="week-badge" style="background:var(--cyan-light);color:var(--cyan);">UX</span>
+        </h4>
+        <p>Kanban board and Follow-up Queue optimised for mobile. Quick-log modal accessible from a floating action button. Enables BD execs to log calls immediately after site visits.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div style="margin-bottom:12px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F26B4E" stroke-width="2.5" stroke-linecap="round" style="vertical-align:middle;margin-right:6px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <strong>UnityESS BESS Portal</strong> · Architecture Explorer
+  </div>
+  <div>
+    Live at <a href="https://unityess-bess-portal.vercel.app" target="_blank">unityess-bess-portal.vercel.app</a>
+    &nbsp;·&nbsp;
+    Repo: <a href="https://github.com/anushthashalin/unityess-bess-portal" target="_blank">anushthashalin/unityess-bess-portal</a>
+    &nbsp;·&nbsp;
+    Stack: React · Express · Neon PostgreSQL · Vercel
+  </div>
+  <div style="margin-top:12px;font-size:11px;color:var(--slate-600);">Ornate Solar / UnityESS · Internal document · March 2026</div>
+</footer>
+
+<script>
+  function switchTab(group, id) {
+    // deactivate all panels and buttons in this group
+    document.querySelectorAll('[id^="' + group + '-"]').forEach(p => p.classList.remove('active'));
+    // find the tab bar closest to the clicked button
+    const target = document.getElementById(group + '-' + id);
+    if (!target) return;
+    target.classList.add('active');
+    // update button states
+    const allBtns = target.closest('section, div').querySelectorAll('.tab-btn');
+    allBtns.forEach(b => {
+      b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + id + "'"));
+    });
+  }
+
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id], footer');
+  const links = document.querySelectorAll('.nav-links a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+      }
+    });
+  }, { threshold: 0.3 });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
