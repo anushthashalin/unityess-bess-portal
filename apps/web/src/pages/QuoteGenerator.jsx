@@ -52,21 +52,24 @@ function todayStr() {
 // ── Quote print styles ─────────────────────────────────────────────────────────
 const PRINT_CSS = `
 @media print {
+  html, body { margin: 0 !important; padding: 0 !important; }
   #no-print-wrapper { display: none !important; }
   #quote-print-wrapper {
     position: static !important;
     left: auto !important; top: auto !important;
     overflow: visible !important;
     height: auto !important;
-    width: auto !important;
+    width: 100% !important;
   }
   #quote-print-area {
-    width: 210mm !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    box-sizing: border-box !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 8mm; }
 }
 `;
 
@@ -323,7 +326,7 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
       width: '210mm', minHeight: '297mm', background: '#fff',
       fontFamily: "'Chivo', 'Inter', sans-serif",
       fontSize: 11, color: '#2D2D2D',
-      padding: '14mm 14mm 10mm 14mm',
+      padding: '10mm 10mm 8mm 10mm',
       boxSizing: 'border-box',
       position: 'relative',
     },
@@ -363,7 +366,7 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
         background: '#f8f9fa', border: '1.5px solid #e5e7eb',
         borderRadius: 8, padding: '10px 14px', marginBottom: 12,
       }}>
-        <div style={{ fontSize: 11, fontWeight: 900, color: '#2D2D2D', marginBottom: 2 }}>
+        <div style={{ fontSize: 11, fontWeight: 900, color: '#2D2D2D', marginBottom: 2, wordBreak: 'break-word' }}>
           DELIVERABLES — {systemDesc} BESS Project for {clientName}
         </div>
         <div style={{ fontSize: 10, color: '#555', lineHeight: 1.5, marginTop: 6 }}>
@@ -379,7 +382,7 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
         <thead>
           <tr style={{ background: '#2D2D2D' }}>
             <th style={{ padding: '7px 12px', textAlign: 'left', color: '#fff', fontWeight: 700, fontSize: 10, letterSpacing: '0.5px', width: '70%' }}>DESCRIPTION</th>
-            <th style={{ padding: '7px 12px', textAlign: 'right', color: '#fff', fontWeight: 700, fontSize: 10, letterSpacing: '0.5px' }}>PRICE (INR, excl. GST @ 18%)</th>
+            <th style={{ padding: '7px 12px', textAlign: 'right', color: '#fff', fontWeight: 700, fontSize: 10, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>PRICE (ex-GST)</th>
           </tr>
         </thead>
         <tbody>
@@ -423,7 +426,7 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
 
       {/* Footer */}
       <div style={{
-        position: 'absolute', bottom: '8mm', left: '14mm', right: '14mm',
+        position: 'absolute', bottom: '6mm', left: '10mm', right: '10mm',
         borderTop: '1px solid #e5e7eb', paddingTop: 6,
         display: 'flex', justifyContent: 'space-between',
         fontSize: 8.5, color: '#aaa',
