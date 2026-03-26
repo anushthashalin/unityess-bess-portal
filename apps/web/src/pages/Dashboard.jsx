@@ -75,9 +75,12 @@ function AnimatedNumber({ value }) {
   return <>{display.toLocaleString('en-IN')}</>;
 }
 
-function KPICard({ icon: Icon, label, value, sub, iconBg, accentColor, rawValue }) {
+function KPICard({ icon: Icon, label, value, sub, iconBg, accentColor, rawValue, onClick }) {
   return (
-    <Card className="relative overflow-hidden border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm group">
+    <Card
+      className={`relative overflow-hidden border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm group${onClick ? ' cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl" style={{ background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
         style={{ background: `radial-gradient(ellipse at top right, ${accentColor}08, transparent 60%)` }} />
@@ -678,16 +681,21 @@ export default function Dashboard() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-4 gap-4">
-        <KPICard icon={FolderOpen}  label="Active Projects"  rawValue={pj.length}
-          sub="BESS installations tracked" accentColor="#F26B4E" iconBg="bg-orange-100 text-orange-500" />
-        <KPICard icon={TrendingUp}  label="Pipeline Value"   value={inr(totalCapex)}
-          sub="Ex-GST · All proposals" accentColor="#3B82F6" iconBg="bg-blue-100 text-blue-500" />
-        <KPICard icon={Zap}         label="Capacity Quoted"  value={`${totalKwh.toLocaleString('en-IN')} kWh`} rawValue={totalKwh}
-          sub="All configurations" accentColor="#7C3AED" iconBg="bg-violet-100 text-violet-600" />
-        <KPICard icon={FileText}    label="Proposals"        rawValue={pr.length}
-          sub={`${draftProposals.length} drafts · ${expiringProposals.length} expiring`}
-          accentColor="#16A34A" iconBg="bg-emerald-100 text-emerald-600" />
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Projects Under Negotiation</p>
+        <div className="grid grid-cols-4 gap-4">
+          <KPICard icon={FolderOpen}  label="Leads Under Negotiation"    rawValue={pj.length}
+            sub="BESS installations tracked" accentColor="#F26B4E" iconBg="bg-orange-100 text-orange-500"
+            onClick={() => navigate('/bess/clients')} />
+          <KPICard icon={TrendingUp}  label="Pipeline Under Negotiation" value={inr(totalCapex)}
+            sub="Ex-GST · All proposals" accentColor="#3B82F6" iconBg="bg-blue-100 text-blue-500" />
+          <KPICard icon={Zap}         label="Total Capacity Quoted"      value={`${totalKwh.toLocaleString('en-IN')} kWh`} rawValue={totalKwh}
+            sub="All configurations" accentColor="#7C3AED" iconBg="bg-violet-100 text-violet-600" />
+          <KPICard icon={FileText}    label="Proposals"                  rawValue={pr.length}
+            sub={`${draftProposals.length} drafts · ${expiringProposals.length} expiring`}
+            accentColor="#16A34A" iconBg="bg-emerald-100 text-emerald-600"
+            onClick={() => navigate('/bess/proposals')} />
+        </div>
       </div>
 
       {/* ── BD Pipeline Summary ── */}
