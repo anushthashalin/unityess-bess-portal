@@ -146,7 +146,7 @@ function LeadsTab() {
   const [view, setView] = useState('all');            // 'all' | 'team' | bd-key
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [bdFilter, setBdFilter] = useState('');
+  const [bdFilter, setBdFilter] = useState('all');
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [selectedLead, setSelectedLead] = useState(null);
@@ -183,7 +183,7 @@ function LeadsTab() {
       );
     }
     if (statusFilter) rows = rows.filter(l => l.status === statusFilter);
-    if (bdFilter)     rows = rows.filter(l => l.bd?.toLowerCase().includes(bdFilter.toLowerCase()));
+    if (bdFilter && bdFilter !== 'all') rows = rows.filter(l => l.bd?.toLowerCase().includes(bdFilter.toLowerCase()));
 
     return [...rows].sort((a, b) => {
       const av = (a[sortField] ?? '').toString().toLowerCase();
@@ -240,7 +240,7 @@ function LeadsTab() {
       {/* View switcher */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex border border-border/50 rounded-xl overflow-hidden bg-card shadow-sm">
-          <button onClick={() => { setView('all'); setBdFilter(''); }}
+          <button onClick={() => { setView('all'); setBdFilter('all'); }}
             className={cn('px-4 py-2 text-[12px] font-bold transition-all',
               view === 'all' ? 'bg-[#F26B4E] text-white' : 'text-muted-foreground hover:text-foreground')}>
             All Leads
@@ -281,7 +281,7 @@ function LeadsTab() {
                 <SelectValue placeholder="All BDs"/>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All BDs</SelectItem>
+                <SelectItem value="all">All BDs</SelectItem>
                 {BD_TEAM.map(b => <SelectItem key={b.key} value={b.match}>{b.short}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -566,7 +566,7 @@ function LeadsTab() {
 function AccountsTab({ product, accounts, users, refetch }) {
   const { can } = useAuth();
   const [search,    setSearch]    = useState('');
-  const [industry,  setIndustry]  = useState('');
+  const [industry,  setIndustry]  = useState('all');
   const [sortField, setSortField] = useState('company_name');
   const [sortDir,   setSortDir]   = useState('asc');
   const [showAdd,   setShowAdd]   = useState(false);
@@ -599,7 +599,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
   const filtered = useMemo(() => {
     let rows = accounts.filter(a =>
       (!search || [a.company_name, a.city, a.industry, a.owner_name].some(v => v?.toLowerCase().includes(search.toLowerCase()))) &&
-      (!industry || a.industry === industry)
+      (industry === 'all' || !industry || a.industry === industry)
     );
     return [...rows].sort((a, b) => {
       const av = a[sortField] ?? '', bv = b[sortField] ?? '';
@@ -638,11 +638,11 @@ function AccountsTab({ product, accounts, users, refetch }) {
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          {['', ...industries.slice(0,4)].map(ind => (
-            <button key={ind||'all'} onClick={() => setIndustry(ind)}
+          {['all', ...industries.slice(0,4)].map(ind => (
+            <button key={ind} onClick={() => setIndustry(ind)}
               className={cn('px-3 py-1 rounded-full text-[11px] font-bold border transition-all',
                 industry === ind ? 'bg-[#F26B4E] text-white border-[#F26B4E]' : 'bg-card text-muted-foreground border-border/50 hover:border-[#F26B4E] hover:text-[#F26B4E]')}>
-              {ind || 'All'}
+              {ind === 'all' ? 'All' : ind}
             </button>
           ))}
         </div>
@@ -793,7 +793,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
 function ContactsTab({ accounts, contacts, refetch }) {
   const { can } = useAuth();
   const [search,    setSearch]    = useState('');
-  const [filterAcc, setFilterAcc] = useState('');
+  const [filterAcc, setFilterAcc] = useState('all');
   const [showAdd,   setShowAdd]   = useState(false);
   const [form, setForm] = useState({ account_id:'', name:'', designation:'', email:'', phone:'', linkedin:'', notes:'', is_primary: false });
   const [saving, setSaving] = useState(false);
@@ -817,7 +817,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
 
   const filtered = useMemo(() => contacts.filter(c => {
     const s = !search || [c.name, c.designation, c.email, c.company_name].some(v => v?.toLowerCase().includes(search.toLowerCase()));
-    const a = !filterAcc || String(c.account_id) === filterAcc;
+    const a = filterAcc === 'all' || !filterAcc || String(c.account_id) === filterAcc;
     return s && a;
   }), [contacts, search, filterAcc]);
 
@@ -844,7 +844,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
             <SelectValue placeholder="All Accounts"/>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Accounts</SelectItem>
+            <SelectItem value="all">All Accounts</SelectItem>
             {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.company_name}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -960,7 +960,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
   const { can } = useAuth();
   const [view,        setView]        = useState('kanban');
   const [search,      setSearch]      = useState('');
-  const [stageFilter, setStageFilter] = useState('');
+  const [stageFilter, setStageFilter] = useState('all');
   const [showAdd,     setShowAdd]     = useState(false);
   const [form, setForm] = useState({ account_id:'', contact_id:'', owner_id:'', title:'', scope_type:'', estimated_value:'' });
   const [saving,    setSaving]    = useState(false);
@@ -1013,7 +1013,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
 
   const filtered = opps.filter(o => {
     const s = !search || [o.company_name, o.title, o.owner_name].some(v => v?.toLowerCase().includes(search.toLowerCase()));
-    const st = !stageFilter || o.stage === stageFilter;
+    const st = stageFilter === 'all' || !stageFilter || o.stage === stageFilter;
     return s && st;
   });
 
@@ -1039,7 +1039,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
             <SelectValue placeholder="All Stages"/>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Stages</SelectItem>
+            <SelectItem value="all">All Stages</SelectItem>
             {STAGES.map(s => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
