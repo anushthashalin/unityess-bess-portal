@@ -438,7 +438,7 @@ function TodaySchedule() {
 function BDPipelineSummary() {
   const navigate = useNavigate();
   const { opportunities, accounts, followUps } = useApiMulti({
-    opportunities: bdApi.opportunities,
+    opportunities: bdApi.opps,
     accounts:      bdApi.accounts,
     followUps:     bdApi.followUps,
   }, []);
