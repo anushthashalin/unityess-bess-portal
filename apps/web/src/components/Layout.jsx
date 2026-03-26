@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, MapPin, BarChart2, Zap,
   FileText, FolderOpen, Receipt, Battery, LogOut, ChevronRight,
   Briefcase, Target, Activity, TrendingUp, ClipboardList, Bell,
-  ShieldCheck, Upload, Search, X, Sun, History,
+  ShieldCheck, Upload, Search, X, Sun, History, FilePlus2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -29,6 +29,7 @@ const BESS_BD_NAV = [
   { label: 'Activity Log',    to: '/bess/bd/activities',    icon: ClipboardList },
   { label: 'Follow-up Queue', to: '/bess/bd/follow-ups',    icon: Bell },
   { label: 'Approvals',       to: '/bess/bd/approvals',     icon: ShieldCheck },
+  { label: 'Quote Generator', to: '/bess/bd/quote-generator', icon: FilePlus2 },
   { label: 'Sheets Import',   to: '/bess/bd/import',        icon: Upload,   perm: 'import' },
   { label: 'Audit Log',       to: '/bess/bd/audit-log',     icon: History,  perm: 'audit'  },
 ];

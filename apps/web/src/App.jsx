@@ -25,6 +25,7 @@ import BDApprovals from './pages/BDApprovals.jsx';
 import BDProposals from './pages/BDProposals.jsx';
 import BDImport from './pages/BDImport.jsx';
 import AuditLog from './pages/AuditLog.jsx';
+import QuoteGenerator from './pages/QuoteGenerator.jsx';
 
 // EPC pages
 import EPCDashboard from './pages/EPCDashboard.jsx';
@@ -91,6 +92,7 @@ export default function App() {
               <Route path="/bess/bd/proposals"          element={<BDProposals     product="bess" />} />
               <Route path="/bess/bd/import"             element={<BDImport        product="bess" />} />
               <Route path="/bess/bd/audit-log"          element={<AuditLog />} />
+              <Route path="/bess/bd/quote-generator"    element={<QuoteGenerator />} />
 
               {/* ── Solar EPC ── */}
               <Route path="/epc/dashboard"     element={<EPCDashboard />} />
