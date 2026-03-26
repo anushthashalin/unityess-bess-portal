@@ -68,6 +68,7 @@ const LI_DATA = [
   { date: 'Q2 2025', value: 9800  },
   { date: 'Q3 2025', value: 9600  },
   { date: 'Q4 2025', value: 9400  },
+  { date: 'Q1 2026', value: 9650  },
 ];
 
 // ── Quote print styles ─────────────────────────────────────────────────────────
@@ -490,7 +491,7 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
             </ResponsiveContainer>
           </div>
         <div style={{ fontSize: 8.5, color: '#bbb', marginTop: 4, textAlign: 'right' }}>
-          Source: Fastmarkets / BloombergNEF · Quarterly avg Li₂CO₃ (battery-grade) · Prices indicative only
+          Source: Fastmarkets / BloombergNEF · Quarterly avg Li₂CO₃ (battery-grade) · Updated Q1 2026 · Indicative only
         </div>
       </div>
 
