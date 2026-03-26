@@ -1,4 +1,6 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+// Empty string = same-origin relative URLs (works on Vercel where web + API share one domain)
+// Override with VITE_API_URL env var for local dev pointing to a separate API server
+const BASE = import.meta.env.VITE_API_URL ?? '';
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('bess_portal_token');
