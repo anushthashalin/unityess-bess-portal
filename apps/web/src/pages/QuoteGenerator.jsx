@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Input } from '../components/ui/input.jsx';
 import { Label } from '../components/ui/label.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
-import { Download, RefreshCw, FileText } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 
 // ── Price list FY 2026-27 ──────────────────────────────────────────────────────
 const MODELS = [
@@ -49,27 +48,6 @@ function todayStr() {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// ── Li Carbonate Price Data (quarterly avg, USD/MT — Fastmarkets/BloombergNEF) ─
-// Reflects the 2022 peak (~$78k) and subsequent correction to ~$9-10k in 2025
-const LI_DATA = [
-  { date: 'Q1 2022', value: 42000 },
-  { date: 'Q2 2022', value: 65000 },
-  { date: 'Q3 2022', value: 71000 },
-  { date: 'Q4 2022', value: 78000 },
-  { date: 'Q1 2023', value: 74000 },
-  { date: 'Q2 2023', value: 47000 },
-  { date: 'Q3 2023', value: 27000 },
-  { date: 'Q4 2023', value: 17000 },
-  { date: 'Q1 2024', value: 13500 },
-  { date: 'Q2 2024', value: 13000 },
-  { date: 'Q3 2024', value: 11000 },
-  { date: 'Q4 2024', value: 10500 },
-  { date: 'Q1 2025', value: 10000 },
-  { date: 'Q2 2025', value: 9800  },
-  { date: 'Q3 2025', value: 9600  },
-  { date: 'Q4 2025', value: 9400  },
-  { date: 'Q1 2026', value: 9650  },
-];
 
 // ── Quote print styles ─────────────────────────────────────────────────────────
 const PRINT_CSS = `
@@ -101,11 +79,6 @@ export default function QuoteGenerator() {
   const [priceOverride, setPriceOverride] = useState(false);
   const [validDays,  setValidDays]    = useState(7);
   const [notes,      setNotes]        = useState('');
-
-  // Li chart state — static dataset, always available
-  const [liData]    = useState(LI_DATA);
-  const liLoading   = false;
-  const liLatest    = LI_DATA[LI_DATA.length - 1];
 
   // Computed
   const model     = MODELS.find(m => m.key === modelKey) ?? MODELS[0];
@@ -265,21 +238,6 @@ export default function QuoteGenerator() {
               className="w-full px-3 py-2 rounded-lg border border-input text-[12px] bg-background resize-none focus:outline-none focus:ring-2 focus:ring-[#F26B4E]/30 focus:border-[#F26B4E]"/>
           </div>
 
-          {/* Li data status */}
-          <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center gap-3 shadow-sm">
-            <div className="flex-1">
-              <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Li Carbonate Index</div>
-              {liLatest && (
-                <div className="text-[13px] font-black text-[#F26B4E] mt-0.5">
-                  ${liLatest.value.toFixed(0)}/t
-                  <span className="text-[10px] font-normal text-muted-foreground ml-1">({liLatest.date})</span>
-                </div>
-              )}
-            </div>
-            <div className="p-2 rounded-lg border border-border/50 text-muted-foreground">
-              <RefreshCw size={13}/>
-            </div>
-          </div>
         </div>
 
         {/* ── A4 Preview ── */}
@@ -303,9 +261,6 @@ export default function QuoteGenerator() {
                 totalKwh={totalKwh}
                 totalKw={totalKw}
                 noteText={noteText}
-                liData={liData}
-                liLoading={liLoading}
-                liLatest={liLatest}
               />
             </div>
           </div>
@@ -328,9 +283,6 @@ export default function QuoteGenerator() {
           totalKwh={totalKwh}
           totalKw={totalKw}
           noteText={noteText}
-          liData={liData}
-          liLoading={liLoading}
-          liLatest={liLatest}
         />
       </div>
     </div>
@@ -339,7 +291,7 @@ export default function QuoteGenerator() {
 
 // ── The actual A4 quote document ───────────────────────────────────────────────
 function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
-  finalTotal, gst, totalInc, totalKwh, totalKw, noteText, liData, liLoading, liLatest }) {
+  finalTotal, gst, totalInc, totalKwh, totalKw, noteText }) {
 
   const effectiveUnits = model.type === 'dc_block' ? 1 : qty;
   const systemDesc = model.type === 'dc_block'
@@ -460,39 +412,6 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
         fontSize: 9.5, color: '#555', lineHeight: 1.6, marginBottom: 14,
       }}>
         <strong style={{ color: '#2D2D2D', fontSize: 10 }}>Note:</strong> {noteText}
-      </div>
-
-      {/* Li Carbonate chart */}
-      <div style={{ borderTop: '1.5px solid #e5e7eb', paddingTop: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 10, color: '#2D2D2D', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-            Lithium Carbonate Index (USD / Metric Ton)
-          </div>
-          {liLatest && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#F26B4E' }}>
-              Latest: ${liLatest.value.toFixed(0)}/t ({liLatest.date}) · Fastmarkets / BloombergNEF
-            </div>
-          )}
-        </div>
-
-        <div style={{ height: 120 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={liData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#aaa' }} interval="preserveStartEnd" tickLine={false}/>
-                <YAxis tick={{ fontSize: 8, fill: '#aaa' }} tickLine={false} axisLine={false}
-                  tickFormatter={v => `$${(v/1000).toFixed(0)}k`}/>
-                <Tooltip
-                  contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid #e5e7eb' }}
-                  formatter={v => [`$${Number(v).toFixed(0)}/t`, 'Li Carbonate']}/>
-                <Line type="monotone" dataKey="value" stroke="#F26B4E" strokeWidth={2}
-                  dot={false} activeDot={{ r: 4, fill: '#F26B4E' }}/>
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        <div style={{ fontSize: 8.5, color: '#bbb', marginTop: 4, textAlign: 'right' }}>
-          Source: Fastmarkets / BloombergNEF · Quarterly avg Li₂CO₃ (battery-grade) · Updated Q1 2026 · Indicative only
-        </div>
       </div>
 
       {/* Footer */}
