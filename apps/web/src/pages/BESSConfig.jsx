@@ -393,8 +393,8 @@ export default function BESSConfig() {
     const suggestedCategory = validated_energy_kwh >= 200 ? 'container' : 'cabinet';
     setSzCategory(suggestedCategory);
 
-    // Filter SKUs by auto-suggested category
-    const categoryUnits = unitList.filter(u => (u.energy_kwh ?? 0) > 0 && (u.category === suggestedCategory || !u.category));
+    // Show ALL units with valid energy — category is used only as a display hint, not a filter
+    const categoryUnits = unitList.filter(u => (u.energy_kwh ?? 0) > 0);
     const allConfigs = categoryUnits.map(unit => {
         // Eco: minimum units to meet validated requirement (nameplate-based)
         const ecoCount = Math.max(1, Math.ceil(validated_energy_kwh / unit.energy_kwh));

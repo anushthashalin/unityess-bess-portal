@@ -62,7 +62,8 @@ const MODEL_SPECS = {
 };
 
 function getModelSpecs(model) {
-  return MODEL_SPECS[model] || {
+  // Direct match first; then strip the "UESS-" prefix the portal prepends
+  return MODEL_SPECS[model] || MODEL_SPECS[(model ?? '').replace(/^UESS-/i, '')] || {
     cell_config: 'LFP Cell Stack — per datasheet',
     dc_nominal_v: 'Per datasheet',
     dc_range_v: 'Per datasheet',
