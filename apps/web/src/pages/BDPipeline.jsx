@@ -150,22 +150,44 @@ function LeadsTab() {
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [selectedLead, setSelectedLead] = useState(null);
+  const [draft, setDraft] = useState(null);           // editable copy of selectedLead
+
+  // Local leads state — edits persist within the session
+  const [leads, setLeads] = useState(() => BD_LEADS);
+
+  function openLead(l) { setSelectedLead(l); setDraft({ ...l }); }
+  function closeLead() { setSelectedLead(null); setDraft(null); }
+
+  function setDraftField(k, v) { setDraft(d => ({ ...d, [k]: v })); }
+
+  function togglePhase(key) {
+    const cur = draft[key];
+    const newVal = isDone(cur) ? 'not done' : 'done';
+    setDraftField(key, newVal);
+  }
+
+  function saveDraft() {
+    setLeads(prev => prev.map(l => l.id === draft.id ? { ...draft } : l));
+    setSelectedLead({ ...draft });
+  }
+
+  const hasChanges = draft && selectedLead && JSON.stringify(draft) !== JSON.stringify(selectedLead);
 
   // Stats
   const stats = useMemo(() => ({
-    total:        BD_LEADS.length,
-    negotiation:  BD_LEADS.filter(l => l.status === 'Under Negotiation').length,
-    customers:    BD_LEADS.filter(l => l.status === 'Customer').length,
-    prospects:    BD_LEADS.filter(l => l.status === 'Prospect').length,
-    leads:        BD_LEADS.filter(l => l.status === 'Lead').length,
-    hold:         BD_LEADS.filter(l => l.status === 'Hold').length,
-  }), []);
+    total:        leads.length,
+    negotiation:  leads.filter(l => l.status === 'Under Negotiation').length,
+    customers:    leads.filter(l => l.status === 'Customer').length,
+    prospects:    leads.filter(l => l.status === 'Prospect').length,
+    leads:        leads.filter(l => l.status === 'Lead').length,
+    hold:         leads.filter(l => l.status === 'Hold').length,
+  }), [leads]);
 
   // BD-specific leads when in BD view
   const activeBD = view !== 'all' && view !== 'team' ? BD_TEAM.find(b => b.key === view) : null;
 
   const filtered = useMemo(() => {
-    let rows = BD_LEADS;
+    let rows = leads;
 
     // If viewing a specific BD rep's leads
     if (activeBD) {
@@ -286,7 +308,7 @@ function LeadsTab() {
               </SelectContent>
             </Select>
 
-            <span className="text-[11px] text-muted-foreground">{filtered.length} of {BD_LEADS.length}</span>
+            <span className="text-[11px] text-muted-foreground">{filtered.length} of {leads.length}</span>
             <button onClick={exportCSV}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold border border-border/50 bg-card text-muted-foreground hover:text-[#F26B4E] hover:border-[#F26B4E] transition-all">
               <Download size={12}/> CSV
@@ -299,7 +321,7 @@ function LeadsTab() {
       {view === 'team' && (
         <div className="grid grid-cols-3 gap-4">
           {BD_TEAM.map(bd => {
-            const bdLeads    = BD_LEADS.filter(l => l.bd?.toLowerCase().includes(bd.match));
+            const bdLeads    = leads.filter(l => l.bd?.toLowerCase().includes(bd.match));
             const negCount   = bdLeads.filter(l => l.status === 'Under Negotiation').length;
             const custCount  = bdLeads.filter(l => l.status === 'Customer').length;
             const initials   = bd.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -421,7 +443,7 @@ function LeadsTab() {
               <TableBody>
                 {filtered.map((l, idx) => (
                   <TableRow key={l.id}
-                    onClick={() => setSelectedLead(l)}
+                    onClick={() => openLead(l)}
                     className="hover:bg-[#F26B4E]/[0.04] transition-colors border-border/30 cursor-pointer group">
                     <TableCell className="py-2.5 text-center text-[11px] text-muted-foreground/50 font-mono">{idx + 1}</TableCell>
                     <TableCell className="py-2.5 px-4">
@@ -467,62 +489,90 @@ function LeadsTab() {
       )}
 
       {/* Lead detail drawer */}
-      <Sheet open={!!selectedLead} onOpenChange={open => !open && setSelectedLead(null)}>
-        <SheetContent className="w-[460px] sm:max-w-[460px] overflow-y-auto">
-          {selectedLead && (
+      <Sheet open={!!selectedLead} onOpenChange={open => !open && closeLead()}>
+        <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto flex flex-col">
+          {selectedLead && draft && (
             <>
-              <SheetHeader className="pb-4 border-b border-border/50">
+              <SheetHeader className="pb-4 border-b border-border/50 shrink-0">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <SheetTitle className="text-xl font-black">{selectedLead.name}</SheetTitle>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <StatusBadge status={selectedLead.status}/>
-                      {selectedLead.qualified && selectedLead.qualified !== '?' && (
-                        <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full',
-                          selectedLead.qualified === 'Yes' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500')}>
-                          {selectedLead.qualified === 'Yes' ? '✓ Qualified' : '✗ Not Qualified'}
-                        </span>
-                      )}
+                  <div className="flex-1 pr-3">
+                    <Input
+                      value={draft.name}
+                      onChange={e => setDraftField('name', e.target.value)}
+                      className="text-xl font-black border-0 border-b-2 border-transparent focus-visible:border-[#F26B4E] focus-visible:ring-0 px-0 h-auto text-foreground rounded-none bg-transparent"
+                    />
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <Select value={draft.status} onValueChange={v => setDraftField('status', v)}>
+                        <SelectTrigger className="h-6 w-auto text-[11px] font-bold border-0 px-2 py-0 gap-1 rounded-full focus:ring-0"
+                          style={{ background: (STATUS_CONFIG[draft.status]?.bg ?? '#f8fafc'), color: (STATUS_CONFIG[draft.status]?.color ?? '#94a3b8') }}>
+                          <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(STATUS_CONFIG).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={draft.qualified ?? '?'} onValueChange={v => setDraftField('qualified', v)}>
+                        <SelectTrigger className="h-6 w-auto text-[10px] font-bold border rounded-full px-2 py-0 gap-1 focus:ring-0 bg-card">
+                          <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">✓ Qualified</SelectItem>
+                          <SelectItem value="No">✗ Not Qualified</SelectItem>
+                          <SelectItem value="?">? Unknown</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="text-[11px] text-muted-foreground font-mono">ID: {selectedLead.id}</div>
+                  <div className="text-[11px] text-muted-foreground font-mono shrink-0">#{selectedLead.id}</div>
                 </div>
               </SheetHeader>
 
-              <div className="py-5 space-y-5">
-                {/* BD + contact */}
+              <div className="py-5 space-y-5 flex-1 overflow-y-auto">
+                {/* BD + Contact */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">BD Executive</div>
-                    <div className="flex items-center gap-2">
-                      <BDAvatar bdName={selectedLead.bd} size={8}/>
-                      <span className="font-semibold text-[13px]">{selectedLead.bd || '—'}</span>
-                    </div>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">BD Executive</Label>
+                    <Select value={draft.bd || 'unassigned'} onValueChange={v => setDraftField('bd', v === 'unassigned' ? '' : v)}>
+                      <SelectTrigger className="mt-1 h-9 text-sm focus:ring-[#F26B4E] rounded-lg">
+                        <div className="flex items-center gap-2">
+                          {draft.bd && <BDAvatar bdName={draft.bd} size={5}/>}
+                          <SelectValue placeholder="— Unassigned —"/>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">— Unassigned —</SelectItem>
+                        {BD_TEAM.map(b => <SelectItem key={b.key} value={b.name}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Contact</div>
-                    <span className="text-[13px] text-foreground">{selectedLead.contact || '—'}</span>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contact Person</Label>
+                    <Input value={draft.contact} onChange={e => setDraftField('contact', e.target.value)}
+                      placeholder="Contact name / number"
+                      className="mt-1 h-9 text-sm focus-visible:ring-[#F26B4E] rounded-lg"/>
                   </div>
                 </div>
 
                 {/* Specs */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'Capacity', value: selectedLead.kwh ? selectedLead.kwh + ' kWh' : '—' },
-                    { label: 'Location', value: selectedLead.location || '—' },
-                    { label: 'System Type', value: selectedLead.type || '—' },
-                    { label: 'Timeline', value: selectedLead.timeline || '—' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="bg-muted/40 rounded-xl p-3">
-                      <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</div>
-                      <div className="text-[13px] font-semibold text-foreground">{value}</div>
+                    { k: 'kwh',      label: 'Capacity (kWh)', placeholder: 'e.g. 261' },
+                    { k: 'location', label: 'Location',       placeholder: 'City / State' },
+                    { k: 'type',     label: 'System Type',    placeholder: 'e.g. AC Coupled' },
+                    { k: 'timeline', label: 'Timeline',       placeholder: 'e.g. Q2 2026' },
+                  ].map(({ k, label, placeholder }) => (
+                    <div key={k}>
+                      <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</Label>
+                      <Input value={draft[k] || ''} onChange={e => setDraftField(k, e.target.value)}
+                        placeholder={placeholder}
+                        className="mt-1 h-9 text-sm focus-visible:ring-[#F26B4E] rounded-lg"/>
                     </div>
                   ))}
                 </div>
 
-                {/* Phase tracking */}
+                {/* Phase tracking — click to toggle */}
                 <div>
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Phase Tracking</div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Phase Tracking <span className="normal-case font-normal text-muted-foreground/60">— click to toggle</span></div>
                   <div className="flex gap-2 justify-between">
                     {[
                       { key: 'budgetary',  label: 'Budgetary' },
@@ -531,10 +581,11 @@ function LeadsTab() {
                       { key: 'finalQuote', label: 'Final Quote' },
                       { key: 'followup',   label: 'Follow-up' },
                     ].map(({ key, label }) => {
-                      const done = isDone(selectedLead[key]);
-                      const dateStr = isDoneDate(selectedLead[key]);
+                      const done = isDone(draft[key]);
+                      const dateStr = isDoneDate(draft[key]);
                       return (
-                        <div key={key} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flex:1 }}>
+                        <button key={key} onClick={() => togglePhase(key)}
+                          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flex:1, background:'none', border:'none', cursor:'pointer', padding:0 }}>
                           <div style={{
                             width: 36, height: 36, borderRadius: '50%',
                             border: `2px solid ${done ? '#F26B4E' : '#d1d5db'}`,
@@ -542,24 +593,37 @@ function LeadsTab() {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0,
                             boxShadow: done ? '0 1px 4px rgba(242,107,78,0.35)' : 'none',
+                            transition: 'all 0.15s',
                           }}>
                             {done && <Check size={14} color="white" strokeWidth={3}/>}
                           </div>
-                          <span style={{ fontSize: 10, color: '#6b7280', textAlign: 'center', lineHeight: 1.3 }}>{label}</span>
+                          <span style={{ fontSize: 10, color: done ? '#F26B4E' : '#6b7280', textAlign: 'center', lineHeight: 1.3, fontWeight: done ? 700 : 400 }}>{label}</span>
                           {dateStr && <span style={{ fontSize: 9, color: '#F26B4E', fontWeight: 700 }}>{dateStr}</span>}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
 
                 {/* Remarks */}
-                {selectedLead.remarks && (
-                  <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4">
-                    <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">Remarks</div>
-                    <p className="text-[13px] text-foreground leading-relaxed">{selectedLead.remarks}</p>
-                  </div>
+                <div>
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Remarks</Label>
+                  <textarea value={draft.remarks || ''} onChange={e => setDraftField('remarks', e.target.value)}
+                    rows={3} placeholder="Internal notes, context, next steps…"
+                    className="mt-1 w-full px-3 py-2 rounded-lg border border-input text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-[#F26B4E]/30 focus:border-[#F26B4E]"/>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="shrink-0 pt-4 border-t border-border/50 flex items-center gap-3">
+                {hasChanges && (
+                  <span className="text-[11px] text-amber-600 font-semibold flex-1">Unsaved changes</span>
                 )}
+                <Button variant="outline" onClick={closeLead} className="rounded-lg ml-auto">Cancel</Button>
+                <Button onClick={saveDraft} disabled={!hasChanges}
+                  className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold rounded-lg px-5 disabled:opacity-40">
+                  Save
+                </Button>
               </div>
             </>
           )}
