@@ -1498,7 +1498,7 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
           signal: ctrl2.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.15, maxOutputTokens: 1200, thinkingConfig: { thinkingBudget: 0 } },
+            generationConfig: { temperature: 0.15, maxOutputTokens: 1200, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
           }),
         }
       );
@@ -1510,13 +1510,18 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
     clearTimeout(t2);
     const gd = await gr.json();
     if (gd.error) return res.status(502).json({ error: gd.error.message });
-    const text = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(422).json({ error: 'Gemini did not return a valid recommendation. Try again.' });
+    const raw = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     let parsed;
-    try { parsed = JSON.parse(match[0]); }
-    catch (pe) { return res.status(422).json({ error: 'Gemini response could not be parsed. Try again.' }); }
+    try {
+      // responseMimeType: application/json means raw should be clean JSON
+      // but strip fences defensively in case of older model behaviour
+      const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+      const jsonStr = cleaned.startsWith('{') ? cleaned : (cleaned.match(/\{[\s\S]*\}/) ?? [''])[0];
+      parsed = JSON.parse(jsonStr);
+    } catch (pe) {
+      console.error('[Recommend] JSON parse failed:', raw.slice(0, 300));
+      return res.status(422).json({ error: 'AI commentary could not be parsed. Sizing result is still valid.' });
+    }
     res.json({ data: parsed });
   } catch (e) { handleDbError(res, e); }
 });
