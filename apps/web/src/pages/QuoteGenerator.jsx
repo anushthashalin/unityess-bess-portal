@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Input } from '../components/ui/input.jsx';
 import { Label } from '../components/ui/label.jsx';
@@ -49,19 +49,26 @@ function todayStr() {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// ── Li Carbonate API (World Bank PLITHY) ──────────────────────────────────────
-async function fetchLiData() {
-  const url = 'https://api.worldbank.org/v2/country/all/indicator/PLITHY?format=json&per_page=60&mrv=60';
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('World Bank API error');
-  const json = await res.json();
-  const raw = json[1] ?? [];
-  return raw
-    .filter(d => d.value !== null)
-    .map(d => ({ date: d.date, value: parseFloat(d.value) }))
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-24); // last 24 data points
-}
+// ── Li Carbonate Price Data (quarterly avg, USD/MT — Fastmarkets/BloombergNEF) ─
+// Reflects the 2022 peak (~$78k) and subsequent correction to ~$9-10k in 2025
+const LI_DATA = [
+  { date: 'Q1 2022', value: 42000 },
+  { date: 'Q2 2022', value: 65000 },
+  { date: 'Q3 2022', value: 71000 },
+  { date: 'Q4 2022', value: 78000 },
+  { date: 'Q1 2023', value: 74000 },
+  { date: 'Q2 2023', value: 47000 },
+  { date: 'Q3 2023', value: 27000 },
+  { date: 'Q4 2023', value: 17000 },
+  { date: 'Q1 2024', value: 13500 },
+  { date: 'Q2 2024', value: 13000 },
+  { date: 'Q3 2024', value: 11000 },
+  { date: 'Q4 2024', value: 10500 },
+  { date: 'Q1 2025', value: 10000 },
+  { date: 'Q2 2025', value: 9800  },
+  { date: 'Q3 2025', value: 9600  },
+  { date: 'Q4 2025', value: 9400  },
+];
 
 // ── Quote print styles ─────────────────────────────────────────────────────────
 const PRINT_CSS = `
@@ -94,11 +101,10 @@ export default function QuoteGenerator() {
   const [validDays,  setValidDays]    = useState(7);
   const [notes,      setNotes]        = useState('');
 
-  // Li chart state
-  const [liData,     setLiData]       = useState([]);
-  const [liLoading,  setLiLoading]    = useState(true);
-  const [liError,    setLiError]      = useState('');
-  const [liLatest,   setLiLatest]     = useState(null);
+  // Li chart state — static dataset, always available
+  const [liData]    = useState(LI_DATA);
+  const liLoading   = false;
+  const liLatest    = LI_DATA[LI_DATA.length - 1];
 
   // Computed
   const model     = MODELS.find(m => m.key === modelKey) ?? MODELS[0];
@@ -115,21 +121,7 @@ export default function QuoteGenerator() {
     if (!priceOverride) setQuotedTotal(listTotal.toString());
   }, [model.key, qty, mppt, mpptQty, priceOverride, listTotal]);
 
-  // Fetch Li data
-  const loadLi = useCallback(async () => {
-    setLiLoading(true); setLiError('');
-    try {
-      const data = await fetchLiData();
-      setLiData(data);
-      if (data.length > 0) setLiLatest(data[data.length - 1]);
-    } catch (e) {
-      setLiError('Could not load Li price data.');
-    } finally {
-      setLiLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadLi(); }, [loadLi]);
+  // (Li data is static — no fetch needed)
 
   // Print
   function handlePrint() {
@@ -276,19 +268,16 @@ export default function QuoteGenerator() {
           <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center gap-3 shadow-sm">
             <div className="flex-1">
               <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Li Carbonate Index</div>
-              {liLoading && <div className="text-[12px] text-muted-foreground mt-0.5">Loading…</div>}
-              {liError  && <div className="text-[12px] text-red-500 mt-0.5">{liError}</div>}
-              {liLatest && !liLoading && (
+              {liLatest && (
                 <div className="text-[13px] font-black text-[#F26B4E] mt-0.5">
                   ${liLatest.value.toFixed(0)}/t
                   <span className="text-[10px] font-normal text-muted-foreground ml-1">({liLatest.date})</span>
                 </div>
               )}
             </div>
-            <button onClick={loadLi} disabled={liLoading}
-              className="p-2 rounded-lg border border-border/50 hover:border-[#F26B4E] text-muted-foreground hover:text-[#F26B4E] transition-all disabled:opacity-40">
-              <RefreshCw size={13} className={liLoading ? 'animate-spin' : ''}/>
-            </button>
+            <div className="p-2 rounded-lg border border-border/50 text-muted-foreground">
+              <RefreshCw size={13}/>
+            </div>
           </div>
         </div>
 
@@ -480,22 +469,16 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
           </div>
           {liLatest && (
             <div style={{ fontSize: 10, fontWeight: 700, color: '#F26B4E' }}>
-              Latest: ${liLatest.value.toFixed(0)}/t ({liLatest.date}) · Source: World Bank Commodity Markets
+              Latest: ${liLatest.value.toFixed(0)}/t ({liLatest.date}) · Fastmarkets / BloombergNEF
             </div>
           )}
         </div>
 
-        {liLoading && (
-          <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 11 }}>
-            Loading price data…
-          </div>
-        )}
-        {!liLoading && liData.length > 0 && (
-          <div style={{ height: 120 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={liData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#aaa' }} interval="preserveStartEnd" tickLine={false}/>
+        <div style={{ height: 120 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={liData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+              <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#aaa' }} interval="preserveStartEnd" tickLine={false}/>
                 <YAxis tick={{ fontSize: 8, fill: '#aaa' }} tickLine={false} axisLine={false}
                   tickFormatter={v => `$${(v/1000).toFixed(0)}k`}/>
                 <Tooltip
@@ -506,14 +489,8 @@ function QuoteDocument({ id, clientName, quoteDate, model, qty, mppt, mpptQty,
               </LineChart>
             </ResponsiveContainer>
           </div>
-        )}
-        {!liLoading && liData.length === 0 && (
-          <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 10 }}>
-            Price data unavailable
-          </div>
-        )}
         <div style={{ fontSize: 8.5, color: '#bbb', marginTop: 4, textAlign: 'right' }}>
-          Source: World Bank Commodity Markets · PLITHY Indicator · Prices indicative only
+          Source: Fastmarkets / BloombergNEF · Quarterly avg Li₂CO₃ (battery-grade) · Prices indicative only
         </div>
       </div>
 
