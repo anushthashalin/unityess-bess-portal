@@ -1435,7 +1435,7 @@ app.post('/api/bess/parse-bill', requireAuth, async (req, res) => {
               { text: prompt },
               { inline_data: { mime_type: mimeType, data: fileData } },
             ]}],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.1, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 } },
           }),
         }
       );
@@ -1498,7 +1498,7 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
           signal: ctrl2.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
+            generationConfig: { temperature: 0.15, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
           }),
         }
       );
@@ -1563,7 +1563,7 @@ Return plain text only — no JSON, no markdown, no headers. Just the narrative 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.2, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } },
         }),
       }
     );
