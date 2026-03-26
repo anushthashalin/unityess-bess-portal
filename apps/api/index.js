@@ -1498,7 +1498,7 @@ Return ONLY valid JSON (no markdown, no code fences). Keep all string values und
           signal: ctrl2.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.15, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
+            generationConfig: { temperature: 0.15, maxOutputTokens: 1200, thinkingConfig: { thinkingBudget: 0 } },
           }),
         }
       );
