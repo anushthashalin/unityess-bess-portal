@@ -212,7 +212,7 @@ function LeadsTab() {
       const bv = (b[sortField] ?? '').toString().toLowerCase();
       return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [search, statusFilter, bdFilter, sortField, sortDir, activeBD]);
+  }, [leads, search, statusFilter, bdFilter, sortField, sortDir, activeBD]);
 
   function toggleSort(field) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -490,7 +490,7 @@ function LeadsTab() {
 
       {/* Lead detail drawer */}
       <Sheet open={!!selectedLead} onOpenChange={open => !open && closeLead()}>
-        <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto flex flex-col">
+        <SheetContent className="w-[480px] sm:max-w-[480px] flex flex-col">
           {selectedLead && draft && (
             <>
               <SheetHeader className="pb-4 border-b border-border/50 shrink-0">
@@ -527,7 +527,7 @@ function LeadsTab() {
                 </div>
               </SheetHeader>
 
-              <div className="py-5 space-y-5 flex-1 overflow-y-auto">
+              <div className="py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
                 {/* BD + Contact */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
