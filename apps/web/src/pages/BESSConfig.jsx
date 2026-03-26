@@ -536,13 +536,15 @@ export default function BESSConfig() {
   };
 
   // Proposal modal state
-  const [showPropModal,  setShowPropModal]  = useState(false);
-  const [propClientId,   setPropClientId]   = useState('');
-  const [propSiteId,     setPropSiteId]     = useState('');
-  const [propNotes,      setPropNotes]      = useState('');
-  const [propLoading,    setPropLoading]    = useState(false);
-  const [propSuccess,    setPropSuccess]    = useState(null); // proposal number on success
-  const [propProjectId,  setPropProjectId]  = useState('');
+  const [showPropModal,    setShowPropModal]    = useState(false);
+  const [propClientId,     setPropClientId]     = useState('');
+  const [propSiteId,       setPropSiteId]       = useState('');
+  const [propNotes,        setPropNotes]        = useState('');
+  const [propLoading,      setPropLoading]      = useState(false);
+  const [propSuccess,      setPropSuccess]      = useState(null); // proposal number on success
+  const [propProjectId,    setPropProjectId]    = useState('');
+  const [propDocxLoading,  setPropDocxLoading]  = useState(false);
+  const [propDocxCfg,      setPropDocxCfg]      = useState(null); // config snapshot for .docx
 
   // Derive everything here (values are 0/empty while loading — that is fine)
   const unitList   = units?.data  ?? [];
@@ -683,6 +685,11 @@ export default function BESSConfig() {
       const effectiveCapex   = qCapex || totalPrice;
       const effectivePayback = quoteFinancials?.payback ?? (parseFloat(simplePayback) || null);
       const effectiveIrr     = quoteFinancials?.irrPct  ?? irrPct ?? null;
+
+      // Resolve client name for the docx
+      const clientObj = clientList.find(c => String(c.id) === String(propClientId));
+      const clientName = clientObj?.company_name ?? clientObj?.contact_name ?? 'Valued Client';
+
       const res = await bessApi.createProposal({
         client_id:            parseInt(propClientId),
         site_id:              (propSiteId && propSiteId !== 'none') ? parseInt(propSiteId) : null,
@@ -698,11 +705,49 @@ export default function BESSConfig() {
           `${numUnits}× ${u.model ?? 'BESS'} | ${totalPower} kW / ${totalEnergy} kWh | ${coupling}-Coupled | ${appLabel}`,
         validity_days: 30,
       });
-      setPropSuccess(res.data?.proposal_number ?? 'Created');
+
+      const propNum = res.data?.proposal_number ?? 'Created';
+      setPropSuccess(propNum);
+
+      // Snapshot config so the docx download button can use it
+      setPropDocxCfg({
+        client_name:    clientName,
+        num_units:      numUnits,
+        unit_model:     u.model ?? 'UnityESS BESS',
+        unit_kw:        u.power_kw    ?? 0,
+        unit_kwh:       u.energy_kwh  ?? 0,
+        unit_price:     effectiveCapex / (numUnits || 1),
+        use_case:       application ?? szUseCase ?? 'tod_arbitrage',
+        peak_tariff:    parseFloat(szPeakTariff)    || 10.50,
+        offpeak_tariff: parseFloat(szOffpeakTariff) || 5.50,
+        state:          selectedState ?? '',
+        proposal_number: propNum,
+        doc_date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }),
+        solar_phase: 'Future Phase',
+      });
     } catch (e) {
       alert('Error creating proposal: ' + (e?.response?.data?.error ?? e.message));
     } finally {
       setPropLoading(false);
+    }
+  }
+
+  async function handleDownloadDocx() {
+    if (!propDocxCfg) return;
+    setPropDocxLoading(true);
+    try {
+      const { blob, filename } = await bessApi.downloadProposalDocx(propDocxCfg);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    } catch (e) {
+      alert('Download failed: ' + e.message);
+    } finally {
+      setPropDocxLoading(false);
     }
   }
 
@@ -2086,8 +2131,18 @@ export default function BESSConfig() {
                     You can find it under the <strong>Proposals</strong> section.
                   </DialogDescription>
                 </DialogHeader>
-                <DialogFooter>
-                  <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setShowPropModal(false)}>Done</Button>
+                <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  Download the branded .docx to share with the client.
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setShowPropModal(false)}>Close</Button>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 gap-2"
+                    onClick={handleDownloadDocx}
+                    disabled={propDocxLoading || !propDocxCfg}
+                  >
+                    {propDocxLoading ? 'Generating…' : '⬇ Download Proposal (.docx)'}
+                  </Button>
                 </DialogFooter>
               </>
             ) : (

@@ -61,6 +61,28 @@ export const bessApi = {
   createConfig:       (body) => api.post('/api/bess/bess-configurations', body),
   recommendBess:      (body) => api.post('/api/bess/recommend', body),
   parseBill:          (body) => api.post('/api/bess/parse-bill', body),
+
+  // Returns a Blob (binary .docx) — use separately from the JSON api helper
+  downloadProposalDocx: async (body) => {
+    const token = localStorage.getItem('bess_portal_token');
+    const res = await fetch(`${BASE}/api/bess/generate-proposal-docx`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(err.message ?? err.error ?? `HTTP ${res.status}`);
+    }
+    const disposition = res.headers.get('Content-Disposition') ?? '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : 'BESS_Proposal.docx';
+    const blob = await res.blob();
+    return { blob, filename };
+  },
 };
 
 // ── BD endpoints ───────────────────────────────────────────────────────────

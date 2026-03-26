@@ -5,6 +5,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 const express      = require('express');
 const cors         = require('cors');
+const { generateBessProposalDocx } = require('./proposal-gen');
 const { Pool }     = require('pg');
 const bcrypt       = require('bcryptjs');
 const jwt          = require('jsonwebtoken');
@@ -1571,6 +1572,27 @@ Return plain text only — no JSON, no markdown, no headers. Just the narrative 
     const narrative = gd?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Narrative unavailable.';
     res.json({ data: { narrative } });
   } catch (e) { handleDbError(res, e); }
+});
+
+// ── Proposal .docx generator ───────────────────────────────────────────────
+app.post('/api/bess/generate-proposal-docx', requireAuth, async (req, res) => {
+  try {
+    const cfg = req.body;
+    const buf = await generateBessProposalDocx(cfg);
+    // Build a safe filename
+    const clientShort = (cfg.client_name || 'Client')
+      .replace(/[^A-Za-z0-9\s]/g, '').trim()
+      .split(/\s+/).slice(0, 3).join('_');
+    const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '');
+    const filename = `BESS_Proposal_${clientShort}_${dateStr}.docx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buf.length);
+    res.send(buf);
+  } catch (e) {
+    console.error('[Proposal Gen]', e.message);
+    res.status(500).json({ error: 'Proposal generation failed: ' + e.message });
+  }
 });
 
 // ── Proposals ─────────────────────────────────────────────────────────────
