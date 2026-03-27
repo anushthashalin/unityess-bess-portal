@@ -1,25 +1,25 @@
 /** Format a number as Indian Rupees with Cr/L shorthand */
 export function inr(v) {
-  if (v == null) return '—';
-  if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(2)} Cr`;
-  if (v >= 100_000)    return `₹${(v / 100_000).toFixed(1)} L`;
-  return `₹${Number(v).toLocaleString('en-IN')}`;
+  if (v == null) return '\u2014';
+  if (v >= 10_000_000) return `\u20B9${(v / 10_000_000).toFixed(2)} Cr`;
+  if (v >= 100_000)    return `\u20B9${(v / 100_000).toFixed(1)} L`;
+  return `\u20B9${Number(v).toLocaleString('en-IN')}`;
 }
 
 /** Format a number with Indian comma grouping + optional unit */
 export function num(v, unit = '') {
-  if (v == null) return '—';
+  if (v == null) return '\u2014';
   return `${Number(v).toLocaleString('en-IN')}${unit ? ' ' + unit : ''}`;
 }
 
-/** Lookup helper — find name field by id in an array */
+/** Lookup helper - find name field by id in an array */
 export function lookup(arr, id, field = 'company_name') {
-  return arr?.find(r => r.id === id)?.[field] ?? '—';
+  return arr?.find(r => r.id === id)?.[field] ?? '\u2014';
 }
 
 /** Format ISO date string to Indian locale */
 export function date(d) {
-  if (!d) return '—';
+  if (!d) return '\u2014';
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 

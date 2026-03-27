@@ -174,6 +174,12 @@ async function runMigrations() {
     `ALTER TABLE bd.activities DROP CONSTRAINT IF EXISTS activities_type_check`,
     `ALTER TABLE bd.activities ADD CONSTRAINT activities_type_check
        CHECK (type = ANY(ARRAY['call','email','meeting','whatsapp','site_visit','demo']))`,
+    // Remarks on opportunities
+    `ALTER TABLE bd.opportunities ADD COLUMN IF NOT EXISTS remarks TEXT`,
+    // Update BD Exec placeholder users with real team members
+    `UPDATE bd.users SET name='Vishal Pundir',    email='vishal@ornatesolar.com'    WHERE name='BD Exec 1'`,
+    `UPDATE bd.users SET name='Dhathresh Patnam', email='dhathresh@ornatesolar.com' WHERE name='BD Exec 2'`,
+    `UPDATE bd.users SET name='Arup Hazra',       email='arup@ornatesolar.com'      WHERE name='BD Exec 3'`,
   ];
   for (const sql of migrations) {
     try {
@@ -415,7 +421,7 @@ app.get('/api/bd/opportunities', async (req, res) => {
 
 app.post('/api/bd/opportunities', requireAuth, async (req, res) => {
   try {
-    const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type } = req.body;
+    const { account_id, contact_id, owner_id, title, scope_type, estimated_value, product_type, remarks } = req.body;
     if (!account_id || !title) return res.status(400).json({ error: 'account_id and title are required' });
     const { rows: [c] } = await pool.query(
       "SELECT COUNT(*) FROM bd.opportunities WHERE opp_id LIKE $1",
@@ -424,9 +430,9 @@ app.post('/api/bd/opportunities', requireAuth, async (req, res) => {
     const opp_id = `OPP-${new Date().getFullYear()}-${String(parseInt(c.count)+1).padStart(3,'0')}`;
     const next_d = new Date(); next_d.setDate(next_d.getDate()+3);
     const { rows } = await pool.query(
-      `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date,product_type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d, product_type ?? 'bess']
+      `INSERT INTO bd.opportunities (opp_id,account_id,contact_id,owner_id,title,scope_type,estimated_value,next_action_date,product_type,remarks)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [opp_id, account_id, contact_id, owner_id, title, scope_type, estimated_value, next_d, product_type ?? 'bess', remarks ?? null]
     );
     await logAudit(req, 'create', 'opportunities', rows[0].id, { opp_id: rows[0].opp_id, title: rows[0].title });
     res.status(201).json({ data: rows[0] });
@@ -438,7 +444,7 @@ app.patch('/api/bd/opportunities/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
                      'next_action','next_action_date','stale','stale_reason','lost_reason',
-                     'po_number','po_value','closed_at'];
+                     'po_number','po_value','closed_at','remarks'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const keys = updates.map(([k]) => k);
