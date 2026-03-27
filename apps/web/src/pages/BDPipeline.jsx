@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useApiMulti } from '../hooks/useApi.js';
 import { bdApi } from '../lib/api.js';
@@ -178,7 +178,33 @@ function AddLeadButton({ refetch, users, onCreated }) {
       setForm({ company_name: '', industry: '', city: '', state: '', website: '', gstin: '', source: 'Manual', owner_id: '', remarks: '' });
       if (refetch) refetch();
     } catch(ex) {
-      setErr(ex.message || 'Failed to save');
+      const isDuplicate = ex.message?.includes('Duplicate') || ex.status === 409;
+      if (isDuplicate && onCreated) {
+        // Account already exists in DB — surface it in the local list anyway
+        const bdName = (users||[]).find(u => String(u.id) === form.owner_id)?.name || '';
+        onCreated({
+          id: Date.now(),
+          name: form.company_name,
+          status: 'Lead',
+          contact: '',
+          bd: bdName,
+          kwh: '',
+          location: form.city || '',
+          type: form.industry || '',
+          timeline: '',
+          qualified: 'No',
+          budgetary: 'not done',
+          techDisc: 'not done',
+          tcOffer: 'not done',
+          finalQuote: 'not done',
+          followup: 'not done',
+          remarks: form.remarks || '',
+        });
+        setOpen(false);
+        setForm({ company_name: '', industry: '', city: '', state: '', website: '', gstin: '', source: 'Manual', owner_id: '', remarks: '' });
+      } else {
+        setErr(ex.message || 'Failed to save');
+      }
     } finally {
       setSaving(false);
     }
@@ -263,6 +289,37 @@ function LeadsTab({ users = [], refetch }) {
 
   // Local leads state — edits persist within the session
   const [leads, setLeads] = useState(() => BD_LEADS);
+
+  // On mount: pull newly-created accounts from the API and merge into local list
+  useEffect(() => {
+    bdApi.accounts({ product_type: 'bess' })
+      .then(res => {
+        const apiAccounts = res?.data ?? [];
+        const existingNames = new Set(BD_LEADS.map(l => l.name.toLowerCase().trim()));
+        const newLeads = apiAccounts
+          .filter(a => !existingNames.has(a.company_name.toLowerCase().trim()))
+          .map(a => ({
+            id: `api-${a.id}`,
+            name: a.company_name,
+            status: 'Lead',
+            contact: '',
+            bd: a.owner_name || '',
+            kwh: '',
+            location: [a.city, a.state].filter(Boolean).join(', '),
+            type: a.industry || '',
+            timeline: '',
+            qualified: 'No',
+            budgetary: 'not done',
+            techDisc: 'not done',
+            tcOffer: 'not done',
+            finalQuote: 'not done',
+            followup: 'not done',
+            remarks: a.remarks || '',
+          }));
+        if (newLeads.length > 0) setLeads(prev => [...prev, ...newLeads]);
+      })
+      .catch(() => {}); // silently fail — static BD_LEADS still shown
+  }, []);
 
   function openLead(l) { setSelectedLead(l); setDraft({ ...l }); }
   function closeLead() { setSelectedLead(null); setDraft(null); }
