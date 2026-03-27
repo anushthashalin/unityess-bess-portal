@@ -34,7 +34,7 @@ import { cn } from '../lib/utils.js';
 import AddToCalendar from '../components/AddToCalendar.jsx';
 import { BD_LEADS, BD_TEAM, STATUS_CONFIG } from '../data/bdLeads.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const INDUSTRIES = ['C&I Solar','Utility Solar','EPC','Manufacturing','Real Estate','Hospitality','Healthcare','Education','Government','Other'];
 const SOURCES    = ['referral','cold_call','linkedin','tender','website','exhibition','other'];
 const SCOPE_TYPES  = ['supply_only','dc_block_pcs','rms_order','supply_install','tpc'];
@@ -51,12 +51,12 @@ const STAGES = [
 ];
 
 function stageConfig(key) {
-  return STAGES.find(s => s.key === key) ?? { color:'#aaa', bg:'#f5f5f5', label: key ?? '—' };
+  return STAGES.find(s => s.key === key) ?? { color:'#aaa', bg:'#f5f5f5', label: key ?? 'â' };
 }
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
+// ââ Shared helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function StageBadge({ stage }) {
-  if (!stage) return <span className="text-muted-foreground text-xs">—</span>;
+  if (!stage) return <span className="text-muted-foreground text-xs">â</span>;
   const sc = stageConfig(stage);
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border"
@@ -92,7 +92,7 @@ function KpiChip({ label, value, icon: Icon, color }) {
   );
 }
 
-// ── LEADS TAB ─────────────────────────────────────────────────────────────────
+// ââ LEADS TAB âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function isDone(v) {
   if (!v || v === 'not done') return false;
   return true;
@@ -142,6 +142,91 @@ function BDAvatar({ bdName, size = 7 }) {
   );
 }
 
+
+function AddLeadButton({ refetch, users }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [form, setForm] = useState({ company_name: '', industry: '', city: '', state: '', website: '', gstin: '', source: 'Manual', owner_id: '' });
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.company_name.trim()) { setErr('Company name required'); return; }
+    setSaving(true); setErr('');
+    try {
+      await bdApi.createAccount({ ...form, owner_id: form.owner_id || null });
+      setOpen(false);
+      setForm({ company_name: '', industry: '', city: '', state: '', website: '', gstin: '', source: 'Manual', owner_id: '' });
+      if (refetch) refetch();
+    } catch(ex) {
+      setErr(ex.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 bg-[#F26B4E] hover:bg-[#E04D2E] text-white font-bold px-4 py-2 rounded-lg shadow-sm text-[13px] transition-colors">
+          <Plus size={14}/> Add Lead
+        </button>
+      </div>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-[420px] sm:w-[480px]">
+          <SheetHeader>
+            <SheetTitle>Add New Lead</SheetTitle>
+          </SheetHeader>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4 overflow-y-auto">
+            <div>
+              <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Company Name *</label>
+              <input value={form.company_name} onChange={e => setForm(f => ({...f, company_name: e.target.value}))} placeholder="e.g. Acme Industries Ltd" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]"/>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Industry</label>
+                <input value={form.industry} onChange={e => setForm(f => ({...f, industry: e.target.value}))} placeholder="e.g. Manufacturing" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]"/>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">City</label>
+                <input value={form.city} onChange={e => setForm(f => ({...f, city: e.target.value}))} placeholder="City" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]"/>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">State</label>
+                <input value={form.state} onChange={e => setForm(f => ({...f, state: e.target.value}))} placeholder="State" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]"/>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Website</label>
+                <input value={form.website} onChange={e => setForm(f => ({...f, website: e.target.value}))} placeholder="https://" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]"/>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">GSTIN</label>
+              <input value={form.gstin} onChange={e => setForm(f => ({...f, gstin: e.target.value}))} placeholder="22AAAAA0000A1Z5" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]"/>
+            </div>
+            <div>
+              <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-1">BD Rep</label>
+              <select value={form.owner_id} onChange={e => setForm(f => ({...f, owner_id: e.target.value}))} className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#F26B4E]">
+                <option value="">Assign to...</option>
+                {(users||[]).filter(u => u.is_active).map(u => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
+              </select>
+            </div>
+            {err && <p className="text-sm text-red-500">{err}</p>}
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border text-sm font-medium hover:bg-gray-50">Cancel</button>
+              <button type="submit" disabled={saving} className="px-4 py-2 rounded-md bg-[#F26B4E] hover:bg-[#E04D2E] text-white text-sm font-bold disabled:opacity-50">
+                {saving ? 'Saving...' : 'Save Lead'}
+              </button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
 function LeadsTab() {
   const [view, setView] = useState('all');            // 'all' | 'team' | bd-key
   const [search, setSearch] = useState('');
@@ -152,7 +237,7 @@ function LeadsTab() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [draft, setDraft] = useState(null);           // editable copy of selectedLead
 
-  // Local leads state — edits persist within the session
+  // Local leads state â edits persist within the session
   const [leads, setLeads] = useState(() => BD_LEADS);
 
   function openLead(l) { setSelectedLead(l); setDraft({ ...l }); }
@@ -279,7 +364,7 @@ function LeadsTab() {
             <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
               <Input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search company, BD, location…"
+                placeholder="Search company, BD, locationâ¦"
                 className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl"/>
               {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
             </div>
@@ -374,7 +459,7 @@ function LeadsTab() {
           <div className="flex items-center gap-3">
             <button onClick={() => setView('team')}
               className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground hover:text-[#F26B4E] transition-colors">
-              ← Back to team
+              â Back to team
             </button>
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[11px] font-black"
@@ -401,7 +486,7 @@ function LeadsTab() {
             <div className="relative ml-2">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
               <Input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search leads…"
+                placeholder="Search leadsâ¦"
                 className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl w-52"/>
               {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
             </div>
@@ -410,7 +495,7 @@ function LeadsTab() {
         </div>
       )}
 
-      {/* Leads table — shown in 'all' or individual BD view */}
+      {/* Leads table â shown in 'all' or individual BD view */}
       {(view === 'all' || activeBD) && (
         filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
@@ -455,13 +540,13 @@ function LeadsTab() {
                       <TableCell className="py-2.5">
                         <div className="flex items-center gap-2">
                           <BDAvatar bdName={l.bd} size={6}/>
-                          <span className="text-[12px] text-muted-foreground truncate max-w-[80px]">{l.bd || '—'}</span>
+                          <span className="text-[12px] text-muted-foreground truncate max-w-[80px]">{l.bd || 'â'}</span>
                         </div>
                       </TableCell>
                     )}
-                    <TableCell className="py-2.5 text-[12px] font-semibold text-foreground/80 whitespace-nowrap">{l.kwh || '—'}</TableCell>
-                    <TableCell className="py-2.5 text-[12px] text-muted-foreground">{l.location || '—'}</TableCell>
-                    <TableCell className="py-2.5 text-[12px] text-muted-foreground max-w-[100px] truncate">{l.type || '—'}</TableCell>
+                    <TableCell className="py-2.5 text-[12px] font-semibold text-foreground/80 whitespace-nowrap">{l.kwh || 'â'}</TableCell>
+                    <TableCell className="py-2.5 text-[12px] text-muted-foreground">{l.location || 'â'}</TableCell>
+                    <TableCell className="py-2.5 text-[12px] text-muted-foreground max-w-[100px] truncate">{l.type || 'â'}</TableCell>
                     {/* Phase dots */}
                     {[l.budgetary, l.techDisc, l.tcOffer, l.finalQuote, l.followup].map((v, i) => {
                       const done = isDone(v);
@@ -479,7 +564,7 @@ function LeadsTab() {
                         </TableCell>
                       );
                     })}
-                    <TableCell className="py-2.5 text-[11px] text-muted-foreground max-w-[80px] truncate">{l.followup || '—'}</TableCell>
+                    <TableCell className="py-2.5 text-[11px] text-muted-foreground max-w-[80px] truncate">{l.followup || 'â'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -516,8 +601,8 @@ function LeadsTab() {
                           <SelectValue/>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Yes">✓ Qualified</SelectItem>
-                          <SelectItem value="No">✗ Not Qualified</SelectItem>
+                          <SelectItem value="Yes">â Qualified</SelectItem>
+                          <SelectItem value="No">â Not Qualified</SelectItem>
                           <SelectItem value="?">? Unknown</SelectItem>
                         </SelectContent>
                       </Select>
@@ -536,11 +621,11 @@ function LeadsTab() {
                       <SelectTrigger className="mt-1 h-9 text-sm focus:ring-[#F26B4E] rounded-lg">
                         <div className="flex items-center gap-2">
                           {draft.bd && <BDAvatar bdName={draft.bd} size={5}/>}
-                          <SelectValue placeholder="— Unassigned —"/>
+                          <SelectValue placeholder="â Unassigned â"/>
                         </div>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="unassigned">— Unassigned —</SelectItem>
+                        <SelectItem value="unassigned">â Unassigned â</SelectItem>
                         {BD_TEAM.map(b => <SelectItem key={b.key} value={b.name}>{b.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -570,9 +655,9 @@ function LeadsTab() {
                   ))}
                 </div>
 
-                {/* Phase tracking — click to toggle */}
+                {/* Phase tracking â click to toggle */}
                 <div>
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Phase Tracking <span className="normal-case font-normal text-muted-foreground/60">— click to toggle</span></div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Phase Tracking <span className="normal-case font-normal text-muted-foreground/60">â click to toggle</span></div>
                   <div className="flex gap-2 justify-between">
                     {[
                       { key: 'budgetary',  label: 'Budgetary' },
@@ -609,7 +694,7 @@ function LeadsTab() {
                 <div>
                   <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Remarks</Label>
                   <textarea value={draft.remarks || ''} onChange={e => setDraftField('remarks', e.target.value)}
-                    rows={3} placeholder="Internal notes, context, next steps…"
+                    rows={3} placeholder="Internal notes, context, next stepsâ¦"
                     className="mt-1 w-full px-3 py-2 rounded-lg border border-input text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-[#F26B4E]/30 focus:border-[#F26B4E]"/>
                 </div>
               </div>
@@ -633,7 +718,7 @@ function LeadsTab() {
   );
 }
 
-// ── ACCOUNTS TAB ─────────────────────────────────────────────────────────────
+// ââ ACCOUNTS TAB âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function AccountsTab({ product, accounts, users, refetch }) {
   const { can } = useAuth();
   const [search,    setSearch]    = useState('');
@@ -704,7 +789,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <Input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search company, city, owner…"
+            placeholder="Search company, city, ownerâ¦"
             className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl" />
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
         </div>
@@ -757,17 +842,17 @@ function AccountsTab({ product, accounts, users, refetch }) {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="py-3 text-[13px] text-muted-foreground">{a.industry || '—'}</TableCell>
+                  <TableCell className="py-3 text-[13px] text-muted-foreground">{a.industry || 'â'}</TableCell>
                   <TableCell className="py-3 text-[13px] text-muted-foreground">
                     <div className="flex items-center gap-1">
                       {(a.city || a.state) && <MapPin size={10} className="text-muted-foreground/50 shrink-0"/>}
-                      {[a.city, a.state].filter(Boolean).join(', ') || '—'}
+                      {[a.city, a.state].filter(Boolean).join(', ') || 'â'}
                     </div>
                   </TableCell>
                   <TableCell className="py-3">
                     <div className="flex items-center gap-2">
                       <InitialAvatar name={a.owner_name || '?'} size={6} />
-                      <span className="text-[12px] text-muted-foreground">{a.owner_name || '—'}</span>
+                      <span className="text-[12px] text-muted-foreground">{a.owner_name || 'â'}</span>
                     </div>
                   </TableCell>
                   <TableCell className="py-3 text-center">
@@ -777,7 +862,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
                     </span>
                   </TableCell>
                   <TableCell className="py-3 font-bold text-[13px]" style={{ color: a.pipeline_value > 0 ? undefined : '#ccc' }}>
-                    {a.pipeline_value > 0 ? inr(a.pipeline_value) : '—'}
+                    {a.pipeline_value > 0 ? inr(a.pipeline_value) : 'â'}
                   </TableCell>
                   <TableCell className="py-3"><StageBadge stage={a.latest_stage} /></TableCell>
                   <TableCell className="py-3 pr-3">
@@ -827,14 +912,14 @@ function AccountsTab({ product, accounts, users, refetch }) {
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Industry</Label>
                 <Select value={form.industry} onValueChange={v => set('industry', v)}>
-                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Select —"/></SelectTrigger>
+                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Select â"/></SelectTrigger>
                   <SelectContent>{INDUSTRIES.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Source</Label>
                 <Select value={form.source} onValueChange={v => set('source', v)}>
-                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Select —"/></SelectTrigger>
+                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Select â"/></SelectTrigger>
                   <SelectContent>{SOURCES.map(s => <SelectItem key={s} value={s}>{s.replace('_',' ')}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -842,7 +927,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Account Owner</Label>
               <Select value={form.owner_id} onValueChange={v => set('owner_id', v)}>
-                <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Unassigned —"/></SelectTrigger>
+                <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Unassigned â"/></SelectTrigger>
                 <SelectContent>{users.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -850,7 +935,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
             <SheetFooter className="pt-2 gap-2">
               <Button type="button" variant="outline" onClick={() => setShowAdd(false)} className="rounded-lg">Cancel</Button>
               <Button type="submit" disabled={saving} className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white rounded-lg font-bold px-5">
-                {saving ? 'Saving…' : 'Save Account'}
+                {saving ? 'Savingâ¦' : 'Save Account'}
               </Button>
             </SheetFooter>
           </form>
@@ -860,7 +945,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
   );
 }
 
-// ── CONTACTS TAB ──────────────────────────────────────────────────────────────
+// ââ CONTACTS TAB ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function ContactsTab({ accounts, contacts, refetch }) {
   const { can } = useAuth();
   const [search,    setSearch]    = useState('');
@@ -906,7 +991,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
           <Input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, email, designation…"
+            placeholder="Search name, email, designationâ¦"
             className="pl-9 pr-8 h-9 text-sm bg-card border-border/50 rounded-xl"/>
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={12}/></button>}
         </div>
@@ -957,20 +1042,20 @@ function ContactsTab({ accounts, contacts, refetch }) {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="py-3 text-[13px] font-semibold text-foreground/70">{c.company_name || '—'}</TableCell>
-                  <TableCell className="py-3 text-[13px] text-muted-foreground">{c.designation || '—'}</TableCell>
+                  <TableCell className="py-3 text-[13px] font-semibold text-foreground/70">{c.company_name || 'â'}</TableCell>
+                  <TableCell className="py-3 text-[13px] text-muted-foreground">{c.designation || 'â'}</TableCell>
                   <TableCell className="py-3">
                     {c.email
                       ? <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 text-[13px] text-[#F26B4E] hover:underline"><Mail size={11}/>{c.email}</a>
-                      : <span className="text-muted-foreground/40 text-sm">—</span>}
+                      : <span className="text-muted-foreground/40 text-sm">â</span>}
                   </TableCell>
                   <TableCell className="py-3">
                     {c.phone
                       ? <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"><Phone size={11}/>{c.phone}</a>
-                      : <span className="text-muted-foreground/40 text-sm">—</span>}
+                      : <span className="text-muted-foreground/40 text-sm">â</span>}
                   </TableCell>
                   <TableCell className="py-3 pr-4 text-right">
-                    {c.linkedin && <a href={c.linkedin} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400 hover:underline font-semibold">LinkedIn ↗</a>}
+                    {c.linkedin && <a href={c.linkedin} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400 hover:underline font-semibold">LinkedIn â</a>}
                   </TableCell>
                 </TableRow>
               ))}
@@ -989,7 +1074,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Account *</Label>
               <Select value={form.account_id} onValueChange={v => set('account_id', v)}>
-                <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Select account —"/></SelectTrigger>
+                <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Select account â"/></SelectTrigger>
                 <SelectContent>{accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.company_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -1016,7 +1101,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
             <SheetFooter className="pt-2 gap-2">
               <Button type="button" variant="outline" onClick={() => setShowAdd(false)} className="rounded-lg">Cancel</Button>
               <Button type="submit" disabled={saving} className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white rounded-lg font-bold px-5">
-                {saving ? 'Saving…' : 'Save Contact'}
+                {saving ? 'Savingâ¦' : 'Save Contact'}
               </Button>
             </SheetFooter>
           </form>
@@ -1026,7 +1111,7 @@ function ContactsTab({ accounts, contacts, refetch }) {
   );
 }
 
-// ── OPPORTUNITIES TAB ─────────────────────────────────────────────────────────
+// ââ OPPORTUNITIES TAB âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch }) {
   const { can } = useAuth();
   const [view,        setView]        = useState('kanban');
@@ -1072,7 +1157,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
       await bdApi.patchOpp(oppId, { stage: newStage });
       refetch();
     } catch (err) {
-      setStageErr(err.message || 'Failed to move — try again');
+      setStageErr(err.message || 'Failed to move â try again');
     } finally {
       setMovingId(null);
     }
@@ -1102,7 +1187,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
           <Input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search company, title, owner…"
+            placeholder="Search company, title, ownerâ¦"
             className="pl-9 h-9 text-sm bg-card border-border/50 rounded-xl"/>
         </div>
         <Select value={stageFilter} onValueChange={setStageFilter}>
@@ -1172,7 +1257,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
                             </div>
                             <div className="text-[11px] text-muted-foreground mb-2">{o.title}</div>
                             <div className="flex justify-between items-center mb-1.5">
-                              <span className="text-[12px] font-black text-[#F26B4E]">{o.estimated_value ? inr(o.estimated_value) : '—'}</span>
+                              <span className="text-[12px] font-black text-[#F26B4E]">{o.estimated_value ? inr(o.estimated_value) : 'â'}</span>
                               {o.scope_type && <span className="text-[9px] font-bold uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{SCOPE_LABELS[o.scope_type]??o.scope_type}</span>}
                             </div>
                             <div className="flex justify-between items-center">
@@ -1192,7 +1277,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
                                 disabled={movingId === o.id}
                                 className="mt-2 w-full py-1 rounded text-[10px] font-bold border border-dashed transition-colors disabled:opacity-50 disabled:cursor-wait"
                                 style={{ borderColor: nextStage.color, color: nextStage.color }}>
-                                {movingId === o.id ? 'Moving…' : `Move → ${nextStage.label}`}
+                                {movingId === o.id ? 'Movingâ¦' : `Move â ${nextStage.label}`}
                               </button>
                             )}
                           </div>
@@ -1228,19 +1313,19 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
                       <div className="text-[11px] text-muted-foreground font-mono">{o.opp_id}</div>
                     </TableCell>
                     <TableCell className="py-3 text-[13px] font-semibold text-foreground/70">{o.company_name}</TableCell>
-                    <TableCell className="py-3 text-[12px] text-muted-foreground">{SCOPE_LABELS[o.scope_type]??o.scope_type??'—'}</TableCell>
-                    <TableCell className="py-3 font-bold text-[13px]">{o.estimated_value ? inr(o.estimated_value) : <span className="text-muted-foreground/40">—</span>}</TableCell>
+                    <TableCell className="py-3 text-[12px] text-muted-foreground">{SCOPE_LABELS[o.scope_type]??o.scope_type??'â'}</TableCell>
+                    <TableCell className="py-3 font-bold text-[13px]">{o.estimated_value ? inr(o.estimated_value) : <span className="text-muted-foreground/40">â</span>}</TableCell>
                     <TableCell className="py-3"><StageBadge stage={o.stage}/></TableCell>
-                    <TableCell className="py-3 text-[13px] text-muted-foreground">{o.owner_name??'—'}</TableCell>
+                    <TableCell className="py-3 text-[13px] text-muted-foreground">{o.owner_name??'â'}</TableCell>
                     <TableCell className="py-3 text-[13px]" style={{ color: daysSilent > 7 ? '#ef4444' : undefined, fontWeight: daysSilent > 7 ? 700 : 400 }}>
-                      {daysSilent != null ? `${daysSilent}d` : '—'}
+                      {daysSilent != null ? `${daysSilent}d` : 'â'}
                     </TableCell>
                     <TableCell className="py-3 text-[12px]">
                       {o.next_action_date
                         ? <div className="flex items-center gap-2"><span className="text-blue-400 font-semibold">{date(o.next_action_date)}</span>
                             <AddToCalendar title={`Follow-up: ${o.company_name}`} dateStr={o.next_action_date} description={`Stage: ${o.stage}`} size="sm"/>
                           </div>
-                        : <span className="text-muted-foreground/40">—</span>}
+                        : <span className="text-muted-foreground/40">â</span>}
                     </TableCell>
                   </TableRow>
                 );
@@ -1265,7 +1350,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Account *</Label>
               <Select value={form.account_id} onValueChange={v => { set('account_id', v); set('contact_id',''); }}>
-                <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Select account —"/></SelectTrigger>
+                <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Select account â"/></SelectTrigger>
                 <SelectContent>{accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.company_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -1273,26 +1358,26 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Contact</Label>
                 <Select value={form.contact_id} onValueChange={v => set('contact_id', v)} disabled={!form.account_id}>
-                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Select —"/></SelectTrigger>
+                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Select â"/></SelectTrigger>
                   <SelectContent>{accountContacts.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">BD Owner</Label>
                 <Select value={form.owner_id} onValueChange={v => set('owner_id', v)}>
-                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Unassigned —"/></SelectTrigger>
+                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Unassigned â"/></SelectTrigger>
                   <SelectContent>{users.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Scope Type</Label>
                 <Select value={form.scope_type} onValueChange={v => set('scope_type', v)}>
-                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="— Select —"/></SelectTrigger>
+                  <SelectTrigger className="mt-1 focus:ring-[#F26B4E]"><SelectValue placeholder="â Select â"/></SelectTrigger>
                   <SelectContent>{SCOPE_TYPES.map(s => <SelectItem key={s} value={s}>{SCOPE_LABELS[s]}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs font-semibold text-muted-foreground">Estimated Value (₹)</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Estimated Value (â¹)</Label>
                 <Input type="number" value={form.estimated_value} onChange={e => set('estimated_value', e.target.value)}
                   placeholder="e.g. 1500000" className="mt-1 focus-visible:ring-[#F26B4E]"/>
               </div>
@@ -1301,7 +1386,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
             <SheetFooter className="pt-2 gap-2">
               <Button type="button" variant="outline" onClick={() => setShowAdd(false)} className="rounded-lg">Cancel</Button>
               <Button type="submit" disabled={saving} className="bg-[#F26B4E] hover:bg-[#E04D2E] text-white rounded-lg font-bold px-5">
-                {saving ? 'Saving…' : 'Create Opportunity'}
+                {saving ? 'Savingâ¦' : 'Create Opportunity'}
               </Button>
             </SheetFooter>
           </form>
@@ -1311,7 +1396,7 @@ function OpportunitiesTab({ product, opps, accounts, contacts, users, refetch })
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ââ Main page âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function BDPipeline({ product = 'bess' }) {
   const { opps: oppsRes, accounts: accountsRes, contacts: contactsRes, users: usersRes, loading, error, refetch } = useApiMulti({
     opps:     () => bdApi.opps({ product_type: product }),
@@ -1348,7 +1433,7 @@ export default function BDPipeline({ product = 'bess' }) {
         <div>
           <h1 className="text-[22px] font-black text-foreground tracking-tight">Pipeline</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
-            {BD_LEADS.length} leads tracked · {accounts.length} accounts · {openOpps.length} open deals
+            {BD_LEADS.length} leads tracked Â· {accounts.length} accounts Â· {openOpps.length} open deals
           </p>
         </div>
       </div>
@@ -1379,6 +1464,7 @@ export default function BDPipeline({ product = 'bess' }) {
         </TabsList>
 
         <TabsContent value="leads" className="mt-5">
+          <AddLeadButton refetch={refetch} users={users}/>
           <LeadsTab/>
         </TabsContent>
         <TabsContent value="accounts" className="mt-5">
