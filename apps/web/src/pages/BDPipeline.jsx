@@ -143,7 +143,7 @@ function BDAvatar({ bdName, size = 7 }) {
 }
 
 
-function AddLeadButton({ refetch, users }) {
+function AddLeadButton({ refetch, users, onCreated }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -155,6 +155,25 @@ function AddLeadButton({ refetch, users }) {
     setSaving(true); setErr('');
     try {
       await bdApi.createAccount({ ...form, owner_id: form.owner_id || null });
+      const bdName = (users||[]).find(u => String(u.id) === form.owner_id)?.name || '';
+      if (onCreated) onCreated({
+        id: Date.now(),
+        name: form.company_name,
+        status: 'Lead',
+        contact: '',
+        bd: bdName,
+        kwh: '',
+        location: form.city || '',
+        type: form.industry || '',
+        timeline: '',
+        qualified: 'No',
+        budgetary: 'not done',
+        techDisc: 'not done',
+        tcOffer: 'not done',
+        finalQuote: 'not done',
+        followup: 'not done',
+        remarks: form.remarks || '',
+      });
       setOpen(false);
       setForm({ company_name: '', industry: '', city: '', state: '', website: '', gstin: '', source: 'Manual', owner_id: '', remarks: '' });
       if (refetch) refetch();
@@ -232,7 +251,7 @@ function AddLeadButton({ refetch, users }) {
   );
 }
 
-function LeadsTab() {
+function LeadsTab({ users = [], refetch }) {
   const [view, setView] = useState('all');            // 'all' | 'team' | bd-key
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -782,6 +801,7 @@ function AccountsTab({ product, accounts, users, refetch }) {
 
   return (
     <div className="space-y-4">
+      <AddLeadButton users={users} refetch={refetch} onCreated={lead => setLeads(prev => [lead, ...prev])}/>
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
         <KpiChip label="Total Accounts"      value={accounts.length}   icon={Building2}   color="#F26B4E" />
@@ -1469,8 +1489,7 @@ export default function BDPipeline({ product = 'bess' }) {
         </TabsList>
 
         <TabsContent value="leads" className="mt-5">
-          <AddLeadButton refetch={refetch} users={users}/>
-          <LeadsTab/>
+          <LeadsTab users={users} refetch={refetch}/>
         </TabsContent>
         <TabsContent value="accounts" className="mt-5">
           <AccountsTab product={product} accounts={accounts} users={users} refetch={refetch}/>
