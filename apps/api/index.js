@@ -174,8 +174,8 @@ async function runMigrations() {
     `ALTER TABLE bd.activities DROP CONSTRAINT IF EXISTS activities_type_check`,
     `ALTER TABLE bd.activities ADD CONSTRAINT activities_type_check
        CHECK (type = ANY(ARRAY['call','email','meeting','whatsapp','site_visit','demo']))`,
-    // Remarks on opportunities
-    `ALTER TABLE bd.opportunities ADD COLUMN IF NOT EXISTS remarks TEXT`,
+    // Remarks on accounts (lead-level notes)
+    `ALTER TABLE bd.accounts ADD COLUMN IF NOT EXISTS remarks TEXT`,
     // Update BD Exec placeholder users with real team members
     `UPDATE bd.users SET name='Vishal Pundir',    email='vishal@ornatesolar.com'    WHERE name='BD Exec 1'`,
     `UPDATE bd.users SET name='Dhathresh Patnam', email='dhathresh@ornatesolar.com' WHERE name='BD Exec 2'`,
@@ -355,7 +355,7 @@ app.get('/api/bd/accounts', async (req, res) => {
 
 app.post('/api/bd/accounts', requireAuth, async (req, res) => {
   try {
-    const { company_name, industry, city, state, website, gstin, source, owner_id, product_type } = req.body;
+    const { company_name, industry, city, state, website, gstin, source, owner_id, product_type, remarks } = req.body;
     if (!company_name) return res.status(400).json({ error: 'company_name is required' });
     const { rows: [c] } = await pool.query(
       "SELECT COUNT(*) FROM bd.accounts WHERE account_id LIKE $1",
@@ -363,9 +363,9 @@ app.post('/api/bd/accounts', requireAuth, async (req, res) => {
     );
     const account_id = `ACC-${new Date().getFullYear()}-${String(parseInt(c.count) + 1).padStart(3,'0')}`;
     const { rows } = await pool.query(
-      `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id,product_type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [account_id, company_name, industry, city, state, website, gstin, source, owner_id, product_type ?? 'bess']
+      `INSERT INTO bd.accounts (account_id,company_name,industry,city,state,website,gstin,source,owner_id,product_type,remarks)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [account_id, company_name, industry, city, state, website, gstin, source, owner_id, product_type ?? 'bess', remarks ?? null]
     );
     await logAudit(req, 'create', 'accounts', rows[0].id, { company_name: rows[0].company_name, account_id: rows[0].account_id });
     res.status(201).json({ data: rows[0] });
@@ -444,7 +444,7 @@ app.patch('/api/bd/opportunities/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const allowed = ['title','stage','scope_type','estimated_value','contact_id','owner_id',
                      'next_action','next_action_date','stale','stale_reason','lost_reason',
-                     'po_number','po_value','closed_at','remarks'];
+                     'po_number','po_value','closed_at'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const keys = updates.map(([k]) => k);
